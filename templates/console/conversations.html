@@ -1,0 +1,120 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Conversations · {{ BRAND.full_name }}{% endblock %}
+{% block heading %}Conversations{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">Every chat on the platform, what it covered and what it cost</p>
+{% endblock %}
+
+{% block measure %}max-w-[88rem]{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% if focus_student %}
+    <div class="flex flex-wrap items-center gap-3 rounded-xl2 border border-brand-500/25 bg-brand-500/8 p-3.5">
+      <svg class="h-4 w-4 shrink-0 text-brand-600 dark:text-brand-300" aria-hidden="true"><use href="#i-filter"/></svg>
+      <p class="flex-1 text-sm text-ink-700 dark:text-ink-200">
+        Showing conversations for <b class="font-semibold">{{ focus_student.display_name }}</b>.
+      </p>
+      <a href="{% url 'console:conversations' %}" class="btn-ghost btn-sm">Show all</a>
+      <a href="{% url 'console:user_detail' focus_student.pk %}" class="btn-outline btn-sm">Open profile</a>
+    </div>
+  {% endif %}
+
+  {# ---------- Metrics ---------- #}
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "components/stat_card.html" with icon="i-chat" label="Conversations" value=totals.count|intcomma tone="brand" hint="all time" %}
+    {% include "components/stat_card.html" with icon="i-bolt" label="Tokens spent" value=totals.tokens|compact_number tone="warning" hint="across every chat" %}
+    {% include "components/stat_card.html" with icon="i-list" label="Messages" value=totals.messages|compact_number tone="accent" hint="sent and received" %}
+    {% include "components/stat_card.html" with icon="i-clock" label="Active this week" value=totals.active|intcomma tone="success" hint=totals.students|stringformat:"s"|add:" students in total" %}
+  </div>
+
+  {# ---------- Table ---------- #}
+  <div class="card overflow-hidden reveal">
+    <div class="border-b hairline bg-ink-50/50 p-4 dark:bg-white/[.02]">
+      <form method="get" class="flex flex-wrap items-center gap-2">
+    {% include "console/_scope_field.html" %}
+        {% if student_id %}<input type="hidden" name="student" value="{{ student_id }}">{% endif %}
+        <div class="search-shell min-w-[15rem] flex-1">
+          <svg aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="search" name="q" value="{{ search }}" class="input pl-9"
+                 placeholder="Search titles, students, or anything said in a chat" aria-label="Search conversations">
+        </div>
+        <select name="scope" class="select w-auto min-w-[11rem]" aria-label="Filter">
+          <option value="">All conversations</option>
+          <option value="active" {% if scope == 'active' %}selected{% endif %}>Active this week</option>
+          <option value="expensive" {% if scope == 'expensive' %}selected{% endif %}>Most tokens spent</option>
+          <option value="empty" {% if scope == 'empty' %}selected{% endif %}>Never used</option>
+          <option value="archived" {% if scope == 'archived' %}selected{% endif %}>Archived</option>
+        </select>
+        <button type="submit" class="btn-primary btn-sm">Apply</button>
+        {% if search or scope or student_id %}
+          <a href="{% url 'console:conversations' %}" class="btn-ghost btn-sm">Clear</a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table min-w-[56rem]">
+        <thead>
+          <tr>
+            <th class="th">Conversation</th>
+            <th class="th">Student</th>
+            <th class="th text-right">Messages</th>
+            <th class="th text-right">Tokens</th>
+            <th class="th text-right">Last activity</th>
+            <th class="th text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for conversation in page.object_list %}
+            <tr class="row group/row">
+              <td class="td max-w-[22rem]">
+                <a href="{% url 'console:conversation_detail' conversation.pk %}"
+                   class="block truncate font-semibold text-ink-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300">
+                  {% if conversation.is_pinned %}
+                    <svg class="mr-1 inline h-3 w-3 text-brand-500" aria-hidden="true"><use href="#i-pin"/></svg>
+                  {% endif %}
+                  {{ conversation.title }}
+                </a>
+                <p class="text-[11px] text-ink-400 dark:text-ink-500">
+                  #{{ conversation.pk }} · started {{ conversation.created_at|date:"d M Y" }}
+                  {% if conversation.is_archived %}<span class="ml-1 badge-neutral">Archived</span>{% endif %}
+                </p>
+              </td>
+              <td class="td">
+                <a href="{% url 'console:user_detail' conversation.user_id %}"
+                   class="font-medium text-ink-700 hover:text-brand-700 dark:text-ink-200">
+                  {{ conversation.user.display_name }}
+                </a>
+              </td>
+              <td class="td text-right tabular-nums">{{ conversation.message_count|intcomma }}</td>
+              <td class="td text-right font-semibold tabular-nums">{{ conversation.total_tokens|intcomma }}</td>
+              <td class="td text-right">
+                <span class="text-xs text-ink-500 dark:text-ink-400">{{ conversation.updated_at|timeago }}</span>
+                <p class="text-[10px] text-ink-400">{{ conversation.updated_at|date:"d M, H:i" }}</p>
+              </td>
+              <td class="td text-right">
+                <a href="{% url 'console:conversation_detail' conversation.pk %}" class="btn-outline btn-sm">
+                  <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-eye"/></svg> Open
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="px-4 py-16 text-center">
+              <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl2 border border-brand-500/15 bg-brand-500/[.06] text-brand-500/70">
+                <svg class="h-6 w-6" aria-hidden="true"><use href="#i-chat"/></svg>
+              </span>
+              <p class="mt-3.5 text-sm font-semibold text-ink-600 dark:text-ink-300">No conversations match those filters</p>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="px-4 pb-4">{% include "components/pagination.html" %}</div>
+  </div>
+</div>
+{% endblock %}

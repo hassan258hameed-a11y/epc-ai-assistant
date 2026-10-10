@@ -1,0 +1,11 @@
+{% extends "auth/_epc_auth.html" %}
+
+{% block title %}Create your account · {{ BRAND.full_name }}{% endblock %}
+
+{% comment %}
+  The sign-up page. Same card, opened on the second panel, with this page's
+  form bound to it and any referral code from the invite link carried in.
+{% endcomment %}
+{% block card %}
+  {% include "auth/_auth_card.html" with mode="up" signup_form=form referral_prefill=referral_prefill %}
+{% endblock %}

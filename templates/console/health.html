@@ -1,0 +1,266 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}System health · Console{% endblock %}
+{% block heading %}System health{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    {{ report.check_count }} checks against the running installation · read from settings and the
+    database only, never from the provider.
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% comment %}
+    The verdict, before any detail. An administrator opening this page has one
+    question, and it is answered in the first line.
+  {% endcomment %}
+  <section class="card overflow-hidden reveal">
+    <div class="flex flex-wrap items-center gap-4 p-5 sm:p-6
+                {% if report.overall == 'fail' %}bg-rose-500/8
+                {% elif report.overall == 'warn' %}bg-amber-500/8
+                {% else %}bg-emerald-500/8{% endif %}">
+      <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl
+                   {% if report.overall == 'fail' %}bg-rose-500/15 text-rose-600 dark:text-rose-400
+                   {% elif report.overall == 'warn' %}bg-amber-500/15 text-amber-600 dark:text-amber-400
+                   {% else %}bg-emerald-500/15 text-emerald-600 dark:text-emerald-400{% endif %}">
+        <svg class="h-6 w-6" aria-hidden="true">
+          <use href="#{% if report.overall == 'ok' %}i-check-circle{% elif report.overall == 'warn' %}i-info{% else %}i-alert{% endif %}"/>
+        </svg>
+      </span>
+
+      <div class="min-w-0 flex-1">
+        <h2 class="section-title">
+          {% if report.overall == 'fail' %}Needs attention
+          {% elif report.overall == 'warn' %}Running, with things to tidy
+          {% else %}Everything is healthy{% endif %}
+        </h2>
+        <p class="mt-0.5 text-xs text-ink-600 dark:text-ink-300">
+          {% if report.fail_count %}<span class="font-semibold text-rose-600 dark:text-rose-400">{{ report.fail_count }} failing</span>{% endif %}
+          {% if report.fail_count and report.warn_count %} · {% endif %}
+          {% if report.warn_count %}<span class="font-semibold text-amber-600 dark:text-amber-400">{{ report.warn_count }} to review</span>{% endif %}
+          {% if not report.fail_count and not report.warn_count %}All {{ report.check_count }} checks passed.{% endif %}
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span class="hidden text-[11px] text-ink-500 dark:text-ink-400 sm:inline" id="checkedAt">
+          Checked {{ report.generated_at|date:"H:i:s" }}
+        </span>
+        <a href="{% url 'console:health' %}" class="btn-ghost btn-sm" id="recheck">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-refresh"/></svg> Re-check
+        </a>
+      </div>
+    </div>
+
+    {% if report.failing %}
+      <ul class="divide-y divide-ink-200/70 border-t hairline dark:divide-white/8">
+        {% for check in report.failing %}
+          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-xs sm:px-6">
+            <span class="{% if check.status == 'fail' %}badge-danger{% else %}badge-warning{% endif %}">
+              {% if check.status == 'fail' %}Failing{% else %}Review{% endif %}
+            </span>
+            <span class="font-medium text-ink-800 dark:text-ink-100">{{ check.label }}</span>
+            <span class="text-ink-500 dark:text-ink-400">{{ check.value }}</span>
+            {% if check.action_url and console_reach|get_item:check.action_url %}
+              <a href="{{ check.action_url }}" class="ml-auto font-medium text-brand-600 hover:underline dark:text-brand-300">
+                {{ check.action_label|default:"Open" }} →
+              </a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+
+  {% comment %}
+    Token supply gets its own panel: it is the one number with a forecast.
+    One row per model, never a total — the pool that runs dry first is the one
+    that stops a student, and a sum would hide it behind the healthy ones.
+  {% endcomment %}
+  <section class="card spotlight p-5 sm:p-6 reveal">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Token supply, per model</h2>
+      <span class="text-[11px] text-ink-500 dark:text-ink-400">
+        measured over the last {{ window_days }} days
+      </span>
+    </div>
+
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full min-w-[40rem] text-sm">
+        <thead>
+          <tr class="border-b hairline text-left">
+            <th class="py-2 pr-4 text-[11px] uppercase tracking-wide text-ink-400">Model</th>
+            <th class="py-2 pr-4 text-[11px] uppercase tracking-wide text-ink-400">Available to give</th>
+            <th class="py-2 pr-4 text-[11px] uppercase tracking-wide text-ink-400">Held by students</th>
+            <th class="py-2 pr-4 text-[11px] uppercase tracking-wide text-ink-400">Handed out per day</th>
+            <th class="py-2 text-[11px] uppercase tracking-wide text-ink-400">Runs dry in</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in runways %}
+            <tr class="border-b hairline last:border-0">
+              <td class="py-3 pr-4">
+                <span class="block font-semibold text-ink-900 dark:text-white">{{ row.model.name }}</span>
+                <span class="block text-[11px] text-ink-400">{{ row.model.provider_name }}</span>
+              </td>
+              <td class="py-3 pr-4 font-semibold
+                         {% if row.is_empty %}text-rose-600 dark:text-rose-400{% else %}text-ink-900 dark:text-white{% endif %}">
+                {{ row.balance|intcomma }}
+              </td>
+              <td class="py-3 pr-4 text-ink-700 dark:text-ink-200">{{ row.outstanding|intcomma }}</td>
+              <td class="py-3 pr-4 text-ink-700 dark:text-ink-200">{{ row.per_day|intcomma }}</td>
+              <td class="py-3 font-semibold
+                        {% if row.runway_days and row.runway_days <= 7 %}text-rose-600 dark:text-rose-400
+                        {% elif row.runway_days and row.runway_days <= 30 %}text-amber-600 dark:text-amber-400
+                        {% else %}text-ink-900 dark:text-white{% endif %}">
+                {% if row.runway_days %}{{ row.runway_days }} days{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="py-6 text-center text-ink-500">No AI models in the catalogue.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="mt-4 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+      Each forecast projects the last {{ window_days }} days of allocations for that model forward.
+      It measures what was <em>given to students</em>, not what they then spent — a pool empties when
+      tokens leave it, whatever happens to them afterwards. These are the platform's own token
+      balances; they are not the money in your OpenAI or Anthropic account.
+    </p>
+  </section>
+
+  {% comment %}Every check, grouped by the part of the system it belongs to.{% endcomment %}
+  {% for group in groups %}
+    <section class="card overflow-hidden reveal">
+      <header class="flex flex-wrap items-center gap-3 border-b hairline px-5 py-3.5 sm:px-6">
+        <span class="flex h-2.5 w-2.5 shrink-0 rounded-full
+                     {% if group.status == 'fail' %}bg-rose-500
+                     {% elif group.status == 'warn' %}bg-amber-500
+                     {% else %}bg-emerald-500{% endif %}"></span>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-sm font-semibold text-ink-900 dark:text-white">{{ group.label }}</h2>
+          <p class="text-[11px] text-ink-500 dark:text-ink-400">{{ group.description }}</p>
+        </div>
+        <span class="text-[11px] text-ink-400">
+          {% if group.failing %}{{ group.failing }} of {{ group.checks|length }} need attention
+          {% else %}all {{ group.checks|length }} passing{% endif %}
+        </span>
+      </header>
+
+      <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+        {% for check in group.checks %}
+          <li class="px-5 py-3.5 sm:px-6">
+            <div class="flex items-start gap-3">
+              <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full
+                           {% if check.status == 'fail' %}bg-rose-500/15 text-rose-600 dark:text-rose-400
+                           {% elif check.status == 'warn' %}bg-amber-500/15 text-amber-600 dark:text-amber-400
+                           {% else %}bg-emerald-500/15 text-emerald-600 dark:text-emerald-400{% endif %}">
+                <svg class="h-3 w-3" aria-hidden="true">
+                  <use href="#{% if check.status == 'ok' %}i-check{% elif check.status == 'warn' %}i-info{% else %}i-alert{% endif %}"/>
+                </svg>
+              </span>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                  <span class="text-sm font-medium text-ink-900 dark:text-white">{{ check.label }}</span>
+                  <span class="font-mono text-xs text-ink-600 dark:text-ink-300">{{ check.value }}</span>
+                  {# A fix is offered only where this role can go to make it. #}
+                  {% if check.action_url and console_reach|get_item:check.action_url %}
+                    <a href="{{ check.action_url }}"
+                       class="ml-auto text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-300">
+                      {{ check.action_label|default:"Open" }} →
+                    </a>
+                  {% endif %}
+                </div>
+                {% if check.detail %}
+                  <p class="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">{{ check.detail }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+
+  {% comment %}
+    The failure rate above is a number; this is what is behind it. Shown only
+    when there is something to show.
+  {% endcomment %}
+  {% if report.errors %}
+    <section class="card overflow-hidden reveal">
+      <header class="border-b hairline px-5 py-3.5 sm:px-6">
+        <h2 class="text-sm font-semibold text-ink-900 dark:text-white">
+          Provider failures, last {{ report.window_hours }} hours
+        </h2>
+        <p class="text-[11px] text-ink-500 dark:text-ink-400">
+          Grouped by the code the provider returned, commonest first.
+        </p>
+      </header>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-ink-50 text-[11px] uppercase tracking-wide text-ink-500 dark:bg-white/[.03] dark:text-ink-400">
+            <tr>
+              <th scope="col" class="px-5 py-2.5 font-semibold sm:px-6">Code</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Times</th>
+              <th scope="col" class="px-5 py-2.5 font-semibold">Most recent message</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink-200/70 dark:divide-white/8">
+            {% for error in report.errors %}
+              <tr>
+                <td class="px-5 py-2.5 font-mono text-ink-800 dark:text-ink-100 sm:px-6">{{ error.code }}</td>
+                <td class="px-5 py-2.5 text-ink-600 dark:text-ink-300">{{ error.count }}</td>
+                <td class="px-5 py-2.5 text-ink-500 dark:text-ink-400">{{ error.message|default:"—"|truncatechars:110 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <p class="px-1 text-[11px] leading-relaxed text-ink-400">
+    Checks read configuration and stored records only — opening this page never contacts the AI
+    provider, the payment gateways or Telegram, so it costs nothing and cannot hang. Credentials are
+    reported as present or absent; no secret is ever displayed.
+  </p>
+</div>
+
+<script>
+  // Live re-check without losing scroll position. The badge in the header is
+  // the only thing that moves; the detail below stays put until you reload.
+  (function () {
+    var button = document.getElementById('recheck');
+    var stamp = document.getElementById('checkedAt');
+    if (!button || !stamp) return;
+
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      button.classList.add('is-busy');
+      stamp.textContent = 'Checking…';
+
+      fetch('{% url "console:health_data" %}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          // A changed verdict means the page below is stale, so reload it.
+          if (data.fail_count !== {{ report.fail_count }} || data.warn_count !== {{ report.warn_count }}) {
+            window.location.reload();
+            return;
+          }
+          stamp.textContent = 'Checked ' + new Date().toLocaleTimeString();
+          button.classList.remove('is-busy');
+        })
+        .catch(function () {
+          stamp.textContent = 'Could not re-check';
+          button.classList.remove('is-busy');
+        });
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "public/_legal_base.html" %}
+
+{% block title %}Refund policy · {{ BRAND.full_name }}{% endblock %}
+{% block doc_kicker %}Billing{% endblock %}
+{% block doc_title %}Refund policy{% endblock %}
+
+{% block doc_body %}
+<section>
+  <h2>In short</h2>
+  <p>
+    Tokens are a digital product delivered instantly, so purchases are generally final. That said, we do not want
+    anyone paying for something they did not receive. If a payment failed, duplicated, or the tokens never arrived,
+    contact us and we will put it right.
+  </p>
+</section>
+
+<section>
+  <h2>When we issue a refund</h2>
+  <ul>
+    <li>You were charged but no tokens were credited to your account.</li>
+    <li>You were charged more than once for the same order.</li>
+    <li>A technical fault on our side prevented you from using the tokens you paid for.</li>
+    <li>The payment was made in error and no tokens from that purchase have been used.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>When we normally cannot refund</h2>
+  <ul>
+    <li>Tokens from the purchase have already been consumed.</li>
+    <li>You are dissatisfied with the content of an answer. The assistant is a study aid, not a guarantee of a grade.</li>
+    <li>The request arrives more than 14 days after the payment date.</li>
+    <li>The account was disabled for breaking the terms of service.</li>
+  </ul>
+  <p>
+    We review every request individually. If your situation is not listed here, still write to us — we would rather hear about it.
+  </p>
+</section>
+
+<section>
+  <h2>Duplicate payments</h2>
+  <p>
+    If the same order was paid twice, send both reference numbers. We verify against our payment records and the
+    provider's records, then refund the duplicate to the original payment method. Nothing is removed from your balance
+    for a duplicate refund unless the tokens were credited twice.
+  </p>
+</section>
+
+<section>
+  <h2>Payments that do not appear</h2>
+  <p>
+    Bank and crypto transfers can take a few minutes to settle. If tokens have not arrived after 30 minutes, open the
+    payment page in your account, press <strong>Check status</strong>, and send us the reference if it is still pending.
+    Include your transfer receipt so we can match it.
+  </p>
+</section>
+
+<section>
+  <h2>Disputes</h2>
+  <p>
+    Please contact us before raising a dispute with your bank or payment provider. Most issues are resolved the same
+    day, and a chargeback usually takes far longer to settle than a direct refund. If a chargeback is opened, the
+    related account and tokens may be suspended while the dispute is under review.
+  </p>
+</section>
+
+<section>
+  <h2>How to request a refund</h2>
+  <ul>
+    <li>E-mail <a href="mailto:{{ BRAND.support_email }}">{{ BRAND.support_email }}</a> from the address on your account.</li>
+    <li>Include your username, the payment reference (for example <code class="font-mono text-[13px]">EPC-260827-A1B2C3D4</code>), the amount and the payment method.</li>
+    <li>Attach the receipt or screenshot from your bank or wallet.</li>
+  </ul>
+  <p>
+    We acknowledge requests within two business days. Approved refunds are returned to the original payment method;
+    how quickly the money appears depends on your bank or wallet provider.
+  </p>
+</section>
+
+<section>
+  <h2>Changes to this policy</h2>
+  <p>
+    We may update this policy as our payment methods change. The date at the top of this page always reflects the
+    current version, and the version in force at the time of your purchase is the one that applies to it.
+  </p>
+</section>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Audit logs · Console{% endblock %}
+{% block heading %}Audit logs{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">Every consequential action, with who, what and when.</p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ---------- Filters ---------- #}
+  <form method="get" class="card spotlight p-4 animate-fade-up sm:p-5">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="lg:col-span-2">
+        <label for="id_q" class="label">Search</label>
+        <div class="search-shell">
+          <svg aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="search" name="q" id="id_q" value="{{ search }}"
+                 placeholder="Actor, target, description or IP" class="input py-2 pl-9 text-sm">
+        </div>
+      </div>
+      <div>
+        <label for="id_action" class="label">Action</label>
+        <select name="action" id="id_action" class="input py-2 text-sm">
+          <option value="">All actions</option>
+          {% for value, label in actions %}
+            <option value="{{ value }}" {% if action == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label for="id_from" class="label">From</label>
+          <input type="date" name="from" id="id_from" value="{{ date_from }}" class="input py-2 text-sm">
+        </div>
+        <div>
+          <label for="id_to" class="label">To</label>
+          <input type="date" name="to" id="id_to" value="{{ date_to }}" class="input py-2 text-sm">
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 flex flex-wrap items-center gap-2">
+      <button type="submit" class="btn-primary btn-sm">
+        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-filter"/></svg> Apply
+      </button>
+      <a href="{% url 'console:audit_logs' %}" class="btn-ghost btn-sm">Clear</a>
+      <span class="ml-auto text-xs text-ink-500 dark:text-ink-400">{{ page.paginator.count|intcomma }} entries</span>
+    </div>
+  </form>
+
+  {# ---------- Timeline ---------- #}
+  <section class="card overflow-hidden reveal">
+    {% if page.object_list %}
+      <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+        {% for entry in page.object_list %}
+          <li class="p-4 transition hover:bg-ink-50 dark:hover:bg-white/[.03] sm:p-5">
+            <div class="flex items-start gap-3.5">
+              <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg
+                           {% if entry.tone == 'danger' %}bg-rose-500/12 text-rose-600 dark:text-rose-400
+                           {% elif entry.tone == 'success' %}bg-emerald-500/12 text-emerald-600 dark:text-emerald-400
+                           {% else %}bg-ink-500/10 text-ink-500 dark:text-ink-400{% endif %}">
+                <svg class="h-4 w-4" aria-hidden="true">
+                  <use href="#{% if 'token' in entry.action %}i-coin{% elif 'payment' in entry.action %}i-receipt{% elif 'plan' in entry.action %}i-card{% elif 'login' in entry.action or entry.action == 'logout' %}i-lock{% elif 'user' in entry.action %}i-user{% elif entry.action == 'settings_update' %}i-settings{% else %}i-history{% endif %}"/>
+                </svg>
+              </span>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-sm font-semibold text-ink-900 dark:text-white">{{ entry.get_action_display }}</span>
+                  {% if entry.target_label %}
+                    <span class="badge-neutral">{{ entry.target_label|truncatechars:36 }}</span>
+                  {% endif %}
+                </div>
+
+                {% if entry.description %}
+                  <p class="mt-1 text-xs leading-relaxed text-ink-600 dark:text-ink-300">{{ entry.description }}</p>
+                {% endif %}
+
+                {% if entry.old_value or entry.new_value %}
+                  <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                    {% if entry.old_value %}
+                      <span class="rounded-md border hairline bg-rose-500/6 px-1.5 py-0.5 font-mono text-rose-700 dark:text-rose-300">
+                        {{ entry.old_value|truncatechars:60 }}
+                      </span>
+                      <svg class="h-3 w-3 text-ink-400" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+                    {% endif %}
+                    {% if entry.new_value %}
+                      <span class="rounded-md border hairline bg-emerald-500/6 px-1.5 py-0.5 font-mono text-emerald-700 dark:text-emerald-300">
+                        {{ entry.new_value|truncatechars:60 }}
+                      </span>
+                    {% endif %}
+                  </div>
+                {% endif %}
+
+                <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-400">
+                  <span>
+                    {% if entry.actor %}
+                      <a href="{% url 'console:user_detail' entry.actor_id %}" class="font-medium text-ink-500 hover:text-brand-600 dark:text-ink-400 dark:hover:text-brand-300">
+                        {{ entry.actor.display_name }}
+                      </a>
+                    {% else %}System{% endif %}
+                  </span>
+                  {% if entry.ip_address %}<span class="font-mono">{{ entry.ip_address }}</span>{% endif %}
+                  <span>{{ entry.created_at|date:"d M Y, H:i:s" }}</span>
+                </p>
+              </div>
+
+              <time class="shrink-0 text-[11px] text-ink-400">{{ entry.created_at|timeago }}</time>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+      <div class="px-5 pb-5 pt-2">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-history" title="No audit entries match" body="Try widening the date range or clearing the filters." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

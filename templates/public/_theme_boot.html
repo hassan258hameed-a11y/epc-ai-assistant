@@ -1,0 +1,73 @@
+{% comment %}
+  One theme for the whole product, decided before the first paint.
+
+  The student app keeps its choice in localStorage['lumen-theme'] ("dark",
+  "light", or absent for "follow the system"). These pages used to keep their
+  own key, 'epcai-theme', so a student who chose dark in the app met a white
+  sign-in page. The app's key is read first, the old key second, the system
+  setting last; a toggle here writes both, so the choice is the same wherever
+  it was made.
+
+  The resolved theme lands on <html> twice: as the `dark` class the Tailwind
+  pages style against, and as data-theme, which the standalone sign-in card
+  styles against. Included in <head> by base/design.html and
+  auth/_epc_auth.html; it must stay a plain inline script so nothing can
+  paint before it runs.
+{% endcomment %}
+<script>
+  (function () {
+    var root = document.documentElement;
+    var media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function saved() {
+      var value = null;
+      try {
+        value = localStorage.getItem('lumen-theme');
+        if (value !== 'dark' && value !== 'light') value = localStorage.getItem('epcai-theme');
+      } catch (e) {}
+      return value === 'dark' || value === 'light' ? value : null;
+    }
+    function resolve() {
+      return saved() || (media && media.matches ? 'dark' : 'light');
+    }
+    function apply(theme) {
+      var dark = theme === 'dark';
+      if (dark) root.classList.add('dark'); else root.classList.remove('dark');
+      root.setAttribute('data-theme', dark ? 'dark' : 'light');
+    }
+
+    apply(resolve());
+
+    window.epcTheme = {
+      current: function () { return root.classList.contains('dark') ? 'dark' : 'light'; },
+      set: function (theme) {
+        apply(theme);
+        try {
+          localStorage.setItem('lumen-theme', theme);
+          localStorage.setItem('epcai-theme', theme);
+        } catch (e) {}
+      },
+      toggle: function () {
+        this.set(this.current() === 'dark' ? 'light' : 'dark');
+        return this.current();
+      }
+    };
+
+    // Nothing chosen: keep following the system as it changes.
+    if (media) {
+      var follow = function () { if (!saved()) apply(media.matches ? 'dark' : 'light'); };
+      if (media.addEventListener) media.addEventListener('change', follow);
+      else if (media.addListener) media.addListener(follow);
+    }
+    // Chosen in another tab, or in the app: take it up here too.
+    window.addEventListener('storage', function (event) {
+      if (event.key === null || event.key === 'lumen-theme' || event.key === 'epcai-theme') apply(resolve());
+    });
+
+    // The motion preference travels the same way: someone who turned
+    // animations back on in the app meant it for this browser.
+    try {
+      if (localStorage.getItem('motion') === 'full') root.setAttribute('data-motion', 'full');
+    } catch (e) {}
+  })();
+</script>

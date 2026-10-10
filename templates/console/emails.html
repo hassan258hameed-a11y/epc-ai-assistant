@@ -1,0 +1,115 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Email log · Console{% endblock %}
+{% block heading %}Email log{% endblock %}
+{% block subheading %}
+  <p>Every message the platform tried to send, where it went and what happened to it. The address is recorded as it was at the time, so changing an e-mail later does not rewrite where mail actually went.</p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "components/stat_card.html" with icon="i-check-circle" label="Sent" value=totals.sent|default:0|intcomma tone="success" hint="in the last 30 days" %}
+    {% include "components/stat_card.html" with icon="i-alert" label="Failed" value=totals.failed|default:0|intcomma tone=totals.failed|yesno:"danger,neutral" hint="delivery errors" %}
+    {% include "components/stat_card.html" with icon="i-bell" label="Low token warnings" value=totals.warnings|default:0|intcomma tone="warning" hint="in the last 30 days" %}
+    {% include "components/stat_card.html" with icon="i-mail" label="Warnings" value=emails_on|yesno:"Enabled,Disabled" tone=emails_on|yesno:"success,neutral" hint=thresholds_label %}
+  </section>
+
+  <form method="get" class="card spotlight flex flex-wrap items-end gap-3 p-4 sm:p-5">
+    {% include "console/_scope_field.html" %}
+    <div class="min-w-[200px] flex-1">
+      <label for="q" class="label">Search</label>
+      <div class="search-shell">
+        <svg aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="search" name="q" id="q" value="{{ search }}" class="input py-2 pl-9 text-sm" placeholder="Recipient or student">
+      </div>
+    </div>
+    <div class="min-w-[160px]">
+      <label for="type" class="label">Type</label>
+      <select name="type" id="type" class="input py-2 text-sm">
+        <option value="">Any type</option>
+        {% for value, label in types %}
+          <option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="min-w-[150px]">
+      <label for="status" class="label">Status</label>
+      <select name="status" id="status" class="input py-2 text-sm">
+        <option value="">Any status</option>
+        {% for value, label in statuses %}
+          <option value="{{ value }}" {% if value == selected_status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-primary btn-sm">
+      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-filter"/></svg> Filter
+    </button>
+    <a href="{% url 'console:emails' %}" class="btn-ghost btn-sm">Clear</a>
+    <span class="ml-auto text-xs text-ink-500 dark:text-ink-400">{{ page.paginator.count|intcomma }} entries</span>
+  </form>
+
+  <section class="card overflow-hidden reveal">
+    {% if page.object_list %}
+      <div class="table-wrap">
+        <table class="table min-w-[980px]">
+          <thead>
+            <tr>
+              <th class="th">Sent</th>
+              <th class="th">Recipient</th>
+              <th class="th">Type</th>
+              <th class="th col-model">Model</th>
+              <th class="th">Trigger</th>
+              <th class="th text-right">Balance then</th>
+              <th class="th">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in page.object_list %}
+              <tr class="row group/row">
+                <td class="td text-xs text-ink-500 dark:text-ink-400">{{ entry.created_at|date:"d M Y, H:i" }}</td>
+                <td class="td">
+                  <a href="{% url 'console:user_detail' entry.user_id %}" class="text-sm font-medium hover:text-brand-600 dark:hover:text-brand-300">
+                    {{ entry.recipient|truncatechars:30 }}
+                  </a>
+                </td>
+                <td class="td text-xs">{{ entry.get_email_type_display }}</td>
+                <td class="td col-model text-xs">
+                  {% if entry.ai_model %}{{ entry.ai_model.name }}{% else %}<span class="text-ink-400">—</span>{% endif %}
+                </td>
+                <td class="td max-w-xs truncate text-xs tap-expand" tabindex="0" title="{{ entry.trigger }}">{{ entry.trigger|default:"—" }}</td>
+                <td class="td text-right tabular-nums text-ink-500 dark:text-ink-400">
+                  {% if entry.balance_at_send %}{{ entry.balance_at_send|intcomma }}{% else %}—{% endif %}
+                </td>
+                <td class="td">
+                  <span class="{{ entry.tone|tone_classes }}">{{ entry.get_status_display }}</span>
+                  {% if entry.error %}
+                    {# Tap to read the whole error: the tooltip it replaces never opened on a phone. #}
+                    <span class="tap-expand ml-1 block max-w-[16rem] truncate text-[11px] text-rose-700 dark:text-rose-300" tabindex="0" title="{{ entry.error }}">{{ entry.error }}</span>
+                  {% endif %}
+                  {% if entry.can_retry %}
+                    <form method="post" action="{% url 'console:email_retry' entry.pk %}" class="mt-1.5" data-loading-form data-loading-label="Sending…">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn-outline btn-sm" data-submit>
+                        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-refresh"/></svg> Retry
+                      </button>
+                    </form>
+                  {% elif entry.retry_note %}
+                    <span class="mt-1 block max-w-[16rem] whitespace-normal text-[11px] leading-snug text-ink-500 dark:text-ink-400">{{ entry.retry_note }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-mail" title="No mail logged yet" body="Messages appear here as soon as the platform sends one." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

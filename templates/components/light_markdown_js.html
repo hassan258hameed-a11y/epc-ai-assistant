@@ -1,0 +1,92 @@
+{% comment %}
+  The small answer renderer for pages outside the chat: the public shared
+  transcript and the printable export. Included inside a <script>.
+
+  Escape first, then format — nothing a student or a model wrote can run as
+  markup. Links are only ever http(s). The chat itself has a fuller renderer
+  (highlighted code, copy buttons); these pages need to be readable, not
+  interactive — but a table an answer was built around still has to be a
+  table, not a block of "|" characters.
+{% endcomment %}
+  function esc(text) {
+    return String(text).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+{% include "components/tidy_math_js.html" %}
+
+  /* Escape first, then format. Links are only ever http(s). Inline code is
+     set aside so the maths tidy and emphasis never reach inside it. */
+  function inline(text) {
+    var codes = [];
+    return tidyMath(text.replace(/`([^`]+)`/g, function (_, code) {
+        codes.push(code);
+        return '\u0000' + (codes.length - 1) + '\u0000';
+      }))
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="noopener nofollow" target="_blank">$1</a>')
+      .replace(/\u0000(\d+)\u0000/g, function (_, n) { return '<code>' + codes[Number(n)] + '</code>'; });
+  }
+
+  /* A GitHub-style table: a header row, a |---|:--:| rule, then rows. */
+  function tableCells(line) {
+    return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(function (c) { return c.trim(); });
+  }
+  function isTableRule(line) {
+    return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line || '');
+  }
+
+  function markdown(source) {
+    var out = [], lines = esc(source).split('\n'), i = 0, list = null;
+    function closeList() { if (list) { out.push('</' + list + '>'); list = null; } }
+    while (i < lines.length) {
+      var line = lines[i];
+      if (line.indexOf('|') !== -1 && isTableRule(lines[i + 1])) {
+        closeList();
+        var head = tableCells(line);
+        var align = tableCells(lines[i + 1]).map(function (rule) {
+          return /^:-+:$/.test(rule) ? 'center' : /-:$/.test(rule) ? 'right' : '';
+        });
+        var cell = function (tag, text, n) {
+          return '<' + tag + (align[n] ? ' style="text-align:' + align[n] + '"' : '') + '>' + inline(text) + '</' + tag + '>';
+        };
+        var html = '<table><thead><tr>' + head.map(function (text, n) { return cell('th', text, n); }).join('') +
+                   '</tr></thead><tbody>';
+        i += 2;
+        while (i < lines.length && lines[i].indexOf('|') !== -1 && lines[i].trim()) {
+          html += '<tr>' + tableCells(lines[i]).map(function (text, n) { return cell('td', text, n); }).join('') + '</tr>';
+          i++;
+        }
+        out.push(html + '</tbody></table>');
+        continue;
+      }
+      if (/^```/.test(line)) {
+        closeList();
+        var code = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }
+        out.push('<pre><code>' + code.join('\n') + '</code></pre>');
+        i++;
+        continue;
+      }
+      var h = line.match(/^(#{1,3})\s+(.*)$/);
+      if (h) { closeList(); out.push('<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'); i++; continue; }
+      var ul = line.match(/^\s*[-*]\s+(.*)$/), ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (ul || ol) {
+        var kind = ul ? 'ul' : 'ol';
+        if (list !== kind) { closeList(); out.push('<' + kind + '>'); list = kind; }
+        out.push('<li>' + inline((ul || ol)[1]) + '</li>');
+        i++;
+        continue;
+      }
+      closeList();
+      if (/^&gt;\s?/.test(line)) { out.push('<blockquote>' + inline(line.replace(/^&gt;\s?/, '')) + '</blockquote>'); i++; continue; }
+      if (line.trim()) out.push('<p>' + inline(line) + '</p>');
+      i++;
+    }
+    closeList();
+    return out.join('');
+  }
+

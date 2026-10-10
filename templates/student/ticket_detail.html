@@ -1,0 +1,194 @@
+{% extends "base/shell_page.html" %}
+{% load ai_extras %}
+
+{% block title %}{{ ticket.reference }} · Support · {{ BRAND.full_name }}{% endblock %}
+{% block back_url %}{% url 'student:tickets' %}{% endblock %}
+{% block back_label %}Your requests{% endblock %}
+
+{% block head %}
+<style>
+  /* A thread reads best as a conversation, so it borrows the chat's shape:
+     the person's turn on one side, support's on the other, and the same
+     bubble geometry both places. */
+  .thread { display: grid; gap: 18px; }
+  .turn { display: flex; gap: 11px; }
+  .turn-mark {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
+    display: grid; place-items: center;
+    font-size: 10.5px; font-weight: 700; color: #fff;
+    background: linear-gradient(145deg, #8B6DF0 0%, #C061C9 55%, #E0704F 100%);
+  }
+  .turn-staff .turn-mark { background: var(--ink); color: var(--surface); }
+  .turn-staff .turn-mark svg { width: 15px; height: 15px; }
+  .turn-body { min-width: 0; flex: 1; }
+  .turn-who { margin: 0; font-size: 11.5px; color: var(--ink-3); }
+  .turn-who b { color: var(--ink-2); font-weight: 600; }
+  .turn-text {
+    margin: 6px 0 0; padding: 11px 14px;
+    border-radius: 4px 16px 16px 16px;
+    border: 1px solid var(--border); background: var(--surface-2);
+    font-size: 14px; line-height: 1.6; color: var(--ink);
+    white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere;
+  }
+  .turn-staff .turn-text { border-color: var(--accent-mid); background: var(--accent-soft); }
+  .turn-file {
+    display: inline-flex; align-items: center; gap: 10px; margin-top: 9px;
+    padding: 8px 13px 8px 9px; border-radius: var(--r);
+    border: 1px solid var(--border); background: var(--surface);
+    transition: border-color var(--fast);
+  }
+  .turn-file:hover { border-color: var(--accent); }
+  .turn-file span { display: block; }
+  .turn-file .n { font-size: 12.5px; font-weight: 500; max-width: 15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .turn-file .s { font-size: 11px; color: var(--ink-3); }
+  /* The file input is hidden behind a button-shaped label; the label names
+     the chosen file, so nobody wonders whether it took. */
+  .tk-attach {
+    position: relative; display: inline-flex; align-items: center; gap: 8px;
+    height: 36px; padding: 0 13px; border-radius: 11px; cursor: pointer;
+    border: 1px dashed var(--border-firm); background: var(--surface);
+    font-size: 12.5px; font-weight: 600; color: var(--ink-2); max-width: 100%;
+    transition: border-color var(--fast), color var(--fast);
+  }
+  .tk-attach:hover, .tk-attach.has-file { border-color: var(--accent); color: var(--accent); }
+  .tk-attach input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .tk-attach svg { width: 15px; height: 15px; flex: none; }
+  .tk-attach span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14rem; }
+  .tk-close { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="panel-head">
+  <p class="panel-eyebrow mono">{{ ticket.reference }}</p>
+  <h2 class="panel-title">{{ ticket.subject }}</h2>
+</header>
+
+<div class="card">
+  <div class="card-body">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:9px">
+      <span class="badge {% if ticket.status == 'resolved' or ticket.status == 'closed' %}is-ok{% elif ticket.status == 'waiting_user' %}is-warn{% endif %}">
+        {{ ticket.get_status_display }}
+      </span>
+      <span class="badge">{{ ticket.get_category_display }}</span>
+      <span style="margin-left:auto;font-size:11.5px;color:var(--ink-3)">
+        Raised {{ ticket.created_at|date:"d M Y, H:i" }}
+      </span>
+    </div>
+
+    {% if ticket.status == 'resolved' %}
+      <p class="flash is-ok" style="margin:14px 0 0">
+        <svg aria-hidden="true"><use href="#i-check-circle"/></svg>
+        <span>This was marked resolved. If it is not sorted, reply below and it reopens.</span>
+      </p>
+    {% elif ticket.status == 'closed' %}
+      <p class="flash" style="margin:14px 0 0">
+        <svg aria-hidden="true"><use href="#i-lock"/></svg>
+        <span>This ticket is closed. Open a new request if you need more help.</span>
+      </p>
+    {% elif ticket.status == 'new' %}
+      <p class="flash is-warn" style="margin:14px 0 0">
+        <svg aria-hidden="true"><use href="#i-clock"/></svg>
+        <span>We have your request and will reply as soon as we can.</span>
+      </p>
+    {% endif %}
+  </div>
+</div>
+
+<section class="panel-section">
+  <h3 class="section-title">Conversation</h3>
+  <div class="card">
+    <div class="card-body">
+      <div class="thread">
+        <div class="turn">
+          <span class="turn-mark">{{ user.initials }}</span>
+          <div class="turn-body">
+            <p class="turn-who"><b>You</b> · {{ ticket.created_at|date:"d M, H:i" }}</p>
+            <div class="turn-text" dir="auto">{{ ticket.description }}</div>
+            {% if ticket.attachment %}
+              <a class="turn-file" href="{{ ticket.attachment.url }}" target="_blank" rel="noopener">
+                <svg aria-hidden="true" style="width:16px;height:16px;color:var(--accent)"><use href="#i-doc"/></svg>
+                <span>
+                  <span class="n">{{ ticket.attachment_name }}</span>
+                  <span class="s">{{ ticket.attachment_size|filesizeformat }}</span>
+                </span>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% for reply in replies %}
+          <div class="turn {% if reply.is_from_staff %}turn-staff{% endif %}">
+            <span class="turn-mark">
+              {% if reply.is_from_staff %}
+                <svg aria-hidden="true"><use href="#i-shield"/></svg>
+              {% else %}{{ user.initials }}{% endif %}
+            </span>
+            <div class="turn-body">
+              <p class="turn-who">
+                <b>{% if reply.is_from_staff %}Support team{% else %}You{% endif %}</b>
+                · {{ reply.created_at|date:"d M, H:i" }}
+              </p>
+              {% if reply.body %}<div class="turn-text" dir="auto">{{ reply.body }}</div>{% endif %}
+              {% if reply.attachment %}
+                <a class="turn-file" href="{{ reply.attachment.url }}" target="_blank" rel="noopener">
+                  <svg aria-hidden="true" style="width:16px;height:16px;color:var(--accent)"><use href="#i-doc"/></svg>
+                  <span>
+                    <span class="n">{{ reply.attachment_name }}</span>
+                    <span class="s">{{ reply.attachment_size|filesizeformat }}</span>
+                  </span>
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if ticket.status != 'closed' %}
+      <form method="post" action="{% url 'student:ticket_reply' ticket.reference %}" class="card-body"
+            enctype="multipart/form-data" style="border-top:1px solid var(--border-soft)">
+        {% csrf_token %}
+        <div class="field">
+          <label for="{{ form.body.id_for_label }}">Add to this ticket</label>
+          <textarea name="body" id="{{ form.body.id_for_label }}" rows="4" dir="auto"
+                    placeholder="Anything else that would help us sort this out?"></textarea>
+        </div>
+        <div class="btn-row" style="margin-top:14px;align-items:center">
+          <label class="tk-attach">
+            <input type="file" name="attachment" data-attach-input
+                   accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,.csv,.xlsx">
+            <svg aria-hidden="true"><use href="#i-upload"/></svg>
+            <span data-attach-label>Attach a file</span>
+          </label>
+          <span style="flex:1 1 10px"></span>
+          <button type="submit" class="btn btn-primary">
+            <svg aria-hidden="true"><use href="#i-send"/></svg> Send message
+          </button>
+        </div>
+      </form>
+      {% if ticket.status != 'resolved' %}
+        <form method="post" action="{% url 'student:ticket_close' ticket.reference %}" class="card-body tk-close"
+              style="border-top:1px solid var(--border-soft)"
+              onsubmit="return confirm('Close this ticket? The team will stop working on it. You can open a new request any time.');">
+          {% csrf_token %}
+          <span>Sorted already? Close the ticket so the team knows.</span>
+          <button type="submit" class="btn btn-sm btn-ghost">
+            <svg aria-hidden="true"><use href="#i-check-circle"/></svg> Close ticket
+          </button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</section>
+<script>
+  document.querySelectorAll('[data-attach-input]').forEach(function (input) {
+    input.addEventListener('change', function () {
+      var label = input.parentNode.querySelector('[data-attach-label]');
+      var file = input.files && input.files[0];
+      label.textContent = file ? file.name : 'Attach a file';
+      input.parentNode.classList.toggle('has-file', !!file);
+    });
+  });
+</script>
+{% endblock %}

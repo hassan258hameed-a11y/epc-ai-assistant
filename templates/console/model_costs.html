@@ -1,0 +1,506 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+Cost & margin - the Claude Design page of that name, on the real figures.
+
+One hero card puts the margin next to what it is made of: revenue against
+the estimated provider cost, and a ring for the share. Four tiles restate the
+totals, a warning names any model with no list price, and the per-model table
+opens a row into its full breakdown. Sorting is done here in the browser with
+the numbers already on the page; the window is a real reload, because every
+figure changes with it.
+
+Nothing on this page is ever rendered to a student.
+{% endcomment %}
+
+{% block title %}Cost &amp; margin · Console{% endblock %}
+
+{% block head %}
+<style>
+  /* Motion: the design's keyframes, named apart from the console's. */
+  @keyframes cmFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes cmRise { from { opacity: 0; transform: translateY(22px) scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes cmPop { 0% { opacity: 0; transform: scale(.9); } 60% { transform: scale(1.03); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes cmSpin { to { transform: rotate(360deg); } }
+  @keyframes cmSheen { 0% { transform: translateX(-130%) skewX(-18deg); opacity: 1; } 96% { transform: translateX(360%) skewX(-18deg); opacity: 1; } 100% { transform: translateX(360%) skewX(-18deg); opacity: 0; } }
+  @keyframes cmToastIn { from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.96); } to { opacity: 1; transform: translateX(-50%); } }
+
+  .cm { --ink: #0B1222; --mute: #5B6884; --line: #E1E7F2; --hair: #F1F5FA; --card: #E7ECF6; --blue: #2563EB; --blue-ink: #1D4ED8; --body: #26314A; }
+  .cm, .cm button, .cm a { font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif; color: var(--ink); }
+  .cm button { cursor: pointer; }
+  .cm svg { display: block; }
+  .cm .num { font-variant-numeric: tabular-nums; }
+
+  /* ---- topbar buttons ---------------------------------------------- */
+  .cm-refresh { height: 34px; padding: 0 12px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; display: flex; align-items: center; gap: 7px; color: var(--mute); font-size: 12.5px; font-weight: 600; transition: border-color .22s, color .22s, transform .22s; font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif; cursor: pointer; }
+  .cm-refresh:hover { border-color: var(--blue, #2563EB); color: #1D4ED8; transform: translateY(-1px); }
+  .cm-refresh svg { width: 14px; height: 14px; display: block; }
+  .cm-refresh.is-busy svg { animation: cmSpin .8s linear infinite; }
+  .cm-export { height: 34px; padding: 0 13px; flex: 0 0 auto; border: 0; border-radius: 10px; background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: #fff; display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; box-shadow: 0 10px 22px -12px rgba(37,99,235,.9); transition: transform .22s, box-shadow .22s, filter .22s; text-decoration: none; font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif; }
+  .cm-export:hover { transform: translateY(-2px); filter: saturate(1.1); color: #fff; }
+  .cm-export svg { width: 14px; height: 14px; display: block; }
+
+  /* ---- masthead ------------------------------------------------------ */
+  .cm-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: clamp(12px, 1.4vw, 18px); animation: cmFadeUp .5s cubic-bezier(.2,.7,.2,1) both; }
+  .cm-date { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; color: var(--blue-ink); }
+  .cm-h1 { margin: 7px 0 0; font-size: clamp(26px, 2.9vw, 34px); font-weight: 600; letter-spacing: -.035em; line-height: 1.06; color: var(--ink); }
+  .cm-lede { margin: 7px 0 0; font-size: 14px; color: var(--mute); line-height: 1.5; max-width: 58ch; }
+  .cm-window { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .cm-eyebrow { font-size: 9.5px; font-weight: 700; letter-spacing: .13em; color: var(--mute); }
+  .cm-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: 14px; background: #fff; border: 1px solid #E4E9F3; box-shadow: 0 1px 2px rgba(20,35,70,.05); }
+  .cm-seg-pill { position: absolute; top: 4px; bottom: 4px; border-radius: 10px; transition: left .4s cubic-bezier(.5,1.3,.4,1), width .4s; background: linear-gradient(135deg, #3B82F6, #1D4ED8); box-shadow: 0 8px 18px -10px rgba(37,99,235,.9); width: calc((100% - 8px) / 4); left: calc(4px + var(--i, 0) * (100% - 8px) / 4); }
+  .cm-seg a, .cm-seg button { position: relative; z-index: 1; min-width: 0; border: 0; background: transparent; border-radius: 10px; padding: 8px 15px; font-size: 12.5px; font-weight: 600; white-space: nowrap; transition: color .26s; color: var(--mute); text-align: center; text-decoration: none; }
+  .cm-seg a.is-on, .cm-seg button.is-on { color: #fff; }
+  .cm-seg.is-none .cm-seg-pill { opacity: 0; }
+
+  /* ---- hero ---------------------------------------------------------- */
+  .cm-hero { display: flex; flex-wrap: wrap; gap: clamp(14px, 1.6vw, 22px); border-radius: 24px; padding: clamp(18px, 2vw, 26px); border: 1px solid #E4E9F3; background: linear-gradient(118deg, #FFFFFF 0%, #F8FBFF 32%, rgba(96,165,250,.24) 72%, rgba(225,29,72,.14) 100%); box-shadow: 0 24px 48px -34px rgba(20,35,70,.42); animation: cmRise .55s cubic-bezier(.2,.7,.2,1) .05s both; position: relative; overflow: hidden; }
+  .cm-hero-sheen { position: absolute; top: 0; left: 0; width: 110px; height: 2px; background: linear-gradient(90deg, transparent, rgba(37,99,235,.8), transparent); animation: cmSheen 6s cubic-bezier(.4,0,.2,1) 2 both; pointer-events: none; }
+  .cm-hero-main { flex: 1 1 clamp(280px, calc(56% - 22px), 760px); min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .cm-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; color: var(--blue-ink); }
+  .cm-big-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
+  .cm-big { font-size: clamp(38px, 4.4vw, 54px); font-weight: 600; letter-spacing: -.045em; line-height: .92; }
+  .cm-up { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 4px 11px; border-radius: 99px; color: #0A7F5C; background: #E8F8F1; border: 1px solid #C9EDDE; }
+  .cm-up.is-loss { color: #9F1239; background: rgba(225,29,72,.1); border-color: rgba(225,29,72,.26); }
+  .cm-up.is-none { color: var(--mute); background: #F2F5FB; border-color: var(--card); }
+  .cm-compare { display: flex; flex-direction: column; gap: 11px; }
+  .cm-cmp-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .cm-cmp-top b { font-size: 12px; font-weight: 600; color: var(--body); }
+  .cm-cmp-top strong { font-size: 14px; font-weight: 600; }
+  .cm-track { height: 10px; border-radius: 99px; background: rgba(11,18,34,.06); margin-top: 6px; overflow: hidden; }
+  .cm-track i { display: block; height: 100%; border-radius: 99px; min-width: 5px; transition: width .95s cubic-bezier(.2,.7,.2,1); width: 0; }
+  .cm-track i.rev { background: linear-gradient(90deg, #60A5FA, #2563EB); transition-delay: .05s; }
+  .cm-track i.cost { background: linear-gradient(90deg, #FB7185, #E11D48); transition-delay: .15s; }
+  .cm-cmp-sub { font-size: 11.5px; color: var(--mute); margin-top: 5px; }
+  .cm-hero-side { flex: 1 1 clamp(240px, calc(44% - 22px), 400px); min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 18px; border-radius: 20px; background: rgba(255,255,255,.84); border: 1px solid #E5EAF4; backdrop-filter: blur(8px); }
+  .cm-ring { position: relative; width: 132px; height: 132px; flex: 0 0 auto; }
+  .cm-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .cm-ring .arc { transition: stroke-dasharray .95s cubic-bezier(.2,.7,.2,1); }
+  .cm-ring-in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .cm-ring-in strong { font-size: 30px; font-weight: 600; letter-spacing: -.04em; line-height: 1; }
+  .cm-ring-in small { font-size: 9.5px; font-weight: 700; letter-spacing: .12em; color: var(--mute); margin-top: 4px; }
+  .cm-ring-stats { flex: 1 1 130px; min-width: 120px; display: flex; flex-direction: column; gap: 11px; }
+  .cm-ring-stats b { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .11em; color: var(--mute); }
+  .cm-ring-stats strong { display: block; font-size: 17px; font-weight: 600; letter-spacing: -.026em; margin-top: 2px; }
+
+  /* ---- kpis ---------------------------------------------------------- */
+  .cm-kpis { display: flex; flex-wrap: wrap; gap: clamp(10px, 1vw, 14px); }
+  .cm-kpi { flex: 1 1 clamp(200px, calc(25% - 12px), 420px); min-width: 0; border-radius: 18px; padding: 16px; border: 1px solid var(--card); background: #fff; box-shadow: 0 1px 2px rgba(20,35,70,.05); animation: cmRise .5s cubic-bezier(.2,.7,.2,1) both; transition: transform .3s cubic-bezier(.2,.7,.2,1), box-shadow .3s, border-color .3s; }
+  .cm-kpi:hover { transform: translateY(-4px); box-shadow: 0 22px 40px -26px rgba(20,35,70,.45); border-color: rgba(37,99,235,.32); }
+  .cm-kpi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .cm-kpi-top b { font-size: 9.5px; font-weight: 700; letter-spacing: .12em; color: var(--mute); }
+  .cm-kpi-ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; }
+  .cm-kpi-ic svg { width: 15px; height: 15px; }
+  .cm-kpi strong { display: block; font-size: clamp(24px, 2.1vw, 29px); font-weight: 600; letter-spacing: -.038em; line-height: 1; margin-top: 13px; }
+  .cm-kpi small { display: block; font-size: 12px; color: var(--mute); margin-top: 8px; }
+
+  /* ---- warning ------------------------------------------------------- */
+  .cm-warn { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border-radius: 18px; padding: 15px 17px; border: 1px solid #F7E0BC; background: linear-gradient(100deg, #FFFBF2, #FFFDF9); animation: cmRise .5s cubic-bezier(.2,.7,.2,1) .24s both; }
+  .cm-warn-ic { width: 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto; background: #FDF0D8; animation: cmPop .5s cubic-bezier(.3,1.25,.4,1) .3s both; }
+  .cm-warn p { flex: 1 1 240px; min-width: 0; font-size: 13.5px; line-height: 1.5; color: #4A3A17; margin: 0; }
+  .cm-warn p strong { font-weight: 700; color: #7A5A08; }
+  .cm-warn a { height: 34px; padding: 0 14px; border: 1px solid #EBD5AE; border-radius: 11px; background: #fff; font-size: 12.5px; font-weight: 600; color: #7A5A08; flex: 0 0 auto; display: flex; align-items: center; text-decoration: none; transition: transform .22s, border-color .22s, box-shadow .22s; }
+  .cm-warn a:hover { transform: translateY(-2px); border-color: #B07908; box-shadow: 0 12px 22px -16px rgba(176,121,8,.9); color: #7A5A08; }
+
+  /* ---- table --------------------------------------------------------- */
+  .cm-table { border-radius: 22px; border: 1px solid var(--card); background: #fff; box-shadow: 0 1px 2px rgba(20,35,70,.05); overflow: hidden; animation: cmRise .55s cubic-bezier(.2,.7,.2,1) .3s both; }
+  .cm-table-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: clamp(16px, 1.4vw, 22px); }
+  .cm-title { font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
+  .cm-note { font-size: 12.5px; color: var(--mute); margin-top: 2px; }
+  .cm-sort { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .cm-sort-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; border-radius: 12px; background: #F2F5FB; border: 1px solid var(--card); }
+  .cm-sort-pill { position: absolute; top: 3px; bottom: 3px; border-radius: 9px; transition: left .38s cubic-bezier(.5,1.3,.4,1), width .38s; background: linear-gradient(135deg, #3B82F6, #1D4ED8); box-shadow: 0 6px 14px -8px rgba(37,99,235,.8); width: calc((100% - 6px) / 4); left: calc(3px + var(--i, 0) * (100% - 6px) / 4); }
+  .cm-sort-seg button { position: relative; z-index: 1; min-width: 0; border: 0; background: transparent; border-radius: 9px; padding: 6px 13px; font-size: 12px; font-weight: 600; white-space: nowrap; transition: color .26s; color: var(--mute); }
+  .cm-sort-seg button.is-on { color: #fff; }
+  .cm-rows { display: flex; flex-direction: column; }
+  .cm-row { border-top: 1px solid var(--hair); animation: cmFadeUp .45s cubic-bezier(.2,.7,.2,1) both; }
+  .cm-row-main { display: flex; align-items: center; gap: clamp(12px, 1.4vw, 20px); flex-wrap: wrap; padding: 14px clamp(16px, 1.4vw, 22px); cursor: pointer; transition: background .22s; background: transparent; }
+  .cm-row-main:hover { background: #F7FAFE; }
+  .cm-row.is-open .cm-row-main { background: #F5F9FF; }
+  .cm-ident { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 190px; }
+  .cm-mark { width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; flex: 0 0 auto; transition: transform .28s cubic-bezier(.3,1.3,.4,1), box-shadow .28s; background: linear-gradient(135deg, var(--m-from), var(--m-to)); box-shadow: 0 6px 14px -8px var(--m-to); transform: none; color: #fff; }
+  .cm-mark svg { width: 18px; height: 18px; }
+  .cm-row.is-open .cm-mark { box-shadow: 0 12px 24px -10px var(--m-to); transform: scale(1.06) rotate(-3deg); }
+  .cm-name { font-size: 14px; font-weight: 600; letter-spacing: -.018em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cm-prov { font-size: 11px; color: var(--mute); margin-top: 2px; }
+  .cm-mix { flex: 1 1 200px; min-width: 0; }
+  .cm-mix-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .cm-lbl { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--mute); }
+  .cm-mix-top strong { font-size: 12.5px; font-weight: 600; }
+  .cm-mix-bar { display: flex; gap: 2px; height: 7px; margin-top: 7px; border-radius: 99px; overflow: hidden; background: #EFF3FA; }
+  .cm-mix-bar i { display: block; border-radius: 99px; min-width: 3px; transition: width .9s cubic-bezier(.2,.7,.2,1); width: 0; }
+  .cm-mix-bar i.in { background: linear-gradient(90deg, #93C5FD, #3B82F6); }
+  .cm-mix-bar i.out { background: linear-gradient(90deg, #FB7185, #E11D48); }
+  .cm-mix-sub { font-size: 11px; color: var(--mute); margin-top: 5px; }
+  .cm-figs { flex: 0 0 auto; display: flex; align-items: center; gap: clamp(10px, 1.3vw, 18px); }
+  .cm-fig { min-width: 78px; text-align: right; }
+  .cm-fig.wide { min-width: 92px; }
+  .cm-fig strong { display: block; font-size: 14px; font-weight: 600; margin-top: 3px; }
+  .cm-fig strong.mute { color: var(--mute); }
+  .cm-margin { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; margin-top: 3px; }
+  .cm-margin strong { font-size: 15px; font-weight: 600; margin: 0; }
+  .cm-margin strong.gain { color: #0A7F5C; } .cm-margin strong.loss { color: #9F1239; } .cm-margin strong.mute { color: var(--mute); }
+  .cm-margin small { font-size: 10.5px; font-weight: 600; color: var(--mute); }
+  .cm-chev { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; transition: background .26s, color .26s, transform .3s cubic-bezier(.4,0,.2,1); background: #F1F4FB; color: var(--mute); transform: none; }
+  .cm-chev svg { width: 14px; height: 14px; }
+  .cm-row.is-open .cm-chev { background: var(--m-to); color: #fff; transform: rotate(180deg); }
+  .cm-detail { padding: 2px clamp(16px, 1.4vw, 22px) 18px; background: #FAFCFF; animation: cmFadeUp .3s cubic-bezier(.2,.7,.2,1) both; }
+  .cm-detail[hidden] { display: none; }
+  .cm-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .cm-dcard { border-radius: 14px; padding: 12px 13px; background: #fff; border: 1px solid var(--card); transition: transform .26s cubic-bezier(.2,.7,.2,1), box-shadow .26s, border-color .26s; }
+  .cm-dcard:hover { transform: translateY(-3px); box-shadow: 0 16px 30px -22px rgba(20,35,70,.5); border-color: color-mix(in srgb, var(--m-to) 33%, transparent); }
+  .cm-dcard b { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .1em; color: var(--mute); }
+  .cm-dcard strong { display: block; font-size: 17px; font-weight: 600; letter-spacing: -.026em; margin-top: 5px; }
+  .cm-dcard small { display: block; font-size: 10.5px; color: var(--mute); margin-top: 4px; }
+  .cm-detail-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .cm-detail-foot span { font-size: 11.5px; color: var(--mute); flex: 1 1 200px; min-width: 0; }
+  .cm-detail-foot a { height: 32px; padding: 0 13px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 12px; font-weight: 600; flex: 0 0 auto; display: flex; align-items: center; text-decoration: none; transition: border-color .22s, color .22s, transform .22s, box-shadow .22s; }
+  .cm-detail-foot a:hover { border-color: var(--blue); color: var(--blue-ink); transform: translateY(-2px); box-shadow: 0 10px 18px -12px rgba(37,99,235,.8); }
+  .cm-table-foot { padding: clamp(14px, 1.2vw, 18px) clamp(16px, 1.4vw, 22px); border-top: 1px solid var(--hair); background: #FAFCFF; font-size: 11.5px; line-height: 1.6; color: var(--mute); }
+  .cm-table-foot a { font-weight: 600; color: var(--blue); transition: color .18s; }
+  .cm-table-foot a:hover { color: var(--blue-ink); }
+  .cm-empty { padding: 30px 22px; text-align: center; font-size: 12.5px; color: var(--mute); border-top: 1px solid var(--hair); }
+  .cm-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 2px 6px 10px; font-size: 11.5px; color: var(--mute); }
+
+  .cm-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 11px; padding: 12px 16px; border-radius: 14px; background: #0B1222; color: #fff; box-shadow: 0 24px 48px -20px rgba(11,18,34,.65); animation: cmToastIn .34s cubic-bezier(.3,1.2,.4,1) both; max-width: min(440px, 90vw); }
+  .cm-toast i { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto; background: rgba(16,185,129,.2); color: #34D399; }
+  .cm-toast span { font-size: 13px; font-weight: 500; line-height: 1.4; }
+  .cm-toast[hidden] { display: none; }
+
+  /* ---- dark: the design is light; these keep it legible, nothing more */
+  .dark .cm { --ink: #F2F4F8; --mute: #A8B0BD; --line: #262B34; --hair: #1F242C; --card: #262B34; --body: #D6DAE3; }
+  .dark .cm .cm-kpi, .dark .cm .cm-table, .dark .cm .cm-seg, .dark .cm .cm-dcard, .dark .cm .cm-detail-foot a, .dark .cm-refresh { background: #14171E; }
+  /* Status pills: the same meaning in dark mode, tinted on dark rather than pastel on white. */
+  .dark .cm-up { color: #34D399; background: rgba(16,185,129,.12); border-color: rgba(52,211,153,.26); }
+  .dark .cm-up.is-loss { color: #FB7185; background: rgba(225,29,72,.14); border-color: rgba(251,113,133,.28); }
+  .dark .cm-up.is-none { color: #A8B0BD; background: #1A1E26; border-color: #262B34; }
+  .dark .cm .cm-hero { background: linear-gradient(118deg, #141B2C 0%, #131A2A 32%, rgba(37,99,235,.22) 72%, rgba(225,29,72,.14) 100%); border-color: rgba(255,255,255,.08); }
+  .dark .cm .cm-hero-side { background: rgba(20,23,30,.84); border-color: #262B34; }
+  .dark .cm .cm-track { background: rgba(255,255,255,.08); } .dark .cm .cm-ring .base { stroke: #262B34; }
+  .dark .cm .cm-sort-seg { background: #1A1E26; } .dark .cm .cm-chev { background: #1F242C; }
+  .dark .cm .cm-row-main:hover { background: rgba(255,255,255,.04); } .dark .cm .cm-row.is-open .cm-row-main, .dark .cm .cm-detail, .dark .cm .cm-table-foot { background: #11141B; }
+  .dark .cm .cm-mix-bar { background: #1F242C; } .dark .cm .cm-up.is-none { background: #1A1E26; }
+  .dark .cm .cm-warn { background: linear-gradient(100deg, #201A0E, #1B1810); border-color: rgba(247,224,188,.25); } .dark .cm .cm-warn p { color: #E8DCC2; } .dark .cm .cm-warn a { background: #14171E; }
+  /* Values the dark theme never redefined: the design's blue, the margin and
+     warning inks, and the pastel icon wells. */
+  .dark .cm { --blue: #60A5FA; --blue-ink: #93C5FD; }
+  .dark .cm .cm-margin strong.gain { color: #34D399; } .dark .cm .cm-margin strong.loss { color: #FB7185; }
+  .dark .cm .cm-warn p strong, .dark .cm .cm-warn a { color: #FBBF24; }
+  .dark .cm .cm-warn a { border-color: rgba(251,191,36,.35); }
+  .dark .cm .cm-warn-ic { background: rgba(217,119,6,.18); }
+  .dark .cm .cm-kpi-ic { background: rgba(255,255,255,.06) !important; }
+  .dark .cm-refresh { border-color: #262B34; color: #A8B0BD; }
+  .dark .cm-refresh:hover { border-color: #60A5FA; color: #93C5FD; }
+  @media (pointer: coarse) {
+    .cm .cm-warn a, .cm .cm-detail-foot a, .cm-refresh, .cm-export { min-height: 44px; }
+    .cm .cm-sort-seg button, .cm .cm-seg a { min-height: 40px; }
+    .cm .cm-note a, .cm .cm-foot a, .cm .cm-table-foot a { display: inline-flex; align-items: center; min-height: 40px; }
+  }
+</style>
+{% endblock %}
+
+{% block topbar %}
+<button type="button" class="cm-refresh" id="cmRefresh" title="Refresh">
+  <svg aria-hidden="true"><use href="#i-refresh"/></svg><span id="cmRefreshLabel" class="topbar-label">Refresh</span>
+</button>
+<a href="{% url 'console:model_costs_export' %}?days={{ days }}" class="cm-export" id="cmExport">
+  <svg aria-hidden="true"><use href="#i-download"/></svg><span class="topbar-label">Export</span>
+</a>
+{% endblock %}
+
+{% block page_head %}
+<header class="cm cm-head">
+  <div style="min-width:0">
+    {% now "l, j F Y" as today_line %}<div class="cm-date">{{ today_line|upper }}</div>
+    <h1 class="cm-h1" data-page-title>Cost &amp; margin</h1>
+    <p class="cm-lede">What students paid against what the tokens they burned actually cost you.</p>
+  </div>
+  <div class="cm-window">
+    <span class="cm-eyebrow">WINDOW</span>
+    <div class="cm-seg{% if window_index < 0 %} is-none{% endif %}" style="--i:{{ window_index }}">
+      <div class="cm-seg-pill"></div>
+      {% for window in windows %}
+        <a href="{% qs request days=window %}" class="{% if days == window %}is-on{% endif %}">{{ window }} days</a>
+      {% endfor %}
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="cm" id="cm" style="display:flex;flex-direction:column;gap:clamp(12px,1.4vw,18px)">
+
+  {# ---------- hero ---------- #}
+  <section class="cm-hero">
+    <span class="cm-hero-sheen"></span>
+    <div class="cm-hero-main">
+      <div>
+        <div class="cm-kicker">MARGIN &middot; LAST {{ days }} DAYS</div>
+        <div class="cm-big-row">
+          <div class="cm-big num" data-money="{{ totals.margin }}">{{ totals.margin|money }}</div>
+          {% if totals.margin_percent is None %}
+            <span class="cm-up is-none">no revenue in this window</span>
+          {% else %}
+            <span class="cm-up{% if totals.margin < 0 %} is-loss{% endif %}">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="{% if totals.margin < 0 %}M8 3.6V12M4.4 8.4 8 12l3.6-3.6{% else %}M8 12.4V4M4.4 7.6 8 4l3.6 3.6{% endif %}"/></svg>{{ totals.margin_percent }}% of revenue
+            </span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="cm-compare">
+        <div>
+          <div class="cm-cmp-top"><b>Revenue collected</b><strong class="num" data-money="{{ totals.revenue }}">{{ totals.revenue|money }}</strong></div>
+          <div class="cm-track"><i class="rev" data-width="100"></i></div>
+          <div class="cm-cmp-sub">{{ totals.plans_sold }} plan{{ totals.plans_sold|pluralize }} sold in this window</div>
+        </div>
+        <div>
+          <div class="cm-cmp-top"><b>Estimated provider cost</b><strong class="num" data-money="{{ totals.cost }}">{{ totals.cost|money }}</strong></div>
+          <div class="cm-track"><i class="cost" data-width="{{ totals.cost_pct|floatformat:1 }}"></i></div>
+          <div class="cm-cmp-sub">list price applied to {{ totals.tokens|compact_number }} logged tokens</div>
+        </div>
+      </div>
+    </div>
+    <div class="cm-hero-side">
+      <div class="cm-ring">
+        <svg viewBox="0 0 132 132" aria-hidden="true">
+          <defs><linearGradient id="cmRing" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60A5FA"/><stop offset="1" stop-color="#2563EB"/></linearGradient></defs>
+          <circle class="base" cx="66" cy="66" r="55" fill="none" stroke="#ECF0F8" stroke-width="11"/>
+          <circle class="arc" cx="66" cy="66" r="55" fill="none" stroke="url(#cmRing)" stroke-width="11" stroke-linecap="round"
+                  stroke-dasharray="0 {{ ring_circumference }}" data-arc="{{ ring_length }} {{ ring_circumference }}"/>
+        </svg>
+        <div class="cm-ring-in">
+          <strong class="num">{% if totals.margin_percent is None %}&mdash;{% else %}{{ totals.margin_percent }}%{% endif %}</strong>
+          <small>MARGIN</small>
+        </div>
+      </div>
+      <div class="cm-ring-stats">
+        <div><b>PER REQUEST</b><strong class="num" data-money="{{ totals.per_request }}">{{ totals.per_request|money }}</strong></div>
+        <div><b>PER STUDENT</b><strong class="num" data-money="{{ totals.per_student }}">{{ totals.per_student|money }}</strong></div>
+        <div><b>PRICE COVERAGE</b><strong class="num">{{ totals.priced }} of {{ totals.models }}</strong></div>
+      </div>
+    </div>
+  </section>
+
+  {# ---------- kpis ---------- #}
+  <section class="cm-kpis">
+    <div class="cm-kpi" style="animation-delay:.06s">
+      <div class="cm-kpi-top"><b>TOTAL REVENUE</b><span class="cm-kpi-ic" style="background:#EAF1FE;color:#2563EB"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.6h10.8v6.8H2.6zM2.6 7.4h10.8"/></svg></span></div>
+      <strong class="num" data-money="{{ totals.revenue }}">{{ totals.revenue|money }}</strong>
+      <small>{{ totals.plans_sold }} plan{{ totals.plans_sold|pluralize }} sold in the window</small>
+    </div>
+    <div class="cm-kpi" style="animation-delay:.12s">
+      <div class="cm-kpi-top"><b>ESTIMATED COST</b><span class="cm-kpi-ic" style="background:#FEF3E2;color:#B07908"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6v10.8M5.4 5.6h3.9a1.6 1.6 0 0 1 0 3.2H6.5a1.6 1.6 0 0 0 0 3.2h4"/></svg></span></div>
+      <strong class="num" data-money="{{ totals.cost }}">{{ totals.cost|money }}</strong>
+      <small>list price on logged tokens</small>
+    </div>
+    <div class="cm-kpi" style="animation-delay:.18s">
+      <div class="cm-kpi-top"><b>GROSS MARGIN</b><span class="cm-kpi-ic" style="background:#E8F8F1;color:#0A7F5C"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 12l3.6-3.8 2.6 1.8 4.2-5.4M13.2 4.6h-2.8M13.2 4.6v2.8"/></svg></span></div>
+      <strong class="num" data-money="{{ totals.margin }}">{{ totals.margin|money }}</strong>
+      <small>{% if totals.margin_percent is None %}no revenue yet{% else %}{{ totals.margin_percent }}% of revenue{% endif %}</small>
+    </div>
+    <div class="cm-kpi" style="animation-delay:.24s">
+      <div class="cm-kpi-top"><b>TOKENS BILLED</b><span class="cm-kpi-ic" style="background:rgba(225,29,72,.1);color:#E11D48"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6c2.9 0 5.2 1 5.2 2.2S10.9 7 8 7 2.8 6 2.8 4.8 5.1 2.6 8 2.6M2.8 4.8v6.4c0 1.2 2.3 2.2 5.2 2.2s5.2-1 5.2-2.2V4.8"/></svg></span></div>
+      <strong class="num" data-k="{{ totals.tokens }}">{{ totals.tokens|compact_number }}</strong>
+      <small>{{ totals.requests|intcomma }} request{{ totals.requests|pluralize }}</small>
+    </div>
+  </section>
+
+  {# ---------- unpriced warning ---------- #}
+  {% if totals.unpriced %}
+    {% comment %}
+      A model with no configured price is shown as unpriced, never as free: a
+      zero in the cost column would read as "this model costs nothing", which
+      is the one thing it certainly does not mean.
+    {% endcomment %}
+    <section class="cm-warn">
+      <span class="cm-warn-ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="#B07908" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6 14 13H2zM8 6.4v3M8 10.8v.4"/></svg></span>
+      <p><strong>{{ totals.unpriced|join:", " }}</strong> {% if totals.unpriced|length == 1 %}has{% else %}have{% endif %} no list price yet &mdash; {% if totals.unpriced|length == 1 %}its{% else %}their{% endif %} cost reads as unpriced instead of zero, and {% if totals.unpriced|length == 1 %}it sits{% else %}they sit{% endif %} outside the totals above.</p>
+      {% if console_can.tokens %}<a href="{% url 'console:ai_tokens' %}">Set prices</a>{% endif %}
+    </section>
+  {% endif %}
+
+  {# ---------- per-model table ---------- #}
+  <section class="cm-table">
+    <div class="cm-table-head">
+      <div style="min-width:0">
+        <div class="cm-title">Per-model economics</div>
+        <div class="cm-note"><span id="cmModels">{{ totals.models }}</span> model{{ totals.models|pluralize }} &middot; sorted by <span id="cmSortName">margin</span> &middot; open a row for the full breakdown</div>
+      </div>
+      <div class="cm-sort">
+        <span class="cm-eyebrow" style="letter-spacing:.12em">SORT BY</span>
+        <div class="cm-sort-seg" id="cmSortSeg" style="--i:0">
+          <div class="cm-sort-pill"></div>
+          <button type="button" class="is-on" data-sort="margin">Margin</button>
+          <button type="button" data-sort="cost">Cost</button>
+          <button type="button" data-sort="tokens">Tokens</button>
+          <button type="button" data-sort="requests">Requests</button>
+        </div>
+      </div>
+    </div>
+    <div class="cm-rows" id="cmRows">
+      {% for row in rows %}
+        <div class="cm-row" style="--m-from:{{ row.tone.from }};--m-to:{{ row.tone.to }};animation-delay:{{ row.delay }}"
+             data-margin="{% if row.priced %}{{ row.margin }}{% else %}{{ row.revenue }}{% endif %}" data-cost="{{ row.cost }}"
+             data-tokens="{{ row.input_tokens|add:row.output_tokens }}" data-requests="{{ row.requests }}" data-model="{{ row.model.key }}">
+          <div class="cm-row-main" role="button" tabindex="0" aria-expanded="false">
+            <div class="cm-ident">
+              <span class="cm-mark"><svg aria-hidden="true"><use href="#{{ row.tone.icon }}"/></svg></span>
+              <div style="min-width:0">
+                <div class="cm-name">{{ row.model.name }}</div>
+                <div class="cm-prov">{{ row.model.provider_name }} &middot; {{ row.requests|intcomma }} request{{ row.requests|pluralize }}</div>
+              </div>
+            </div>
+            <div class="cm-mix">
+              <div class="cm-mix-top"><span class="cm-lbl">TOKEN MIX</span><strong class="num">{{ row.input_tokens|add:row.output_tokens|compact_number }}</strong></div>
+              <div class="cm-mix-bar"><i class="in" data-width="{{ row.in_pct }}"></i><i class="out" data-width="{{ row.out_pct }}"></i></div>
+              <div class="cm-mix-sub">{{ row.input_tokens|compact_number }} in &middot; {{ row.output_tokens|compact_number }} out</div>
+            </div>
+            <div class="cm-figs">
+              <div class="cm-fig"><div class="cm-lbl">EST. COST</div><strong class="num{% if not row.priced %} mute{% endif %}">{% if row.priced %}{{ row.cost|money }}{% else %}unpriced{% endif %}</strong></div>
+              <div class="cm-fig"><div class="cm-lbl">REVENUE</div><strong class="num{% if not row.revenue %} mute{% endif %}">{{ row.revenue|money }}</strong></div>
+              <div class="cm-fig wide">
+                <div class="cm-lbl">MARGIN</div>
+                <div class="cm-margin">
+                  <strong class="num {% if row.margin_sign > 0 %}gain{% elif row.margin_sign < 0 %}loss{% else %}mute{% endif %}">{% if row.priced %}{{ row.margin|money }}{% else %}{{ 0|money }}{% endif %}</strong>
+                  {% if row.margin_percent is not None %}<small class="num">{{ row.margin_percent }}%</small>{% endif %}
+                </div>
+              </div>
+              <span class="cm-chev"><svg aria-hidden="true"><use href="#i-chevron-down"/></svg></span>
+            </div>
+          </div>
+          <div class="cm-detail" hidden>
+            <div class="cm-detail-grid">
+              <div class="cm-dcard"><b>INPUT TOKENS</b><strong class="num">{{ row.input_tokens|compact_number }}</strong><small>{% if row.model.input_cost_per_1m %}${{ row.model.input_cost_per_1m|floatformat:2 }} / M{% else %}no price set{% endif %}</small></div>
+              <div class="cm-dcard"><b>OUTPUT TOKENS</b><strong class="num">{{ row.output_tokens|compact_number }}</strong><small>{% if row.model.output_cost_per_1m %}${{ row.model.output_cost_per_1m|floatformat:2 }} / M{% else %}no price set{% endif %}</small></div>
+              <div class="cm-dcard"><b>STUDENTS</b><strong class="num">{{ row.students|intcomma }}</strong><small>hold this model</small></div>
+              <div class="cm-dcard"><b>COST / STUDENT</b><strong class="num">{% if row.priced and row.students %}{{ row.cost_per_student|money }}{% else %}&mdash;{% endif %}</strong><small>in this window</small></div>
+              <div class="cm-dcard"><b>COST / REQUEST</b><strong class="num">{% if row.priced and row.requests %}{{ row.cost_per_request|money }}{% else %}&mdash;{% endif %}</strong><small>{{ row.requests|intcomma }} request{{ row.requests|pluralize }}</small></div>
+            </div>
+            <div class="cm-detail-foot">
+              <span>{% if row.priced %}Priced at ${{ row.model.input_cost_per_1m|floatformat:2 }} in / ${{ row.model.output_cost_per_1m|floatformat:2 }} out per million tokens.{% else %}No list price configured &mdash; this model is excluded from the totals.{% endif %}</span>
+              {% if console_can.tokens %}<a href="{% url 'console:ai_tokens' %}">Edit list price</a>{% endif %}
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="cm-empty">No models in this scope yet.</div>
+      {% endfor %}
+    </div>
+    <div class="cm-table-foot">
+      Cost is an estimate &mdash; the provider's published price per million tokens applied to the tokens actually logged in this window. It is not a vendor invoice, and it excludes image generation, transcription and requests that failed before billing. Set each model's input and output price on its row in {% if console_can.tokens %}<a href="{% url 'console:ai_tokens' %}">AI token management</a>{% else %}AI token management{% endif %}.
+    </div>
+  </section>
+
+  <div class="cm-foot">
+    <span>EPC Platform &middot; Cost &amp; margin</span>
+    <span>Estimates refreshed <span id="cmSyncAgo">just now</span></span>
+  </div>
+
+  <div class="cm-toast" id="cmToast" hidden role="status" aria-live="polite">
+    <i><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.4 6.6 11.4l5.8-6.8"/></svg></i>
+    <span id="cmToastText"></span>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---- figures count up over 950ms, easing out, like the design */
+  function money(v) { return (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2); }
+  function k(v) { if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M'; if (v >= 1000) return (v / 1000).toFixed(1) + 'K'; return String(Math.round(v)); }
+  function countUp(el, target, fmt, finalText) {
+    if (document.hidden || !target) { el.textContent = finalText; return; }
+    var t0 = performance.now(), d = 950;
+    function step(now) {
+      var p = Math.min(1, (now - t0) / d), t = 1 - Math.pow(1 - p, 3);
+      el.textContent = p < 1 ? fmt(target * t) : finalText;
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function animateFigures() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-money]'), function (el) {
+      countUp(el, parseFloat(el.getAttribute('data-money')) || 0, money, el.textContent);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-k]'), function (el) {
+      countUp(el, parseFloat(el.getAttribute('data-k')) || 0, k, el.textContent);
+    });
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-width]'), function (bar) {
+        bar.style.width = bar.getAttribute('data-width') + '%';
+      });
+      var arc = document.querySelector('.cm-ring .arc');
+      if (arc) arc.setAttribute('stroke-dasharray', arc.getAttribute('data-arc'));
+    }); });
+  }
+  animateFigures();
+
+  /* ---- rows open into their breakdown */
+  var rows = $('cmRows');
+  rows.addEventListener('click', function (e) {
+    if (e.target.closest('a')) return;
+    var main = e.target.closest('.cm-row-main'); if (!main) return;
+    toggle(main.parentNode);
+  });
+  rows.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('cm-row-main')) { e.preventDefault(); toggle(e.target.parentNode); }
+  });
+  function toggle(row) {
+    var open = row.classList.contains('is-open');
+    Array.prototype.forEach.call(rows.querySelectorAll('.cm-row.is-open'), function (r) { close(r); });
+    if (!open) {
+      row.classList.add('is-open');
+      row.querySelector('.cm-detail').hidden = false;
+      row.querySelector('.cm-row-main').setAttribute('aria-expanded', 'true');
+    }
+  }
+  function close(r) {
+    r.classList.remove('is-open');
+    r.querySelector('.cm-detail').hidden = true;
+    r.querySelector('.cm-row-main').setAttribute('aria-expanded', 'false');
+  }
+
+  /* ---- sort: the numbers are already here, so the rows just change order */
+  var seg = $('cmSortSeg'), keys = ['margin', 'cost', 'tokens', 'requests'];
+  seg.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-sort]'); if (!btn) return;
+    var key = btn.getAttribute('data-sort');
+    seg.style.setProperty('--i', keys.indexOf(key));
+    Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.toggle('is-on', b === btn); });
+    $('cmSortName').textContent = key;
+    var list = Array.prototype.slice.call(rows.querySelectorAll('.cm-row'));
+    list.forEach(close);
+    list.sort(function (a, b) { return parseFloat(b.getAttribute('data-' + key)) - parseFloat(a.getAttribute('data-' + key)); });
+    list.forEach(function (r, i) { r.style.animation = 'none'; rows.appendChild(r); });
+    // Re-run the entrance so the new order lands the way the first one did.
+    void rows.offsetWidth;
+    list.forEach(function (r, i) { r.style.animation = ''; r.style.animationDelay = (i * 0.05).toFixed(2) + 's'; });
+  });
+
+  /* ---- refresh: spin, then reload for fresh figures */
+  var refresh = $('cmRefresh'), started = Date.now();
+  refresh.addEventListener('click', function () {
+    if (refresh.classList.contains('is-busy')) return;
+    refresh.classList.add('is-busy'); $('cmRefreshLabel').textContent = 'Syncing';
+    setTimeout(function () { window.location.reload(); }, 600);
+  });
+  setInterval(function () {
+    var m = Math.round((Date.now() - started) / 60000);
+    $('cmSyncAgo').textContent = m < 1 ? 'just now' : m + ' min ago';
+  }, 30000);
+
+  /* ---- toast */
+  var toastT = null;
+  function toast(msg) {
+    var box = $('cmToast'); $('cmToastText').textContent = msg; box.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(function () { box.hidden = true; }, 3400);
+  }
+  $('cmExport').addEventListener('click', function () { toast('Exporting the per-model table for the last {{ days }} days.'); });
+})();
+</script>
+{% endblock %}

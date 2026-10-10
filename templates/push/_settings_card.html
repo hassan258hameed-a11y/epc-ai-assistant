@@ -1,0 +1,169 @@
+{% comment %}
+  Settings → "Notifications on this device" (Web Push).
+
+  Only the browser knows whether it can receive notifications, what the
+  student answered to the permission prompt, and whether it is subscribed —
+  so static/js/push.js decides the state and writes it to data-push-state:
+  checking · unsupported · needs-install · not-configured · blocked · off · on.
+  Each element marked data-push-show="<state>" is visible in that state only
+  (the rules are below); the server only knows "configured or not", which is
+  enough for the first paint. Behaviour comes from push.js by delegation — a
+  panel fragment's own <script> would never run.
+{% endcomment %}
+<style>
+  .ps-card:not([data-push-state="checking"]) [data-push-show="checking"],
+  .ps-card:not([data-push-state="unsupported"]) [data-push-show="unsupported"],
+  .ps-card:not([data-push-state="needs-install"]) [data-push-show="needs-install"],
+  .ps-card:not([data-push-state="not-configured"]) [data-push-show="not-configured"],
+  .ps-card:not([data-push-state="blocked"]) [data-push-show="blocked"],
+  .ps-card:not([data-push-state="off"]) [data-push-show="off"],
+  .ps-card:not([data-push-state="on"]) [data-push-show="on"] { display: none; }
+
+  .ps-who { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border-soft); }
+  .ps-mark { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: none; color: var(--ink-3); background: var(--surface-3); transition: color var(--fast), background var(--fast); }
+  .ps-mark svg { width: 19px; height: 19px; }
+  .ps-card[data-push-state="on"] .ps-mark { color: #fff; background: var(--accent-fill); }
+  .ps-card[data-push-state="blocked"] .ps-mark { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .ps-who-text { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+  .ps-who-text b { font-size: 13.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ps-who-text > span { font-size: 12px; color: var(--ink-3); line-height: 1.45; }
+  .ps-pill { flex: none; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border); color: var(--ink-3); background: var(--surface); }
+  .ps-pill.is-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 32%, transparent); }
+  .ps-pill.is-warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+
+  .ps-note { margin-top: 14px; font-size: 13px; color: var(--ink-2); line-height: 1.6; max-width: 62ch; }
+  .ps-note p { margin: 0; }
+  .ps-note ol { margin: 8px 0 0; padding-left: 20px; }
+  .ps-note li + li { margin-top: 3px; }
+  .ps-note b { color: var(--ink); font-weight: 600; }
+  .ps-note .btn-row { margin-top: 12px; }
+  .ps-note code { font-family: var(--mono); font-size: 12px; padding: 1px 5px; border-radius: 6px; background: var(--surface-3); color: var(--ink); overflow-wrap: anywhere; }
+  .ps-note .ps-inline-icon { display: inline-block; width: 15px; height: 15px; vertical-align: -3px; color: var(--accent); }
+  .ps-admin { display: block; margin-top: 6px; font-size: 12px; color: var(--ink-3); }
+
+  .ps-actions { margin-top: 14px; }
+  .ps-msg { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-3); line-height: 1.5; }
+  .ps-msg[data-tone="ok"] { color: var(--ok); }
+  .ps-msg[data-tone="bad"] { color: var(--danger); }
+
+  .ps-what { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+  .ps-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .ps-kinds li { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 10px 3px 8px; border-radius: 99px; font-size: 12px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--border-soft); }
+  .ps-kinds svg { width: 13px; height: 13px; flex: none; color: var(--ok); }
+  .ps-kinds li.is-off { color: var(--ink-4); background: transparent; border-style: dashed; border-color: var(--border); }
+  .ps-kinds li.is-off svg { color: var(--ink-4); }
+  .ps-kinds li.is-off span { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--ink-4) 60%, transparent); }
+  .ps-what .hint { display: block; margin-top: 8px; font-size: 11.5px; color: var(--ink-3); }
+
+  .ps-prefs { display: grid; gap: 12px; margin-top: 16px; }
+  .ps-prefs .btn-row { margin: 0; }
+
+  @media (pointer: coarse) {
+    .ps-card .btn { min-height: 40px; }
+    .ps-prefs .check { min-height: 40px; align-items: center; }
+  }
+  @media (max-width: 520px) {
+    .ps-who { align-items: flex-start; }
+    .ps-pill { margin-top: 2px; }
+    .ps-actions .btn { flex: 1 1 auto; }
+  }
+</style>
+<section class="panel-section" id="push">
+  <div class="card ps-card" data-push-card
+       data-push-state="{% if push_configured %}checking{% else %}not-configured{% endif %}"
+       data-push-configured="{% if push_configured %}1{% else %}0{% endif %}"
+       data-push-key="{{ push_public_key }}">
+    <div class="card-head">
+      <h3>Notifications on this device</h3>
+      <p>Alerts from your browser or phone — even when this site is closed.</p>
+    </div>
+    <div class="card-body">
+      <div class="ps-who">
+        <span class="ps-mark" aria-hidden="true"><svg><use href="#i-bell"/></svg></span>
+        <div class="ps-who-text">
+          <b data-push-device>This device</b>
+          <span data-push-show="checking">Checking what this browser supports…</span>
+          <span data-push-show="off">Notifications are off here.</span>
+          <span data-push-show="on">You'll be notified here, even with the site closed.</span>
+          <span data-push-show="blocked">Notifications are blocked for this site.</span>
+          <span data-push-show="needs-install">Add the app to your Home Screen first.</span>
+          <span data-push-show="unsupported">This browser can't show notifications.</span>
+          <span data-push-show="not-configured">Not available on this site yet.</span>
+        </div>
+        <span class="ps-pill is-ok" data-push-show="on">On</span>
+        <span class="ps-pill" data-push-show="off">Off</span>
+        <span class="ps-pill is-warn" data-push-show="blocked">Blocked</span>
+      </div>
+
+      <div class="btn-row ps-actions" data-push-show="off">
+        <button type="button" class="btn btn-primary" data-push-action="enable">
+          <svg aria-hidden="true"><use href="#i-bell"/></svg> Turn on
+        </button>
+      </div>
+      <div class="btn-row ps-actions" data-push-show="on">
+        <button type="button" class="btn" data-push-action="test">
+          <svg aria-hidden="true"><use href="#i-send"/></svg> Send a test
+        </button>
+        <button type="button" class="btn" data-push-action="disable">Turn off</button>
+      </div>
+
+      <div class="ps-note" data-push-show="blocked">
+        <p>Your browser is set to block notifications from this site. To allow them, open the site settings —
+          usually the icon to the left of the address bar — set <b>Notifications</b> to <b>Allow</b>, then check again.</p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-sm" data-push-action="refresh">
+            <svg aria-hidden="true"><use href="#i-refresh"/></svg> Check again
+          </button>
+        </div>
+      </div>
+
+      <div class="ps-note" data-push-show="needs-install">
+        <p>On iPhone and iPad (iOS 16.4 or later), notifications work once the app is on your Home Screen:</p>
+        <ol>
+          <li>Tap <b>Share</b> <svg class="ps-inline-icon" aria-hidden="true"><use href="#i-share"/></svg> in Safari.</li>
+          <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+          <li>Open the app from your Home Screen, come back to Settings and turn notifications on.</li>
+        </ol>
+      </div>
+
+      <div class="ps-note" data-push-show="unsupported">
+        <p>This browser can't receive notifications from websites — private windows often can't either.
+          Chrome, Edge, Firefox and Safari can; on an iPhone, add the app to your Home Screen first.</p>
+      </div>
+
+      <div class="ps-note" data-push-show="not-configured">
+        <p>Browser notifications haven't been set up on this site yet. Everything else works as usual, and
+          your alerts still arrive in the app{% if telegram_configured %} and on Telegram{% endif %}.</p>
+        <span class="ps-admin">For administrators: run <code>python manage.py generate_vapid_keys</code> and add the three lines it prints to the server's <code>.env</code>.</span>
+      </div>
+
+      <p class="ps-msg" data-push-msg role="status" aria-live="polite" hidden></p>
+
+      <div class="ps-what">
+        <span class="st-flabel">What arrives</span>
+        <ul class="ps-kinds">
+          {% for label, enabled in push_kinds %}
+            <li class="{% if not enabled %}is-off{% endif %}">
+              <svg aria-hidden="true"><use href="{% if enabled %}#i-check{% else %}#i-x{% endif %}"/></svg>
+              <span>{{ label }}</span>{% if not enabled %}<span class="sr-only"> (off)</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        <span class="hint">The switches under Notifications above apply here too. These go to every device you turn on.</span>
+      </div>
+
+      <form class="ps-prefs" method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="push_prefs">
+        <label class="check">
+          <input type="checkbox" name="push_answers" {% if push_prefs.push_answers %}checked{% endif %}>
+          <span>Tell me when an answer is ready
+            <span class="hint" style="display:block">If you leave while a long answer is still being written, we'll let you know when it's done.</span></span>
+        </label>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-sm btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>

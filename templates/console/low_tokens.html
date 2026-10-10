@@ -1,0 +1,127 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Low token students · Console{% endblock %}
+{% block heading %}Students running low{% endblock %}
+{% block subheading %}
+  <p>Ordered by how little is left proportionally, so the student closest to being cut off is first — whatever the size of their package.</p>
+{% endblock %}
+
+{% block header_actions %}
+  {% if console_can.operations %}
+  <a href="{% url 'console:emails' %}" class="btn-outline btn-sm">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-mail"/></svg> Email log
+  </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-alert" label=ceiling_label value=total|intcomma foot="wallets needing attention" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-bell" label="Warning points" value=thresholds|length foot="configured percentages" %}
+    {% include "console/_kpi.html" with variant="brand" icon="i-mail" label="Email warnings" value=emails_on|yesno:"On,Off" foot="sent to the registered address" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-coin" label="Currency" value=model_scope.label foot="tokens are held per model" %}
+  </section>
+
+  {% comment %}
+    The thresholds double as the filter: they are the numbers the system itself
+    acts on, so filtering by anything else would show a list that does not
+    match what actually gets warned.
+  {% endcomment %}
+  <div class="card flex flex-wrap items-center gap-2 p-4">
+    <span class="stat-label mr-1 text-ink-400">Show at or below</span>
+    <a href="{% qs request at='' page='' %}" class="chip{% if not selected_threshold %} chip-active{% endif %}">
+      {{ thresholds.0 }}% (all warned)
+    </a>
+    {% for point in thresholds %}
+      <a href="{% qs request at=point page='' %}" class="chip{% if selected_threshold == point %} chip-active{% endif %}">{{ point }}%</a>
+    {% endfor %}
+  </div>
+
+  <section class="card overflow-hidden reveal">
+    {% if rows %}
+      <div class="table-wrap">
+        <table class="table min-w-[960px]">
+          <thead>
+            <tr>
+              <th class="th">Student</th>
+              <th class="th col-model">Model</th>
+              <th class="th text-right">Remaining</th>
+              <th class="th text-right">Allocated</th>
+              <th class="th">Usage</th>
+              <th class="th">Last warning</th>
+              <th class="th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr class="row group/row">
+                <td class="td">
+                  <a href="{% url 'console:user_detail' row.user.pk %}" class="flex items-center gap-3">
+                    {% with av=row.user|avatar_tone %}<span class="student-mark" aria-hidden="true" style="background: linear-gradient(140deg, {{ av.from }}, {{ av.to }})">{{ row.user.initials }}</span>{% endwith %}
+                    <span class="min-w-0">
+                      <span class="block truncate text-sm font-semibold text-ink-900 dark:text-white">{{ row.user.display_name|truncatechars:26 }}</span>
+                      <span class="block truncate text-[11px] text-ink-500 dark:text-ink-400">{{ row.user.email|truncatechars:30 }}</span>
+                    </span>
+                  </a>
+                </td>
+                <td class="td col-model text-xs">{{ row.ai_model.name }}</td>
+                <td class="td text-right text-sm font-bold tabular-nums {% if row.percent <= 10 %}text-rose-600 dark:text-rose-400{% else %}text-amber-600 dark:text-amber-400{% endif %}">
+                  {{ row.remaining|intcomma }}
+                </td>
+                <td class="td text-right tabular-nums text-ink-500 dark:text-ink-400">{{ row.allocated|intcomma }}</td>
+                <td class="td">
+                  <div class="flex items-center gap-2">
+                    <div class="h-1.5 w-24 overflow-hidden rounded-full bg-ink-200 dark:bg-white/10">
+                      <div class="h-full rounded-full {% if row.percent <= 10 %}bg-rose-500{% elif row.percent <= 25 %}bg-amber-500{% else %}bg-brand-500{% endif %}"
+                           style="width:{{ row.percent }}%"></div>
+                    </div>
+                    <span class="text-[11px] font-semibold tabular-nums text-ink-500 dark:text-ink-400">{{ row.percent }}% left</span>
+                  </div>
+                </td>
+                <td class="td text-xs">
+                  {% if row.last_warning %}
+                    <span class="{{ row.last_warning.tone|tone_classes }}">{{ row.last_warning.get_status_display }}</span>
+                    <span class="ml-1 text-ink-400">{{ row.last_warning.created_at|timeago }}</span>
+                  {% else %}
+                    <span class="text-ink-400">Not yet warned</span>
+                  {% endif %}
+                </td>
+                <td class="td text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    {% if console_can.tokens %}
+                    <a href="{% url 'console:ai_distribute' %}?student={{ row.user.pk }}&model={{ row.ai_model.key|urlencode }}"
+                       class="btn-icon h-7 w-7" title="Add tokens" aria-label="Add {{ row.ai_model.name }} tokens for {{ row.user.display_name }}">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-plus"/></svg>
+                    </a>
+                    {% endif %}
+                    {% if console_can.student_care %}
+                    <form method="post" action="{% url 'console:low_token_warn' row.wallet.pk %}"
+                          onsubmit="return confirm('E-mail {{ row.user.display_name|escapejs }} a low-balance warning now?');">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn-icon h-7 w-7" title="E-mail a warning now"
+                              aria-label="E-mail {{ row.user.display_name }} a low-balance warning">
+                        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-mail"/></svg>
+                      </button>
+                    </form>
+                    {% endif %}
+                    <a href="{% url 'console:user_detail' row.user.pk %}" class="btn-icon h-7 w-7" title="View student" aria-label="View {{ row.user.display_name }}">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-eye"/></svg>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-check-circle" title="Nobody is running low" body="Every funded wallet is above the warning threshold." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

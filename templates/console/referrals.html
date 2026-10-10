@@ -1,0 +1,146 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Referrals · Console{% endblock %}
+{% block heading %}Referrals{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">Who is bringing students in, and what it costs.</p>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:referral_campaigns' %}" class="btn-primary btn-sm">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-gift"/></svg> Campaigns
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-gift" label="Total referrals" value=totals.total|intcomma foot="signups using a code" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-check-circle" label="Rewarded" value=totals.rewarded|intcomma foot="verified and paid out" %}
+    {% include "console/_kpi.html" with variant="brand" icon="i-coin" label="Tokens awarded" value=totals.tokens|intcomma foot="to referrers" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-settings" label="Current bonus" value=bonus_referrer|compact_number foot=bonus_referred|compact_number|add:" to the new student" %}
+  </section>
+
+  <div class="grid gap-6 xl:grid-cols-[1fr_1.6fr]">
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="section-title">Top referrers</h2>
+      <p class="section-note mt-0.5">Ranked by invitations</p>
+      {% if leaders %}
+        <ul class="mt-4 space-y-3">
+          {% for leader in leaders %}
+            <li class="flex items-center gap-3">
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[10px] font-bold text-ink-600 dark:bg-white/10 dark:text-ink-300">
+                {{ forloop.counter }}
+              </span>
+              {% if console_can.students and not leader.is_admin_user or console_is_owner %}<a href="{% url 'console:user_detail' leader.pk %}" class="min-w-0 flex-1">{% else %}<span class="min-w-0 flex-1">{% endif %}
+                <span class="block truncate text-sm font-medium text-ink-800 hover:text-brand-600 dark:text-ink-100 dark:hover:text-brand-300">
+                  {{ leader.display_name }}
+                </span>
+                <span class="block text-[11px] text-ink-500">
+                  {{ leader.invited }} invited · {{ leader.rewarded }} rewarded
+                </span>
+              {% if console_can.students and not leader.is_admin_user or console_is_owner %}</a>{% else %}</span>{% endif %}
+              <span class="shrink-0 text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                {{ leader.earned|default:0|compact_number }}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-users" title="No referrers yet" body="Students who invite others will be ranked here." %}
+      {% endif %}
+    </section>
+
+    <section class="card overflow-hidden reveal">
+      <div class="border-b hairline p-4 sm:p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="section-title">All referrals</h2>
+          <span class="text-xs text-ink-500 dark:text-ink-400">{{ page.paginator.count|intcomma }} record{{ page.paginator.count|pluralize }}</span>
+        </div>
+        <form method="get" class="mt-3 flex flex-wrap gap-2">
+    {% include "console/_scope_field.html" %}
+          <select name="status" class="input w-auto py-2 text-sm" aria-label="Status filter">
+            <option value="">All statuses</option>
+            {% for value, label in statuses %}
+              <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn-primary btn-sm">Filter</button>
+          <a href="{% url 'console:referrals' %}" class="btn-ghost btn-sm">Clear</a>
+        </form>
+      </div>
+
+      {% if page.object_list %}
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="th">Referrer</th><th class="th">New student</th><th class="th">Code</th>
+                <th class="th">Status</th><th class="th text-right">Bonus</th><th class="th">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for referral in page.object_list %}
+                <tr class="row group/row">
+                  <td class="td">
+                    {% if console_can.students and not referral.referrer.is_admin_user or console_is_owner %}<a href="{% url 'console:user_detail' referral.referrer_id %}" class="flex items-center gap-2.5 text-sm font-medium hover:text-brand-600 dark:hover:text-brand-300">{% else %}<span class="flex items-center gap-2.5 text-sm font-medium">{% endif %}
+                      {% with av=referral.referrer|avatar_tone %}<span class="student-mark h-7 w-7 text-[10px]" aria-hidden="true" style="background: linear-gradient(140deg, {{ av.from }}, {{ av.to }})">{{ referral.referrer.initials }}</span>{% endwith %}
+                      <span class="truncate">{{ referral.referrer.display_name|truncatechars:20 }}</span>
+                    {% if console_can.students and not referral.referrer.is_admin_user or console_is_owner %}</a>{% else %}</span>{% endif %}
+                  </td>
+                  <td class="td">
+                    {% if console_can.students and not referral.referred_user.is_admin_user or console_is_owner %}
+                    <a href="{% url 'console:user_detail' referral.referred_user_id %}" class="text-sm font-medium hover:text-brand-600 dark:hover:text-brand-300">
+                      {{ referral.referred_user.display_name|truncatechars:20 }}
+                    </a>
+                    {% else %}
+                    <span class="text-sm font-medium">{{ referral.referred_user.display_name|truncatechars:20 }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="td font-mono text-xs">{{ referral.code_used }}</td>
+                  <td class="td">
+                    {% if referral.status == 'rewarded' %}
+                      <span class="badge-success">Rewarded</span>
+                    {% elif referral.status == 'pending' %}
+                      <span class="badge-warning">Pending</span>
+                    {% else %}
+                      <span class="badge-neutral">{{ referral.get_status_display }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="td text-right text-sm tabular-nums">
+                    {% if referral.referrer_bonus %}
+                      <span class="font-semibold text-emerald-600 dark:text-emerald-400">+{{ referral.referrer_bonus|intcomma }}</span>
+                      <span class="block text-[10.5px] text-ink-400">+{{ referral.referred_bonus|intcomma }} to new user</span>
+                    {% else %}
+                      <span class="text-ink-400">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="td text-xs text-ink-500">{{ referral.created_at|date:"d M Y" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-gift" title="No referrals yet" body="When students invite classmates, the records appear here." %}
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card spotlight p-5 sm:p-6 reveal">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="section-title">Bonus configuration</h2>
+        <p class="section-note mt-0.5">
+          Referrer receives {{ bonus_referrer|intcomma }} tokens · new student receives {{ bonus_referred|intcomma }} tokens.
+        </p>
+      </div>
+      {% if console_can.settings %}<a href="{% url 'console:settings' %}#growth" class="btn-outline btn-sm">Change amounts</a>{% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

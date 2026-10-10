@@ -1,0 +1,28 @@
+{% load ai_extras %}
+{% comment %}
+Light-theme metric tile for the token management page.
+  {% include "console/_token_kpi.html" with label="Tokens allocated" value=1234 icon="i-coin" tone="brand" hint="all time" progress=42 %}
+{% endcomment %}
+<div class="tk-card tk-pad transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(11,16,32,.05),0_18px_40px_-20px_rgba(11,16,32,.28)]">
+  <div class="flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <p class="tk-label">{{ label }}</p>
+      <p class="tk-figure" title="{{ value|intcomma }}">{{ value|compact_number }}</p>
+      {% if hint %}<p class="mt-2 text-xs leading-snug text-ink-500">{{ hint }}</p>{% endif %}
+    </div>
+    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl
+                 {% if tone == 'accent' %}bg-accent-500/12 text-accent-600
+                 {% elif tone == 'warning' %}bg-amber-500/14 text-amber-600
+                 {% elif tone == 'danger' %}bg-rose-500/12 text-rose-600
+                 {% elif tone == 'success' %}bg-emerald-500/12 text-emerald-600
+                 {% else %}bg-brand-500/12 text-brand-600{% endif %}">
+      <svg class="h-5 w-5" aria-hidden="true"><use href="#{{ icon|default:'i-chart' }}"/></svg>
+    </span>
+  </div>
+  {% if progress is not None %}
+    <div class="tk-meter mt-4">
+      <div class="tk-meter-bar {% if progress >= 90 %}bg-rose-500{% elif progress >= 70 %}bg-amber-500{% else %}bg-gradient-to-r from-brand-500 to-accent-500{% endif %}"
+           style="width:{{ progress }}%"></div>
+    </div>
+  {% endif %}
+</div>

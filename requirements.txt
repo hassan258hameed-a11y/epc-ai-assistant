@@ -1,0 +1,34 @@
+Django==5.2.17
+python-dotenv==1.0.1
+requests==2.32.3
+
+# Anthropic (Claude) provider. OpenAI is called over plain HTTP with
+# `requests`; Anthropic uses its official SDK, which owns the Messages API
+# shape and the typed errors the provider layer translates.
+anthropic>=0.40,<2
+Pillow==11.0.0
+openpyxl==3.1.5
+segno==1.6.6
+
+# Verifies Binance Pay's RSA-signed webhooks.
+cryptography>=42
+
+# Search by meaning: vector similarity over stored embeddings.
+numpy>=1.26
+# Browser notifications when the site is closed (Web Push with VAPID).
+pywebpush>=2.0
+
+# Document text extraction, so the assistant can answer about an attached file.
+pypdf==5.1.0
+python-docx==1.1.2
+
+# MySQL on shared hosting (cPanel): pure Python, nothing to compile. The
+# settings use it automatically when mysqlclient isn't installed.
+PyMySQL==1.1.1
+
+# --- Production extras (install as needed) ---
+# psycopg[binary]==3.2.3      # PostgreSQL
+# mysqlclient==2.2.6          # MySQL (faster, but needs build headers)
+# gunicorn==23.0.0            # WSGI server (Linux)
+# waitress==3.0.2             # WSGI server (Windows)
+# redis==5.2.1                # shared cache / rate-limit backend

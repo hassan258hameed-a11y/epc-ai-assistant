@@ -1,0 +1,80 @@
+{% comment %}
+  The student's colour palette, applied before first paint on every student
+  page — the chat shell and the standalone pages (checkout, receipt, ticket,
+  referrals) alike — so moving between them never changes colour.
+
+  The design ships six accent pairs and repaints everything from a handful of
+  custom properties. Indigo is the design's own palette: its light and dark
+  shades are tuned in the stylesheet, so choosing it clears any override. The
+  others are derived for the ground they sit on — brighter on dark, deeper on
+  light — until text in the accent clears 4.5:1, and re-derived whenever the
+  theme changes (the chat shell calls ``lumenPalette.apply`` on every change;
+  here the system setting is watched too).
+{% endcomment %}
+<script>
+  (function () {
+    var PALETTES = {
+      indigo:   ['#4F5BD5', '#8B5CF6'],
+      teal:     ['#0E8F83', '#3A9FD6'],
+      graphite: ['#414C5E', '#7C8899'],
+      plum:     ['#7C4DBF', '#C2489B'],
+      ember:    ['#B1542F', '#D69235'],
+      forest:   ['#2E7D55', '#7BA33C']
+    };
+    var PROPS = ['--accent', '--accent-2', '--accent-hi', '--accent-lo', '--accent-soft', '--accent-mid'];
+
+    function mix(hex, towards, amount) {
+      function part(h, i) { return parseInt(h.slice(1 + i * 2, 3 + i * 2), 16); }
+      var out = '#';
+      for (var i = 0; i < 3; i++) {
+        var v = Math.round(part(hex, i) * (1 - amount) + part(towards, i) * amount);
+        out += ('0' + v.toString(16)).slice(-2);
+      }
+      return out;
+    }
+    function luminance(hex) {
+      function ch(i) {
+        var v = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+        return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4);
+      }
+      return .2126 * ch(0) + .7152 * ch(1) + .0722 * ch(2);
+    }
+    function isDark() {
+      var chosen = document.documentElement.getAttribute('data-theme');
+      if (chosen === 'dark' || chosen === 'light') return chosen === 'dark';
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    function stored() {
+      try { return localStorage.getItem('palette') || 'indigo'; } catch (e) { return 'indigo'; }
+    }
+    /* Returns the palette actually applied (unknown names fall back to indigo). */
+    function apply(name) {
+      var root = document.documentElement, pair = PALETTES[name];
+      if (!pair || name === 'indigo') {
+        PROPS.forEach(function (prop) { root.style.removeProperty(prop); });
+        return 'indigo';
+      }
+      var dark = isDark(), a = pair[0], b = pair[1], step;
+      if (dark) {
+        for (step = .25; luminance(a = mix(pair[0], '#FFFFFF', step)) < .24 && step < .7; step += .05) {}
+        b = mix(pair[1], '#FFFFFF', .2);
+      } else {
+        for (step = 0; luminance(a = mix(pair[0], '#000000', step)) > .17 && step < .5; step += .05) {}
+      }
+      root.style.setProperty('--accent', a);
+      root.style.setProperty('--accent-2', b);
+      root.style.setProperty('--accent-hi', mix(a, '#FFFFFF', .12));
+      root.style.setProperty('--accent-lo', mix(a, '#000000', dark ? .27 : .12));
+      root.style.setProperty('--accent-soft', mix(a, dark ? '#0A0C10' : '#FFFFFF', dark ? .86 : .92));
+      root.style.setProperty('--accent-mid', mix(a, dark ? '#0A0C10' : '#FFFFFF', dark ? .76 : .82));
+      return name;
+    }
+
+    window.lumenPalette = { apply: apply, stored: stored, mix: mix, names: Object.keys(PALETTES) };
+    apply(stored());
+    if (window.matchMedia) {
+      var query = window.matchMedia('(prefers-color-scheme: dark)');
+      if (query.addEventListener) query.addEventListener('change', function () { apply(stored()); });
+    }
+  })();
+</script>

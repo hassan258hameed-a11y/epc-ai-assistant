@@ -1,0 +1,104 @@
+{% extends "base/public.html" %}
+
+{% comment %}
+  A conversation a student chose to share, read-only.
+
+  The transcript arrives as JSON (json_script), never as HTML, and the renderer
+  below escapes every character before it adds any formatting — so nothing a
+  student or a model wrote can run as markup on a public page. Attachments are
+  never shown here.
+{% endcomment %}
+
+{% block title %}{{ conversation.title|default:"Shared conversation" }} · {{ BRAND.full_name }}{% endblock %}
+{% block description %}A conversation shared from {{ BRAND.full_name }}.{% endblock %}
+
+{% block head %}
+<meta name="robots" content="noindex">
+<style type="text/tailwindcss">
+  /* A transcript is written by a student and a model, so nothing in it can
+     be trusted to fit: long words and links break, and code blocks and
+     tables scroll inside their own box instead of widening the page. */
+  .shared-msg { @apply rounded-2xl px-5 py-4 text-[15px] leading-relaxed; min-width: 0; max-width: 100%; overflow-wrap: anywhere; animation: sharedIn .45s cubic-bezier(.2,.7,.2,1) both; }
+  .shared-user { @apply ml-auto max-w-[85%] bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md; }
+  .shared-ai { @apply border border-ink-200/70 bg-white text-ink-800 dark:border-white/10 dark:bg-white/[.04] dark:text-ink-100; }
+  .shared-md p { @apply my-2 first:mt-0 last:mb-0; }
+  .shared-md h1, .shared-md h2, .shared-md h3 { @apply mt-4 mb-2 font-bold text-ink-900 dark:text-white; }
+  .shared-md ul, .shared-md ol { @apply my-2 pl-5; }
+  .shared-md ul { list-style: disc; }
+  .shared-md ol { list-style: decimal; }
+  .shared-md li { @apply my-1; }
+  .shared-md code { @apply rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[13px] dark:bg-white/10; }
+  .shared-md { min-width: 0; }
+  .shared-md pre { @apply my-3 overflow-x-auto rounded-xl bg-ink-900 p-4 text-[13px] text-ink-100; max-width: 100%; overflow-wrap: normal; white-space: pre; }
+  .dark .shared-md pre { background: #0E1117; border: 1px solid rgba(255,255,255,.08); }
+  .shared-md table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 14px; margin: .75rem 0; }
+  .shared-md th, .shared-md td { border: 1px solid rgba(127,119,104,.25); padding: .4rem .65rem; text-align: left; overflow-wrap: normal; }
+  .shared-md img { max-width: 100%; height: auto; }
+  .shared-md pre code { @apply bg-transparent p-0 text-inherit; }
+  .shared-md a { @apply font-semibold text-brand-600 underline underline-offset-2 dark:text-brand-300; }
+  .shared-md blockquote { @apply my-2 border-l-4 border-brand-500/40 pl-3 italic text-ink-600 dark:text-ink-300; }
+  .shared-user .shared-md code { @apply bg-white/20; }
+  @keyframes sharedIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .shared-msg { animation: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="relative overflow-hidden mesh">
+  <div class="relative mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-14">
+    <span class="badge-brand">Shared conversation</span>
+    <h1 class="mt-4 text-2xl font-extrabold tracking-tight text-ink-900 dark:text-white sm:text-3xl">
+      {{ conversation.title|default:"Untitled conversation" }}
+    </h1>
+    <p class="mt-3 text-sm text-ink-600 dark:text-ink-400">
+      Shared by {{ owner_name }} · {{ message_count }} message{{ message_count|pluralize }} · {{ link.updated_at|date:"j F Y" }}
+    </p>
+  </div>
+</section>
+
+<section class="border-t hairline bg-white py-10 dark:bg-[#0B0E14] sm:py-12">
+  <div class="mx-auto max-w-3xl space-y-4 px-4 sm:px-6" id="sharedTranscript" aria-live="off">
+    <noscript>
+      {% for message in transcript %}
+        <div class="shared-msg {% if message.role == 'user' %}shared-user{% else %}shared-ai{% endif %}" style="white-space:pre-wrap">{{ message.content }}</div>
+      {% endfor %}
+    </noscript>
+  </div>
+
+  <div class="mx-auto mt-10 max-w-3xl px-4 sm:px-6">
+    <div class="card flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="text-base font-semibold text-ink-900 dark:text-white">Ask your own questions</h2>
+        <p class="mt-1 text-sm text-ink-600 dark:text-ink-400">{{ BRAND.full_name }} gives you several leading AI models in one place.</p>
+      </div>
+      <a href="{% url 'public:home' %}" class="btn-primary btn-sm">Try it free
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>
+    </div>
+    <p class="mt-4 text-center text-xs text-ink-600 dark:text-ink-400">This is a read-only copy. AI answers can be wrong — check anything important.</p>
+  </div>
+</section>
+
+{{ transcript|json_script:"sharedData" }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('sharedData').textContent);
+  var box = document.getElementById('sharedTranscript');
+
+{% include "components/light_markdown_js.html" %}
+
+  data.forEach(function (message, index) {
+    var node = document.createElement('div');
+    node.className = 'shared-msg ' + (message.role === 'user' ? 'shared-user' : 'shared-ai');
+    node.style.animationDelay = Math.min(index * 60, 600) + 'ms';
+    var body = document.createElement('div');
+    body.className = 'shared-md';
+    body.innerHTML = markdown(message.content || '');
+    node.appendChild(body);
+    box.appendChild(node);
+  });
+})();
+</script>
+{% endblock %}

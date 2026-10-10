@@ -1,0 +1,230 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}{{ payment.reference }} · Console{% endblock %}
+{% block heading %}Payment {{ payment.reference }}{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    {{ payment.user.display_name }} · {{ payment.plan.name }}
+  </p>
+{% endblock %}
+
+{% block measure %}max-w-5xl{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <a href="{% url 'console:payments' %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> All payments
+  </a>
+
+  {# ---------- Header ---------- #}
+  <section class="card overflow-hidden reveal">
+    <div class="flex flex-wrap items-center gap-4 p-5 sm:p-6">
+      <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl
+                   {% if payment.status == 'paid' %}bg-emerald-500/12 text-emerald-600 dark:text-emerald-400
+                   {% elif payment.status == 'pending' %}bg-amber-500/12 text-amber-600 dark:text-amber-400
+                   {% elif payment.status == 'refunded' %}bg-sky-500/12 text-sky-600 dark:text-sky-400
+                   {% elif payment.status == 'expired' or payment.status == 'cancelled' %}bg-ink-500/12 text-ink-500 dark:text-ink-300
+                   {% else %}bg-rose-500/12 text-rose-600 dark:text-rose-400{% endif %}">
+        <svg class="h-6 w-6" aria-hidden="true">
+          <use href="#{% if payment.status == 'paid' %}i-check-circle{% elif payment.status == 'pending' %}i-clock{% else %}i-alert{% endif %}"/>
+        </svg>
+      </span>
+
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="font-mono text-base font-bold text-ink-900 dark:text-white">{{ payment.reference }}</h2>
+          <span class="{{ payment.status_tone|tone_classes }}">{{ payment.get_status_display }}</span>
+          {% if payment.tokens_credited %}<span class="badge-success">Tokens credited</span>{% endif %}
+        </div>
+        <p class="mt-1 text-sm text-ink-500 dark:text-ink-400">
+          {{ payment.get_method_display }} · created {{ payment.created_at|date:"d M Y, H:i" }}
+          {% if payment.paid_at %}· paid {{ payment.paid_at|date:"d M Y, H:i" }}{% endif %}
+        </p>
+      </div>
+
+      <div class="text-right">
+        <p class="text-2xl font-extrabold tracking-tight text-ink-900 dark:text-white">{{ payment.pay_display }}</p>
+        <p class="text-xs text-ink-500 dark:text-ink-400">
+          {% if payment.charge_currency and payment.charge_currency != payment.currency %}≈ {% if payment.currency == 'USD' %}${% endif %}{{ payment.amount }} · {% endif %}{{ payment.tokens_to_grant|intcomma }} tokens
+        </p>
+      </div>
+    </div>
+
+    {% if flags %}
+      <div class="border-t hairline bg-rose-500/[.06] px-5 py-3.5">
+        {% for flag in flags %}
+          <p class="flex items-start gap-2 text-sm text-rose-700 dark:text-rose-300">
+            <svg class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"><use href="#i-alert"/></svg>
+            <span><b>{% if flag.event_type == 'amount_mismatch' %}Amount mismatch{% else %}Duplicate transaction{% endif %}</b> — {{ flag.message }}
+              <span class="text-[11px] opacity-75">({{ flag.created_at|date:"d M, H:i" }})</span></span>
+          </p>
+        {% endfor %}
+        <p class="mt-1.5 pl-6 text-xs text-ink-500 dark:text-ink-400">The gateway's confirmation did not match this order, so nothing was credited. Check the statement before confirming by hand.</p>
+      </div>
+    {% endif %}
+
+    {# ---------- Actions ---------- #}
+    <div class="border-t hairline bg-ink-50/70 p-5 dark:bg-white/[.03]">
+      <form method="post" action="{% url 'console:payment_action' payment.reference %}" class="space-y-3" id="actionForm">
+        {% csrf_token %}
+        <div>
+          <label for="id_note" class="label">Note <span class="font-normal text-ink-400">(saved to the audit log)</span></label>
+          <input type="text" name="note" id="id_note" maxlength="255" class="input"
+                 placeholder="e.g. Verified against ABA statement at 14:20">
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          {% if payment.status == 'pending' %}
+            <button type="submit" name="action" value="confirm" class="btn-primary"
+                    onclick="return confirm('Confirm this payment? {{ payment.tokens_to_grant|intcomma }} tokens will be credited to {{ payment.user.display_name|escapejs }}.');">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#i-check"/></svg>
+              Confirm &amp; credit {{ payment.tokens_to_grant|compact_number }} tokens
+            </button>
+            <button type="submit" name="action" value="verify" class="btn-outline">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#i-refresh"/></svg> Re-check with provider
+            </button>
+            <button type="submit" name="action" value="reject" class="btn-ghost text-rose-600 dark:text-rose-400"
+                    onclick="return confirm('Mark this payment as failed?');">
+              Reject
+            </button>
+
+          {% elif payment.status == 'expired' or payment.status == 'failed' %}
+            <button type="submit" name="action" value="verify" class="btn-outline">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#i-refresh"/></svg> Re-check with provider
+            </button>
+            <button type="submit" name="action" value="confirm" class="btn-ghost"
+                    onclick="return confirm('Confirm a late payment? Only do this if the money is on the statement. {{ payment.tokens_to_grant|intcomma }} tokens will be credited to {{ payment.user.display_name|escapejs }}.');">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#i-check"/></svg> Confirm late payment
+            </button>
+
+          {% elif payment.status == 'paid' %}
+            <button type="submit" name="action" value="refund" class="btn-danger"
+                    onclick="return confirm('Refund this payment? {{ payment.tokens_to_grant|intcomma }} tokens will be removed and the subscription cancelled.');">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#i-refresh"/></svg> Issue refund
+            </button>
+            <a href="{% url 'console:user_detail' payment.user_id %}" class="btn-outline">View student</a>
+
+          {% else %}
+            <p class="text-sm text-ink-500 dark:text-ink-400">
+              This payment is {{ payment.get_status_display|lower }} — no further action is available.
+            </p>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <div class="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+
+    {# ---------- Details ---------- #}
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="section-title">Transaction details</h2>
+      <dl class="mt-4 space-y-3 text-sm">
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500 dark:text-ink-400">Student</dt>
+          <dd>
+            <a href="{% url 'console:user_detail' payment.user_id %}" class="font-medium text-brand-600 hover:underline dark:text-brand-300">
+              {{ payment.user.display_name }}
+            </a>
+          </dd>
+        </div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">E-mail</dt><dd class="truncate font-medium text-ink-900 dark:text-white">{{ payment.user.email|default:"—" }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Plan</dt><dd class="font-medium text-ink-900 dark:text-white">{{ payment.plan.name }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Amount</dt><dd class="font-semibold tabular-nums text-ink-900 dark:text-white">{{ payment.amount }} {{ payment.currency }}</dd></div>
+        {% if payment.charge_currency %}
+          <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Charged</dt><dd class="font-semibold tabular-nums text-ink-900 dark:text-white">{{ payment.pay_display }}{% if payment.exchange_rate %} <span class="font-normal text-ink-400">at ៛{{ payment.exchange_rate|floatformat:"0"|intcomma }}/$</span>{% endif %}</dd></div>
+        {% endif %}
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Gateway</dt><dd class="font-medium text-ink-900 dark:text-white">{{ provider.label }} <span class="text-[11px] font-normal text-ink-400">· {% if gateway_mode == 'live' %}live{% elif gateway_mode == 'sandbox' %}sandbox{% else %}manual review{% endif %}</span></dd></div>
+        {% if payment.expires_at %}
+          <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">{% if payment.status == 'pending' %}Expires{% else %}Payment window{% endif %}</dt><dd class="font-medium tabular-nums text-ink-900 dark:text-white">{{ payment.expires_at|date:"d M Y, H:i" }}</dd></div>
+        {% endif %}
+        {% if payment.provider_order_id %}
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500 dark:text-ink-400">Gateway order ID</dt>
+            <dd class="max-w-[14rem] truncate font-mono text-xs text-ink-900 dark:text-white" title="{{ payment.provider_order_id }}">{{ payment.provider_order_id }}</dd>
+          </div>
+        {% endif %}
+        {% if payment.was_discounted %}<div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Discount</dt><dd class="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400" title="{{ payment.discount_reason }}">−{{ payment.discount_amount }} · {{ payment.discount_reason|truncatechars:40 }}</dd></div>{% endif %}
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Tokens to grant</dt><dd class="font-semibold tabular-nums text-ink-900 dark:text-white">{{ payment.tokens_to_grant|intcomma }}</dd></div>
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500 dark:text-ink-400">Provider txn ID</dt>
+          <dd class="max-w-[12rem] truncate font-mono text-xs text-ink-900 dark:text-white">{{ payment.provider_txn_id|default:"—" }}</dd>
+        </div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Verified by</dt><dd class="font-medium text-ink-900 dark:text-white">{{ payment.verified_by.display_name|default:"—" }}</dd></div>
+        {% if subscription %}
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500 dark:text-ink-400">Subscription</dt>
+            <dd class="text-right">
+              <span class="font-medium text-ink-900 dark:text-white">{{ subscription.get_status_display }}</span>
+              <span class="block text-[11px] text-ink-500">until {{ subscription.ends_at|date:"d M Y" }}</span>
+            </dd>
+          </div>
+        {% endif %}
+      </dl>
+
+      {% if payment.payer_note %}
+        <div class="mt-4 rounded-xl border hairline bg-ink-50 p-3 dark:bg-white/[.03]">
+          <p class="text-[10.5px] font-bold uppercase tracking-wider text-ink-400">Student note</p>
+          <p class="mt-1 text-xs leading-relaxed text-ink-600 dark:text-ink-300">{{ payment.payer_note }}</p>
+        </div>
+      {% endif %}
+      {% if payment.admin_note %}
+        <div class="mt-3 rounded-xl border hairline bg-ink-50 p-3 dark:bg-white/[.03]">
+          <p class="text-[10.5px] font-bold uppercase tracking-wider text-ink-400">Admin note</p>
+          <p class="mt-1 text-xs leading-relaxed text-ink-600 dark:text-ink-300">{{ payment.admin_note }}</p>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ---------- Proof + trail ---------- #}
+    <div class="space-y-6">
+      {% if payment.proof %}
+        <section class="card spotlight p-5 reveal">
+          <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Payment proof</h2>
+          <p class="section-note mt-0.5">Uploaded by the student</p>
+          <a href="{{ payment.proof.url }}" target="_blank" rel="noopener" class="mt-3 block">
+            <img src="{{ payment.proof.url }}" alt="Payment proof uploaded by the student"
+                 class="w-full rounded-xl border hairline object-contain transition hover:opacity-90" loading="lazy">
+          </a>
+          <p class="mt-2 text-[11px] text-ink-400">Click to open full size.</p>
+        </section>
+      {% endif %}
+
+      <section class="card overflow-hidden reveal">
+        <div class="border-b hairline px-5 py-4">
+          <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Event trail</h2>
+        </div>
+        {% if events %}
+          <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+            {% for event in events %}
+              <li class="px-5 py-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="text-xs font-semibold text-ink-800 dark:text-ink-100">{{ event.event_type }}</p>
+                    {% if event.message %}
+                      <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500 dark:text-ink-400">{{ event.message }}</p>
+                    {% endif %}
+                  </div>
+                  <time class="shrink-0 text-[10.5px] text-ink-400">{{ event.created_at|date:"d M, H:i:s" }}</time>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="px-5 py-6 text-center text-xs text-ink-400">No events recorded.</p>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('actionForm').addEventListener('submit', function (event) {
+    var button = event.submitter;
+    if (button) { button.disabled = true; button.textContent = 'Working…'; }
+  });
+</script>
+{% endblock %}

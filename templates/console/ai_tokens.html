@@ -1,0 +1,579 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+AI Token Management.
+
+The organising rule of this page: **never show one combined token number.**
+Tokens are a separate currency per model, so a single "2,340,000 available"
+figure would be actively misleading — it can look healthy while the model a
+student is trying to use has nothing left. Every figure on this page is
+labelled with the model it belongs to.
+{% endcomment %}
+
+{% block title %}AI tokens · Console{% endblock %}
+{% block heading %}AI token management{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    Each model has its own supply, its own balances and its own history.
+  </p>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:ai_distribute' %}" class="btn-primary btn-sm hidden sm:inline-flex">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-coin"/></svg> Distribute tokens
+  </a>
+{% endblock %}
+
+{% block content %}
+<style>
+  #bulkAllocate > summary { list-style: none; }
+  #bulkAllocate > summary::-webkit-details-marker { display: none; }
+  #bulkAllocate .bulk-chev { transition: transform .2s ease; }
+  #bulkAllocate[open] .bulk-chev { transform: rotate(180deg); }
+</style>
+<div class="space-y-6">
+
+  <div class="sm:hidden">
+    <a href="{% url 'console:ai_distribute' %}" class="btn-primary w-full">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-coin"/></svg> Distribute tokens
+    </a>
+  </div>
+
+  {# ================= Summary across every pool ================= #}
+  {% comment %}
+    The one place on this page a total across models is legitimate, and each
+    is labelled with what it counts. They are sums of the cards below rather
+    than separate queries, so the header cannot disagree with the grid.
+
+    Note what is deliberately absent: a single "available" figure presented as
+    something a student could spend. These say "across every pool", because
+    tokens are not fungible between models and a healthy total can sit beside
+    a model that has nothing left.
+  {% endcomment %}
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="60">
+    {% include "console/_kpi.html" with variant="brand" icon="i-coin" label="Total available" value=summary.available|compact_number foot=summary.pools_label %}
+    {% include "console/_kpi.html" with variant="brand" icon="i-arrow-up-right" label="Distributed" value=summary.distributed|compact_number foot="Granted to students, all time" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-users" label="Held by students" value=summary.held|compact_number foot="Still spendable in their balances" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-chart" label=summary.requests_label value=summary.requests|intcomma foot="Across every model" %}
+  </section>
+
+  {# ================= Provider switches ================= #}
+  {% comment %}
+    A provider, not a model. Switching one off stops every model behind it at
+    once, which is why it sits apart from the cards and is tinted rather than
+    white — it is a different kind of control from anything below it.
+  {% endcomment %}
+  <section class="providers-strip">
+    <div class="min-w-0 flex-1">
+      <h2 class="providers-label">Providers</h2>
+      <p class="mt-0.5 text-[12.5px] text-ink-600 dark:text-ink-300">
+        Switching a provider off stops only its own models. Every other provider keeps answering.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2.5">
+      {% for provider in providers_list %}
+        <form method="post" action="{% url 'console:ai_provider_toggle' provider.pk %}" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="provider-toggle{% if provider.is_active %} is-on{% endif %}"
+                  role="switch" aria-checked="{{ provider.is_active|yesno:'true,false' }}"
+                  title="{% if provider.is_active %}Disable{% else %}Enable{% endif %} every {{ provider.name }} model">
+            <span class="provider-dot"></span>
+            <span class="provider-name">{{ provider.name }}</span>
+            <span class="provider-switch" aria-hidden="true"><i></i></span>
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ================= Model supplies ================= #}
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div class="min-w-0">
+      <h2 class="text-[17px] font-bold tracking-[-.02em] text-ink-900 dark:text-white">Model supplies</h2>
+      <p class="section-note mt-0.5">
+        {{ summary.pools }} independent pool{{ summary.pools|pluralize }}. Top one up or expand it to distribute.
+        Request counts cover the last {{ days }} days.
+      </p>
+    </div>
+    {% comment %}
+      The window the request figures cover. Links rather than a form, so it
+      keeps every other filter on the page as it is.
+    {% endcomment %}
+    <div class="range-switch" role="group" aria-label="Request window">
+      {% for value, label in range_options %}
+        <a href="{% qs request range=value %}" class="range-opt{% if value == days|stringformat:'s' %} is-on{% endif %}"
+           {% if value == days|stringformat:'s' %}aria-current="true"{% endif %} title="Last {{ label }}">{{ value }}D</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ================= One card per model ================= #}
+  {% if cards %}
+    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-stagger="70">
+      {% for card in cards %}
+        <section class="card spotlight flex flex-col overflow-hidden p-5
+                        {% if card.status_tone == 'danger' %}ring-1 ring-inset ring-rose-500/25{% endif %}">
+
+          {% comment %}
+            Identity. The tile carries the model's own colour, which is the
+            same colour its top-up button and its distribute link wear — so a
+            card reads as one thing rather than three, and the eye can find
+            "the red one" in a grid of six without reading a word.
+          {% endcomment %}
+          <header class="flex items-start gap-3">
+            <span class="model-tile" aria-hidden="true"
+                  style="--from: {{ card.tone.from }}; --to: {{ card.tone.to }}">
+              <svg><use href="#{{ card.tone.icon }}"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="model-provider" style="color: {{ card.tone.ink }}; --tone-light: {{ card.tone.from }}">
+                  {{ card.model.provider_name }}
+                </span>
+                {% if card.model.is_default %}<span class="badge-brand">Default</span>{% endif %}
+                <span class="badge-{{ card.status_tone }}">{{ card.status_label }}</span>
+                {% if not card.credentials_ok %}
+                  <span class="badge-warning" title="This provider has no API key configured on the server">
+                    No credentials
+                  </span>
+                {% endif %}
+              </div>
+              <h2 class="mt-1 truncate text-[18px] font-extrabold tracking-[-.025em] text-ink-900 dark:text-white">
+                {{ card.model.name }}
+              </h2>
+              <p class="mt-0.5 truncate font-mono text-[11px] text-ink-400" title="Model id sent to the provider">
+                {{ card.model.key }}
+              </p>
+            </div>
+          </header>
+
+          {# --- the headline number: what is left to give out --- #}
+          <div class="mt-4 rounded-xl2 border hairline bg-ink-50 p-4 dark:bg-white/[.03]">
+            <p class="stat-label">Available to distribute</p>
+            <p class="mt-1 text-3xl font-extrabold tabular-nums tracking-[-.035em]
+                      {% if card.pool_empty %}text-rose-600 dark:text-rose-400{% else %}text-ink-900 dark:text-white{% endif %}"
+               title="{{ card.available|intcomma }} tokens">
+              {{ card.available|intcomma }}
+            </p>
+            <p class="mt-1 text-[11.5px] text-ink-500 dark:text-ink-400">
+              {% if card.pool_empty %}
+                This model's pool is empty — top it up before distributing.
+              {% else %}
+                {{ card.pool_added|compact_number }} added · {{ card.distributed|compact_number }} given out
+              {% endif %}
+            </p>
+            <div class="tk-meter mt-3">
+              <div class="tk-meter-bar {% if card.pool_percent >= 90 %}bg-rose-500{% elif card.pool_percent >= 70 %}bg-amber-500{% else %}bg-gradient-to-r from-brand-500 to-accent-500{% endif %}"
+                   style="width:{{ card.pool_percent }}%"></div>
+            </div>
+
+            {% if card.direction_rows %}
+              {% comment %}
+                How the capacity was bought. Shown only for a model purchased as
+                a fixed block of input and output, because for every other model
+                the question does not arise — and a row of zeroes would imply it
+                had been answered.
+              {% endcomment %}
+              <div class="mt-4 grid grid-cols-2 gap-3 border-t hairline pt-3">
+                {% for row in card.direction_rows %}
+                  <div>
+                    <dt class="stat-label">{{ row.label }} allocation</dt>
+                    <dd class="mt-0.5 text-sm font-bold tabular-nums text-ink-900 dark:text-white"
+                        title="{{ row.allocated|intcomma }} bought">{{ row.allocated|compact_number }}</dd>
+                    <p class="mt-0.5 text-[11px] tabular-nums text-ink-500 dark:text-ink-400">
+                      {{ row.used|intcomma }} used · {{ row.remaining|intcomma }} left
+                    </p>
+                    <div class="tk-meter mt-1.5">
+                      <div class="tk-meter-bar {% if row.percent >= 90 %}bg-rose-500{% elif row.percent >= 70 %}bg-amber-500{% else %}bg-brand-500{% endif %}"
+                           style="width:{{ row.percent }}%"></div>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+
+          {# --- distributed / consumed / holders --- #}
+          <dl class="mt-4 grid grid-cols-3 gap-3">
+            <div>
+              <dt class="stat-label">Distributed</dt>
+              <dd class="mt-0.5 text-lg font-extrabold tabular-nums text-ink-900 dark:text-white"
+                  title="{{ card.distributed|intcomma }}">{{ card.distributed|compact_number }}</dd>
+            </div>
+            <div>
+              <dt class="stat-label">Consumed</dt>
+              <dd class="mt-0.5 text-lg font-extrabold tabular-nums text-ink-900 dark:text-white"
+                  title="{{ card.consumed|intcomma }}">{{ card.consumed|compact_number }}</dd>
+            </div>
+            <div>
+              <dt class="stat-label">Students</dt>
+              <dd class="mt-0.5 text-lg font-extrabold tabular-nums text-ink-900 dark:text-white"
+                  title="{{ card.holders }} hold tokens, {{ card.with_access }} have access">
+                {{ card.holders }}
+              </dd>
+            </div>
+          </dl>
+
+          <p class="mt-3 text-[11.5px] text-ink-500 dark:text-ink-400">
+            Students still holding <span class="font-bold text-ink-800 dark:text-ink-100">{{ card.outstanding|intcomma }}</span>
+            {{ card.model.name }} tokens ·
+            <span class="font-bold text-ink-800 dark:text-ink-100">{{ card.period_requests|intcomma }}</span>
+            request{{ card.period_requests|pluralize }} in {{ days }} days
+            {% if card.period_failures %}
+              · <span class="font-bold text-rose-600 dark:text-rose-400">{{ card.period_failures }}</span> failed
+            {% endif %}
+          </p>
+
+          {# --- top up this model's pool --- #}
+          <form method="post" action="{% url 'console:ai_pool_topup' %}"
+                class="mt-4 flex flex-wrap items-end gap-2 border-t hairline pt-4">
+            {% csrf_token %}
+            <input type="hidden" name="model_id" value="{{ card.model.pk }}">
+            <label class="min-w-0 flex-1 basis-40">
+              <span class="stat-label">Add to the {{ card.model.name }} pool</span>
+              <input type="number" name="amount" step="1000" min="-100000000" max="100000000" inputmode="numeric"
+                     placeholder="e.g. 500000" class="input mt-1 w-full" required>
+            </label>
+            <label class="order-last min-w-0 basis-full">
+              <span class="stat-label">Note <span class="font-normal normal-case tracking-normal">(optional, kept in the pool ledger)</span></span>
+              <input type="text" name="note" maxlength="255" class="input mt-1 w-full" placeholder="e.g. Vendor invoice 2026-09">
+            </label>
+            {% comment %}
+              The model's own colour, so the button that adds to this pool
+              cannot be confused with the one beside it in the next card.
+            {% endcomment %}
+            <button type="submit" class="btn-topup"
+                    style="--from: {{ card.tone.from }}; --to: {{ card.tone.to }}; --glow: {{ card.tone.ink }}">
+              Top up
+            </button>
+          </form>
+
+          <div class="mt-3 flex items-center justify-between gap-2 text-xs">
+            <a href="{% url 'console:ai_distribute' %}?model={{ card.model.key|urlencode }}"
+               class="model-distribute" style="--ink: {{ card.tone.ink }}; --tone-light: {{ card.tone.from }}">
+              Distribute {{ card.model.name }}
+              <svg aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </a>
+            <span class="text-ink-400" title="Provider list price for what has been spent">
+              ~${{ card.estimated_cost|floatformat:2 }} list
+            </span>
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "components/empty_state.html" with title="No AI models yet" body="Add a model in the catalogue to start distributing tokens." icon="i-sparkles" %}
+  {% endif %}
+
+  {# ================= Bulk allocation ================= #}
+  {% comment %}
+    The same per-model distribution as the Distribute page, for a whole
+    group at once. Each student is one transaction; a pool that runs out
+    stops the run where it is and says how far it got.
+  {% endcomment %}
+  {% if models %}
+    <details class="card overflow-hidden" id="bulkAllocate">
+      <summary class="flex cursor-pointer select-none items-center gap-3 p-4 sm:p-5">
+        <span class="icon-tile h-9 w-9 rounded-[.7rem]" aria-hidden="true">
+          <svg style="width:16px;height:16px"><use href="#i-users"/></svg>
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block text-[15px] font-extrabold tracking-[-.02em] text-ink-900 dark:text-white">Allocate to many students</span>
+          <span class="block text-xs text-ink-500 dark:text-ink-400">Give or top up one model for every active, empty or low student at once.</span>
+        </span>
+        <svg class="bulk-chev h-4 w-4 shrink-0 text-ink-500 dark:text-ink-400" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </summary>
+      <form method="post" action="{% url 'console:ai_distribute_bulk' %}" class="grid gap-3 border-t hairline p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-5"
+            data-loading-form data-loading-label="Allocating…"
+            onsubmit="return confirm('Run this allocation for every matching student? Each one is drawn from that model\'s pool.');">
+        {% csrf_token %}
+        <label class="lg:col-span-1">
+          <span class="stat-label">Model</span>
+          <select name="model_id" class="input mt-1 w-full" required>
+            {% for model in models %}<option value="{{ model.pk }}">{{ model.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="lg:col-span-1">
+          <span class="stat-label">Who</span>
+          <select name="target" class="input mt-1 w-full">
+            {% for value, label in bulk_targets %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="lg:col-span-1">
+          <span class="stat-label">Action</span>
+          <select name="action" class="input mt-1 w-full">
+            <option value="add">Add to each balance</option>
+            <option value="set">Top each up to</option>
+          </select>
+        </label>
+        <label class="lg:col-span-1">
+          <span class="stat-label">Tokens</span>
+          <input type="number" name="amount" min="1" max="100000000" step="1000" inputmode="numeric" required
+                 class="input mt-1 w-full" placeholder="e.g. 20000">
+        </label>
+        <label class="sm:col-span-2 lg:col-span-1">
+          <span class="stat-label">Reason <span class="font-normal normal-case tracking-normal">(optional)</span></span>
+          <input type="text" name="reason" maxlength="255" class="input mt-1 w-full" placeholder="e.g. Term 2 allocation">
+        </label>
+        <div class="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-5">
+          <button type="submit" class="btn-primary" data-submit>
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-coin"/></svg> Run allocation
+          </button>
+          <p class="text-[11.5px] text-ink-500 dark:text-ink-400">Up to 2,000 students per run. Every change is audited and each student is notified.</p>
+        </div>
+      </form>
+    </details>
+  {% endif %}
+
+  {# ================= Per-student balances ================= #}
+  <section class="card overflow-hidden">
+    <header class="flex flex-wrap items-center gap-3 border-b hairline p-4">
+      <h2 class="text-[15px] font-extrabold tracking-[-.02em] text-ink-900 dark:text-white">
+        Student balances
+      </h2>
+      <p class="flex-1 text-xs text-ink-500 dark:text-ink-400">
+        Remaining / used, per model. A student can only use a model they hold tokens for.
+      </p>
+      <form method="get" class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <input type="hidden" name="tab" value="{{ tab }}">
+        {% for name, value in ledger_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        {% for name, value in range_param %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <input type="search" name="q" value="{{ search }}" placeholder="Search students"
+               class="input h-9 min-w-0 flex-1 text-xs sm:w-44 sm:flex-none" aria-label="Search students">
+        <select name="status" class="input h-9 w-32 text-xs" aria-label="Account status">
+          <option value="">All accounts</option>
+          <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+          <option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>Disabled</option>
+        </select>
+        {% if models|length > 1 %}
+          <select name="smodel" class="input h-9 w-40 text-xs" aria-label="Balance of which model">
+            <option value="">Balance of…</option>
+            {% for model in models %}
+              <option value="{{ model.key }}" {% if model_filter == model.key %}selected{% endif %}>{{ model.name }}</option>
+            {% endfor %}
+          </select>
+        {% endif %}
+        <select name="tokens" class="input h-9 w-32 text-xs" aria-label="Balance">
+          <option value="">Any balance</option>
+          <option value="funded" {% if tokens_filter == 'funded' %}selected{% endif %}>Has tokens</option>
+          <option value="empty" {% if tokens_filter == 'empty' %}selected{% endif %}>No tokens</option>
+        </select>
+        <button type="submit" class="btn-secondary btn-sm">Filter</button>
+      </form>
+      {% if tokens_filter and not tokens_model %}
+        <p class="w-full text-[11.5px] text-amber-700 dark:text-amber-300">
+          Pick the model under “Balance of…” — “Has tokens” is always about one model's tokens.
+        </p>
+      {% elif tokens_filter %}
+        <p class="w-full text-[11.5px] text-ink-500 dark:text-ink-400">
+          Showing students who {% if tokens_filter == 'funded' %}hold{% else %}hold no{% endif %} {{ tokens_model.name }} tokens.
+        </p>
+      {% endif %}
+    </header>
+
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[52rem] text-sm">
+        <thead>
+          <tr class="border-b hairline text-left">
+            <th class="px-4 py-3 stat-label">Student</th>
+            {% for model in models %}
+              {% with tone=model|model_tone %}
+                <th class="tone-ink px-4 py-3 stat-label whitespace-nowrap" style="color: {{ tone.ink }}; --tone-light: {{ tone.from }}">
+                  {{ model.name }}
+                  <span class="block font-normal normal-case tracking-normal text-ink-400">{{ model.provider_name }}</span>
+                </th>
+              {% endwith %}
+            {% endfor %}
+            <th class="px-4 py-3 stat-label text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr class="border-b hairline last:border-0 hover:bg-ink-50/60 dark:hover:bg-white/[.02]">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  {% with av=row.student|avatar_tone %}<span class="student-mark" aria-hidden="true" style="background: linear-gradient(140deg, {{ av.from }}, {{ av.to }})">{{ row.student.initials }}</span>{% endwith %}
+                  <span class="min-w-0">
+                    <span class="block truncate font-bold text-ink-900 dark:text-white">{{ row.student.display_name }}</span>
+                    <span class="block truncate font-mono text-[11px] text-ink-400">{{ row.student.username }}</span>
+                  </span>
+                </div>
+              </td>
+              {% for cell in row.cells %}
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="block font-bold tabular-nums
+                               {% if cell.empty %}text-ink-400{% else %}text-ink-900 dark:text-white{% endif %}">
+                    {{ cell.balance|intcomma }}
+                  </span>
+                  {% comment %}
+                    How much of what they were given is gone, in the model's own
+                    colour. The number above says what is left; this says how
+                    fast it went — which is the thing you cannot read off a
+                    balance. A student granted nothing shows an empty track
+                    rather than a full bar, because zero of zero is not spent.
+                  {% endcomment %}
+                  <span class="cell-meter" aria-hidden="true">
+                    <i style="width: {{ cell.percent_used }}%;
+                              background: linear-gradient(90deg, {{ cell.tone.from }}, {{ cell.tone.to }})"></i>
+                  </span>
+                  <span class="block text-[11px] text-ink-400 tabular-nums">
+                    {{ cell.used|intcomma }} used of {{ cell.allocated|intcomma }}
+                  </span>
+                  {% if not cell.enabled %}
+                    <span class="badge-neutral mt-1 inline-block">No access</span>
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="px-4 py-3 text-right whitespace-nowrap">
+                <a href="{% url 'console:ai_distribute' %}?student={{ row.student.pk }}"
+                   class="btn-secondary btn-sm">Manage</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="{{ models|length|add:2 }}" class="px-4 py-10 text-center text-sm text-ink-500 dark:text-ink-400">
+              No students matched that filter.
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page.paginator.num_pages > 1 %}
+      <div class="border-t hairline p-3">
+        {% include "components/pagination.html" with page=page page_numbers=page_numbers %}
+      </div>
+    {% endif %}
+  </section>
+
+  {# ================= Audit history ================= #}
+  <section class="card overflow-hidden">
+    <header class="flex flex-wrap items-center gap-3 border-b hairline p-4">
+      <h2 class="text-[15px] font-extrabold tracking-[-.02em] text-ink-900 dark:text-white">
+        Token history
+      </h2>
+      <p class="flex-1 text-xs text-ink-500 dark:text-ink-400">
+        Every movement, with the balance either side of it.
+      </p>
+      <form method="get" class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <input type="hidden" name="tab" value="{{ tab }}">
+        {% for name, value in student_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        {% for name, value in range_param %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <select name="hmodel" class="input h-9 w-40 text-xs" aria-label="Model">
+          <option value="">All models</option>
+          {% for model in models %}
+            <option value="{{ model.key }}" {% if ledger_model == model.key %}selected{% endif %}>{{ model.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="type" class="input h-9 w-40 text-xs" aria-label="Transaction type">
+          <option value="">All types</option>
+          {% for value, label in ledger_types %}
+            <option value="{{ value }}" {% if ledger_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="search" name="student" value="{{ ledger_student }}" placeholder="Student"
+               class="input h-9 w-32 text-xs" aria-label="Student">
+        <input type="date" name="since" value="{{ ledger_since }}" class="input h-9 w-36 text-xs" aria-label="From">
+        <input type="date" name="until" value="{{ ledger_until }}" class="input h-9 w-36 text-xs" aria-label="To">
+        <button type="submit" class="btn-secondary btn-sm">Filter</button>
+      </form>
+    </header>
+
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[48rem] text-sm">
+        <thead>
+          <tr class="border-b hairline text-left">
+            <th class="px-4 py-3 stat-label">When</th>
+            <th class="px-4 py-3 stat-label">Student</th>
+            <th class="px-4 py-3 stat-label">Model</th>
+            <th class="px-4 py-3 stat-label">Action</th>
+            <th class="px-4 py-3 stat-label text-right">Amount</th>
+            <th class="px-4 py-3 stat-label text-right">Before → after</th>
+            <th class="px-4 py-3 stat-label">By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in ledger %}
+            <tr class="border-b hairline last:border-0">
+              <td class="px-4 py-3 whitespace-nowrap text-ink-500 dark:text-ink-400">
+                {{ entry.created_at|date:"j M Y, H:i" }}
+              </td>
+              <td class="px-4 py-3">
+                <span class="block truncate font-bold text-ink-900 dark:text-white">{{ entry.user.display_name }}</span>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap">
+                <span class="block font-semibold text-ink-800 dark:text-ink-100">{{ entry.ai_model.name }}</span>
+                <span class="block text-[11px] text-ink-400">{{ entry.ai_model.provider_name }}</span>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap">
+                <span class="badge-{{ entry.tone }}">{{ entry.get_transaction_type_display }}</span>
+                {% if entry.reason %}
+                  <span class="tap-expand mt-1 block max-w-[18rem] truncate text-[11px] text-ink-400" title="{{ entry.reason }}" tabindex="0">{{ entry.reason }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right font-bold tabular-nums whitespace-nowrap
+                         {% if entry.is_credit %}text-emerald-600 dark:text-emerald-400{% else %}text-ink-700 dark:text-ink-200{% endif %}">
+                {% if entry.is_credit %}+{% else %}−{% endif %}{{ entry.abs_amount|intcomma }}
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap text-ink-500 dark:text-ink-400">
+                {{ entry.balance_before|intcomma }} → <span class="font-bold text-ink-900 dark:text-white">{{ entry.balance_after|intcomma }}</span>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap text-ink-500 dark:text-ink-400">
+                {{ entry.performed_by.display_name|default:"System" }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="px-4 py-10 text-center text-sm text-ink-500 dark:text-ink-400">
+              No token movements match that filter yet.
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ================= Pool movements ================= #}
+  {% if pool_ledger %}
+    <section class="card p-5 sm:p-6">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-[17px] font-bold tracking-[-.02em] text-ink-900 dark:text-white">
+            Recent pool movements
+          </h2>
+          <p class="section-note mt-0.5">Supply changes across every model</p>
+        </div>
+        <a href="{% url 'console:tokens' %}" class="link text-[12.5px]">
+          Full ledger
+        </a>
+      </div>
+
+      <ul class="mt-4 divide-y hairline">
+        {% for entry in pool_ledger %}
+          {% with tone=entry.ai_model|model_tone %}
+            <li class="pool-row">
+              {% comment %}
+                Direction first, as a shape rather than only a sign: an arrow
+                in a tinted disc reads before the number does, so a column of
+                these can be scanned for "what went out" without reading.
+              {% endcomment %}
+              <span class="pool-arrow {% if entry.is_credit %}is-up{% else %}is-down{% endif %}" aria-hidden="true">
+                <svg><use href="#{% if entry.is_credit %}i-trend-up{% else %}i-trend-down{% endif %}"/></svg>
+              </span>
+              <span class="pool-amount {% if entry.is_credit %}is-up{% else %}is-down{% endif %}">
+                {% if entry.is_credit %}+{% else %}&minus;{% endif %}{{ entry.abs_amount|intcomma }}
+              </span>
+              <span class="pool-model"
+                    style="color: {{ tone.ink }}; background: {{ tone.ink }}1A; --tone-light: {{ tone.from }}">{{ entry.ai_model.name }}</span>
+              <span class="pool-what" title="{{ entry.description }}">{{ entry.description }}</span>
+              <span class="pool-when">
+                balance {{ entry.balance_after|intcomma }} · {{ entry.created_at|date:"j M, H:i" }}
+              </span>
+            </li>
+          {% endwith %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+</div>
+{% endblock %}

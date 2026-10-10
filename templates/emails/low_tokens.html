@@ -1,0 +1,97 @@
+{% comment %}
+  Low-token warning. Same table layout and inline styles as the verification
+  e-mail, because it goes through the same mail clients and they are as
+  unforgiving here as they are there.
+
+  The "Renew tokens" button is a plain in-site link with nothing identifying in
+  it. Signed in, the student lands on pricing; signed out, the login page
+  collects them and returns them there. That is what makes a forwarded copy of
+  this e-mail harmless.
+{% endcomment %}
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;padding:0;background:#F7F8FC;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F7F8FC;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+               style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px -12px rgba(11,16,32,.16);">
+
+          <tr>
+            <td style="background:linear-gradient(135deg,#5A38DC 0%,#6E51F0 55%,#12B3AA 100%);padding:28px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.18);text-align:center;line-height:40px;font-size:0;"><span style="display:inline-block;width:12px;height:12px;border-radius:6px;background:#ffffff;vertical-align:middle;"></span></div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <div style="color:#ffffff;font-size:16px;font-weight:700;letter-spacing:-.3px;">AI Assistant</div>
+                    <div style="color:rgba(255,255,255,.7);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:2px;">{{ brand.org }} Platform</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px;">
+              <h1 style="margin:0;font-size:20px;font-weight:700;color:#171D33;letter-spacing:-.4px;">
+                Your {{ model_name }} tokens are running low
+              </h1>
+              <p style="margin:12px 0 0;font-size:14px;line-height:1.65;color:#525C7E;">
+                Hello {{ user.display_name }}, your available tokens for
+                <strong style="color:#171D33;">{{ model_name }}</strong> are nearly used up.
+              </p>
+
+              {% comment %}
+                The number they came for, and what it is a fraction of — a bare
+                count means nothing without the size of the package.
+              {% endcomment %}
+              <div style="margin:24px 0;padding:22px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:14px;text-align:center;">
+                <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#9A5B1B;">
+                  {{ model_name }} tokens remaining
+                </div>
+                <div style="margin-top:8px;font-size:34px;font-weight:800;letter-spacing:-1px;color:#B4520E;">
+                  {{ remaining|floatformat:0 }}
+                </div>
+                <div style="margin-top:6px;font-size:12px;color:#9A5B1B;">
+                  {{ percent }}% of your {{ allocated|floatformat:0 }}-token allocation is left
+                </div>
+              </div>
+
+              <p style="margin:0;font-size:14px;line-height:1.65;color:#525C7E;">
+                To keep using the assistant without interruption, renew your plan or add more
+                {{ model_name }} tokens. Your other models are not affected — tokens are held
+                separately for each one.
+              </p>
+
+              <div style="margin-top:26px;text-align:center;">
+                <a href="{{ pricing_url }}"
+                   style="display:inline-block;padding:14px 32px;background:#5A38DC;color:#ffffff;border-radius:12px;font-size:15px;font-weight:600;text-decoration:none;">
+                  Renew tokens
+                </a>
+              </div>
+              <p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#98A2C0;text-align:center;">
+                You will be asked to sign in first if you are not already.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:18px 32px;background:#F7F8FC;border-top:1px solid #EFF1F8;">
+              <p style="margin:0;font-size:11px;line-height:1.6;color:#98A2C0;text-align:center;">
+                © {{ brand.full_name }} · Sent to {{ user.email }} because your {{ model_name }}
+                balance fell below {{ threshold }}%.<br>
+                You can turn these alerts off in your notification settings.
+                Need help? Write to {{ brand.support_email }}
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,114 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Referral campaigns · Console{% endblock %}
+{% block heading %}Referral campaigns{% endblock %}
+{% block subheading %}
+  <p>Codes you issue, with their own reward, audience and end date. Every student also has a personal code — those appear under <a href="{% url 'console:referrals' %}" class="link">referral history</a>.</p>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:referral_campaign_create' %}" class="btn-primary btn-sm">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> New code
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "components/stat_card.html" with icon="i-gift" label="Live codes" value=stats.live|intcomma tone="success" hint=stats.campaigns|stringformat:"s"|add:" in total" %}
+    {% include "components/stat_card.html" with icon="i-users" label="Registrations" value=stats.registrations|intcomma tone="brand" hint=stats.clicks|intcomma|add:" link clicks" %}
+    {% include "components/stat_card.html" with icon="i-check-circle" label="Conversions" value=stats.conversions|intcomma tone="accent" hint=stats.conversion_rate|stringformat:"s"|add:"% of registrations" %}
+    {% include "components/stat_card.html" with icon="i-card" label="Referred revenue" value=stats.revenue|money tone="success" hint=stats.discount_given|money|add:" given as discount" %}
+  </section>
+
+  <form method="get" class="card spotlight flex flex-wrap items-end gap-3 p-4 sm:p-5">
+    {% include "console/_scope_field.html" %}
+    <div class="min-w-[200px] flex-1">
+      <label for="q" class="label">Search</label>
+      <div class="search-shell">
+        <svg aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="search" name="q" id="q" value="{{ search }}" class="input py-2 pl-9 text-sm" placeholder="Code or name">
+      </div>
+    </div>
+    <div class="min-w-[160px]">
+      <label for="state" class="label">State</label>
+      <select name="state" id="state" class="input py-2 text-sm">
+        <option value="">Any state</option>
+        {% for value, label in states %}
+          <option value="{{ value }}" {% if value == state %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-primary btn-sm">
+      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-filter"/></svg> Filter
+    </button>
+    <a href="{% url 'console:referral_campaigns' %}" class="btn-ghost btn-sm">Clear</a>
+  </form>
+
+  {% if rows %}
+    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3" data-stagger="70">
+      {% for campaign in rows %}
+        {% with badge=campaign.state_badge %}
+          <div class="card card-hover spotlight group flex flex-col p-5">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <a href="{% url 'console:referral_campaign_detail' campaign.pk %}"
+                   class="font-mono text-[17px] font-extrabold tracking-tight text-ink-900 hover:text-brand-600 dark:text-white dark:hover:text-brand-300">
+                  {{ campaign.code }}
+                </a>
+                <p class="mt-0.5 truncate text-xs text-ink-500 dark:text-ink-400">{{ campaign.name }}</p>
+              </div>
+              <span class="{{ badge.1|tone_classes }} shrink-0">{{ badge.0 }}</span>
+            </div>
+
+            <dl class="mt-4 grid grid-cols-2 gap-3 rounded-xl2 border hairline bg-ink-50 p-4 dark:bg-white/[.03]">
+              <div>
+                <dt class="stat-label">New student gets</dt>
+                <dd class="mt-0.5 text-sm font-bold text-brand-600 dark:text-brand-300">{{ campaign.referred_reward_label }}</dd>
+              </div>
+              <div>
+                <dt class="stat-label">Referrer gets</dt>
+                <dd class="mt-0.5 text-sm font-bold text-ink-900 dark:text-white">{{ campaign.referrer_reward_label }}</dd>
+              </div>
+            </dl>
+
+            <div class="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+              <span class="badge-neutral">{{ campaign.ai_model.name|default:"All models" }}</span>
+              <span class="badge-neutral">{{ campaign.get_reward_trigger_display }}</span>
+              {% if campaign.usage_limit %}
+                <span class="badge-neutral">{{ campaign.remaining_uses }} of {{ campaign.usage_limit }} left</span>
+              {% endif %}
+              {% if campaign.expires_at %}
+                <span class="badge-neutral">Ends {{ campaign.expires_at|date:"d M Y" }}</span>
+              {% endif %}
+            </div>
+
+            <div class="mt-4 grid grid-cols-3 gap-2 border-t hairline pt-3 text-center">
+              <div><p class="text-[15px] font-extrabold tabular-nums">{{ campaign.clicks|intcomma }}</p><p class="stat-label">Clicks</p></div>
+              <div><p class="text-[15px] font-extrabold tabular-nums">{{ campaign.registrations|intcomma }}</p><p class="stat-label">Signups</p></div>
+              <div><p class="text-[15px] font-extrabold tabular-nums">{{ campaign.conversions|intcomma }}</p><p class="stat-label">Bought</p></div>
+            </div>
+
+            <div class="mt-4 flex items-center gap-2 border-t hairline pt-4">
+              <a href="{% url 'console:referral_campaign_edit' campaign.pk %}" class="btn-outline btn-sm flex-1">
+                <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg> Edit
+              </a>
+              <form method="post" action="{% url 'console:referral_campaign_toggle' campaign.pk %}" class="flex-1">
+                {% csrf_token %}
+                <button type="submit" class="{% if campaign.is_active %}btn-ghost{% else %}btn-primary{% endif %} btn-sm w-full">
+                  {% if campaign.is_active %}Pause{% else %}Resume{% endif %}
+                </button>
+              </form>
+            </div>
+          </div>
+        {% endwith %}
+      {% endfor %}
+    </div>
+    <div>{% include "components/pagination.html" %}</div>
+  {% else %}
+    {% include "components/empty_state.html" with icon="i-gift" title="No campaigns yet" body="Create a code to run an intake offer, a partner deal or a seasonal discount." %}
+  {% endif %}
+</div>
+{% endblock %}

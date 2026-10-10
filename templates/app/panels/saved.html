@@ -1,0 +1,93 @@
+{% load ai_extras %}
+{% comment %}
+  Saved answers — every reply the student bookmarked, newest first.
+  "Open in chat" jumps to the answer inside its conversation and highlights it.
+{% endcomment %}
+<div class="panel" data-panel-name="saved">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Workspace</p>
+    <h2 class="panel-title">Saved answers</h2>
+    <p class="panel-sub">
+      Answers you bookmarked with the <b>Save</b> button under a reply. Open one to
+      jump straight to it in its conversation.
+    </p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <form class="sv-search" method="get" action="{% url 'student:saved' %}" data-panel-search="saved">
+    <svg aria-hidden="true"><use href="#i-search"/></svg>
+    <input type="search" name="q" value="{{ query }}" placeholder="Search your saved answers" aria-label="Search saved answers">
+  </form>
+
+  {% if items %}
+    <div class="sv-list">
+      {% for item in items %}
+        {% with message=item.message conv=item.message.conversation %}
+          <article class="sv-card" style="animation-delay:{% widthratio forloop.counter0 1 40 %}ms">
+            <header class="sv-head">
+              <span class="sv-mark" aria-hidden="true"><svg><use href="#i-bookmark"/></svg></span>
+              <div class="sv-title">
+                <h3>{{ conv.title }}</h3>
+                <p>
+                  {% if conv.folder %}<span class="sv-folder" style="--f:{{ conv.folder.hex }}"><i></i>{{ conv.folder.name }}</span> · {% endif %}
+                  {{ item.model_name|default:"AI" }} · saved {{ item.created_at|timeago }}
+                </p>
+              </div>
+            </header>
+            {% if item.note %}
+              <p class="sv-note"><svg aria-hidden="true"><use href="#i-edit"/></svg><span>{{ item.note }}</span></p>
+            {% endif %}
+            <p class="sv-body" data-raw="{{ message.content }}">{{ message.content|truncatechars:420 }}</p>
+            <footer class="sv-foot">
+              <a href="{% url 'student:chat_detail' conv.pk %}#message-{{ message.pk }}" class="btn btn-sm btn-primary">
+                <svg aria-hidden="true"><use href="#i-chat"/></svg> Open in chat
+              </a>
+              <button type="button" class="btn btn-sm" data-sv-copy>
+                <svg aria-hidden="true"><use href="#i-copy"/></svg> Copy
+              </button>
+              <details class="sv-note-edit">
+                <summary class="btn btn-sm btn-ghost">
+                  <svg aria-hidden="true"><use href="#i-edit"/></svg> {% if item.note %}Edit note{% else %}Add note{% endif %}
+                </summary>
+                <form method="post" action="{% url 'student:saved' %}" data-panel-form="saved" class="sv-note-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="note_for" value="{{ message.pk }}">
+                  <input type="hidden" name="q" value="{{ query }}">
+                  <input type="text" name="note" maxlength="200" value="{{ item.note }}" placeholder="Why you kept it, e.g. “for the essay”" aria-label="Note">
+                  <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                </form>
+              </details>
+              <span style="flex:1"></span>
+              <form method="post" action="{% url 'student:saved' %}" data-panel-form="saved">
+                {% csrf_token %}
+                <input type="hidden" name="remove" value="{{ message.pk }}">
+                <input type="hidden" name="q" value="{{ query }}">
+                <button type="submit" class="btn btn-sm btn-ghost" aria-label="Remove from saved answers">
+                  <svg aria-hidden="true"><use href="#i-trash"/></svg>
+                </button>
+              </form>
+            </footer>
+          </article>
+        {% endwith %}
+      {% endfor %}
+    </div>
+    {% if page.has_other_pages %}
+      <nav class="sv-pages" aria-label="Pages">
+        {% if page.has_previous %}<a class="btn btn-sm" data-panel-link="saved" href="{% url 'student:saved' %}?page={{ page.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">Newer</a>{% endif %}
+        <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="btn btn-sm" data-panel-link="saved" href="{% url 'student:saved' %}?page={{ page.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">Older</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% elif query %}
+    <p class="empty">
+      <svg aria-hidden="true"><use href="#i-search"/></svg>
+      No saved answers mention “{{ query }}”.
+    </p>
+  {% else %}
+    <p class="empty">
+      <svg aria-hidden="true"><use href="#i-bookmark"/></svg>
+      Nothing saved yet. Press <b>Save</b> under any answer to keep it here.
+    </p>
+  {% endif %}
+</div>

@@ -1,0 +1,161 @@
+{% load ai_extras %}
+{% comment %}
+  Prompt library — reusable starting points for a message.
+
+  Featured prompts are published by an administrator to everybody; below them
+  are the student's own. "Use" drops the prompt into the composer and returns
+  to the chat, where it can be edited before it is sent — a prompt is a draft,
+  never something sent on the student's behalf.
+{% endcomment %}
+<div class="panel" data-panel-name="prompts">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Workspace</p>
+    <h2 class="panel-title">Prompt library</h2>
+    <p class="panel-sub">
+      Ready-made prompts for the things you ask most. Pick one to drop it into
+      the message box, change anything you like, then send.
+    </p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <section class="panel-section">
+    <div class="sa-rule" style="margin-top:0">
+      <b>Featured</b><i aria-hidden="true"></i>
+      <span class="sa-count">{{ featured|length }}</span>
+    </div>
+
+    {% if categories|length > 1 %}
+      <div class="pl-filters" role="group" aria-label="Filter by category" data-pl-filters>
+        <button type="button" class="pl-chip is-on" data-pl-filter="">All</button>
+        {% for category in categories %}
+          <button type="button" class="pl-chip" data-pl-filter="{{ category }}">{{ category }}</button>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if featured %}
+      <div class="pl-grid">
+        {% for prompt in featured %}
+          <article class="pl-card is-featured" data-pl-category="{{ prompt.category }}"
+                   style="animation-delay:{% widthratio forloop.counter0 1 50 %}ms">
+            <div class="pl-card-top">
+              <span class="pl-tile" aria-hidden="true"><svg><use href="#i-sparkles"/></svg></span>
+              <div class="pl-card-title">
+                <h3>{{ prompt.title }}</h3>
+                {% if prompt.category %}<span class="pl-cat">{{ prompt.category }}</span>{% endif %}
+              </div>
+            </div>
+            <p class="pl-preview">{{ prompt.preview }}</p>
+            <div class="pl-actions">
+              <button type="button" class="btn btn-sm btn-primary" data-use-prompt="{{ prompt.pk }}">
+                <svg aria-hidden="true"><use href="#i-send"/></svg> Use in chat
+              </button>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty">
+        <svg aria-hidden="true"><use href="#i-sparkles"/></svg>
+        No featured prompts yet. Your own prompts appear below.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="panel-section">
+    <div class="sa-rule" style="margin-top:0">
+      <b>Your prompts</b><i aria-hidden="true"></i>
+      <span class="sa-count">{{ mine|length }} / {{ max_prompts }}</span>
+    </div>
+
+    {% if mine %}
+      <div class="pl-grid">
+        {% for prompt in mine %}
+          <article class="pl-card" style="animation-delay:{% widthratio forloop.counter0 1 50 %}ms">
+            <div class="pl-card-top">
+              <span class="pl-tile is-mine" aria-hidden="true"><svg><use href="#i-star"/></svg></span>
+              <div class="pl-card-title">
+                <h3>{{ prompt.title }}</h3>
+                {% if prompt.category %}<span class="pl-cat">{{ prompt.category }}</span>{% endif %}
+              </div>
+            </div>
+            <p class="pl-preview">{{ prompt.preview }}</p>
+            <div class="pl-actions">
+              <button type="button" class="btn btn-sm btn-primary" data-use-prompt="{{ prompt.pk }}">
+                <svg aria-hidden="true"><use href="#i-send"/></svg> Use in chat
+              </button>
+              <span class="pl-uses">{% if prompt.use_count %}Used {{ prompt.use_count }}×{% endif %}</span>
+              <a href="{% url 'student:prompts' %}?edit={{ prompt.pk }}#promptForm" class="btn btn-sm btn-ghost"
+                 data-panel-link="prompts" aria-label="Edit {{ prompt.title }}" title="Edit">
+                <svg aria-hidden="true"><use href="#i-edit"/></svg>
+              </a>
+              <form method="post" action="{% url 'student:prompts' %}" data-panel-form="prompts"
+                    data-confirm-title="Delete this prompt?"
+                    data-confirm="“{{ prompt.title }}” will be removed from your prompt library."
+                    data-confirm-button="Delete prompt">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="prompt_id" value="{{ prompt.pk }}">
+                <button type="submit" class="btn btn-sm btn-ghost" aria-label="Delete {{ prompt.title }}">
+                  <svg aria-hidden="true"><use href="#i-trash"/></svg>
+                </button>
+              </form>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty">
+        <svg aria-hidden="true"><use href="#i-star"/></svg>
+        You have not saved any prompts yet. Add one below, or use
+        <b>Save as prompt</b> in the chat's prompt menu.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="panel-section">
+    <div class="sa-rule" style="margin-top:0"><b>{% if editing %}Edit “{{ editing.title }}”{% else %}Add a prompt{% endif %}</b><i aria-hidden="true"></i></div>
+    <form method="post" action="{% url 'student:prompts' %}" data-panel-form="prompts" class="card pl-form" id="promptForm">
+      {% csrf_token %}
+      {% if editing %}
+        <input type="hidden" name="action" value="update">
+        <input type="hidden" name="prompt_id" value="{{ editing.pk }}">
+      {% else %}
+        <input type="hidden" name="action" value="create">
+      {% endif %}
+      <div class="pl-form-row">
+        <div class="sa-field">
+          <label for="plTitle">Title</label>
+          <input id="plTitle" name="title" maxlength="80" required value="{{ draft.title }}"
+                 placeholder="e.g. Explain like a teacher">
+        </div>
+        <div class="sa-field">
+          <label for="plCategory">Category <span class="pl-optional">optional</span></label>
+          <input id="plCategory" name="category" maxlength="40" value="{{ draft.category }}"
+                 placeholder="e.g. Study" list="plCategories">
+          <datalist id="plCategories">
+            {% for category in categories %}<option value="{{ category }}">{% endfor %}
+          </datalist>
+        </div>
+      </div>
+      <div class="sa-field">
+        <label for="plBody">Prompt</label>
+        <textarea id="plBody" name="body" rows="5" maxlength="{{ max_body }}" required
+                  placeholder="Write the prompt as you would type it in the chat.">{{ draft.body }}</textarea>
+      </div>
+      <div class="pl-form-foot">
+        {% if editing %}
+          <a href="{% url 'student:prompts' %}" class="btn" data-panel-link="prompts">Cancel</a>
+          <button type="submit" class="btn btn-primary">
+            <svg aria-hidden="true"><use href="#i-check"/></svg> Save changes
+          </button>
+        {% else %}
+          <button type="submit" class="btn btn-primary">
+            <svg aria-hidden="true"><use href="#i-plus"/></svg> Save prompt
+          </button>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+</div>

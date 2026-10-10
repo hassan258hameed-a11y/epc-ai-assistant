@@ -1,0 +1,201 @@
+{% load ai_extras %}
+{% comment %}
+  Usage — the Student App design's account view.
+
+  What you hold, what you spent, and where it went, in that order: the
+  balances first because they are what somebody owns, the limits below
+  because they only qualify them, then the month and the ledger it came
+  from. Every figure here is the student's own.
+{% endcomment %}
+<div class="panel" data-panel-name="usage">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Account</p>
+    <h2 class="panel-title">Usage</h2>
+    <p class="panel-sub">
+      What you hold, what you have spent, and where it went. Balances are kept
+      separately for each model, because each one is priced differently.
+    </p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <section class="panel-section">
+    <div class="sa-rule" style="margin-top:0">
+      <b>Balances by model</b>
+      <i aria-hidden="true"></i>
+      {% if empty_wallets %}<span class="sa-empty-pill">{{ empty_wallets }} empty</span>{% endif %}
+    </div>
+    {% include "app/panels/_wallets.html" %}
+  </section>
+
+  {% if limits %}
+    {% comment %}
+      How fast what is left may be spent. Deliberately below the balances: the
+      balance is what somebody owns, and this only qualifies it.
+    {% endcomment %}
+    <section class="panel-section">
+      <div class="sa-rule" style="margin-top:0"><b>Usage limits</b><i aria-hidden="true"></i></div>
+      <p class="section-note" style="margin-top:8px">
+        Your tokens never expire. These set how many of them you can spend in a
+        day, a week and a month — and they reset on their own.
+      </p>
+
+      {% for group in limits %}
+        <div class="card" style="margin-top:12px">
+          <div class="card-body">
+            <div class="price-head" style="margin-bottom:14px">
+              <h3 style="font-size:15px">{{ group.model.name }}</h3>
+              <span class="price-balance {% if group.blocked %}is-empty{% endif %}">
+                {{ group.spendable|intcomma }} spendable now
+              </span>
+            </div>
+
+            <div class="usage-cards">
+              {% for window in group.windows %}
+                <div class="usage-card">
+                  <h4>{{ window.label }}</h4>
+                  <p class="big">{{ window.percent }}%</p>
+                  <p class="sub">{{ window.used|intcomma }} of {{ window.limit|intcomma }} tokens</p>
+                  <span class="usage-track">
+                    <i class="usage-fill" style="width:{{ window.percent }}%
+                       {% if window.percent >= 100 %};background:var(--danger)
+                       {% elif window.percent >= 70 %};background:var(--warn-hi){% endif %}"></i>
+                  </span>
+                  <p class="reset">Resets {{ window.reset_display }}</p>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  <section class="panel-section">
+    <div class="sa-rule" style="margin-top:0">
+      <b>Last {{ days }} days{% if model_filter %} · {{ model_filter_name }}{% endif %}</b><i aria-hidden="true"></i>
+      <a class="us-csv" href="{% url 'student:usage_export' %}?days={{ days }}{% if model_filter %}&model={{ model_filter }}{% endif %}" download>
+        <svg aria-hidden="true"><use href="#i-download"/></svg> CSV
+      </a>
+    </div>
+    {% comment %}
+      Two filters: how far back, and which model. Both are links, so the
+      panel's own navigation keeps them and a refresh lands on the same view.
+    {% endcomment %}
+    <div class="us-filters">
+      <div class="us-chips" role="group" aria-label="Range">
+        {% for n in usage_ranges %}
+          <a href="{% url 'student:usage' %}?days={{ n }}{% if model_filter %}&model={{ model_filter }}{% endif %}" data-panel-link="usage"
+             class="us-chip{% if n == days %} is-on{% endif %}">{{ n }} days</a>
+        {% endfor %}
+      </div>
+      {% if by_model|length > 1 or model_filter %}
+        <div class="us-chips" role="group" aria-label="Model">
+          <a href="{% url 'student:usage' %}?days={{ days }}" data-panel-link="usage" class="us-chip{% if not model_filter %} is-on{% endif %}">All models</a>
+          {% for row in by_model %}
+            <a href="{% url 'student:usage' %}?days={{ days }}&model={{ row.key }}" data-panel-link="usage"
+               class="us-chip{% if model_filter == row.key %} is-on{% endif %}">{{ row.name }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    <div class="sa-month">
+      <div class="sa-tiles">
+        <div class="sa-tile" style="--t-bg:var(--accent-soft);--t-line:var(--accent-mid);--t-icon:var(--surface);--t-fg:var(--accent)">
+          <div class="sa-tile-head">
+            <i><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.6c2.9 0 5.2 1 5.2 2.2S10.9 7 8 7 2.8 6 2.8 4.8 5.1 2.6 8 2.6M2.8 4.8v6.4c0 1.2 2.3 2.2 5.2 2.2s5.2-1 5.2-2.2V4.8"/></svg></i>
+            <span>Tokens spent</span>
+          </div>
+          <b>{{ stats.period_tokens|intcomma }}</b>
+          <small>{{ stats.total_tokens|intcomma }} all time</small>
+        </div>
+        <div class="sa-tile" style="--t-bg:var(--surface-2);--t-line:var(--border-soft);--t-icon:var(--surface);--t-fg:var(--accent-2)">
+          <div class="sa-tile-head">
+            <i><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 3.8h10.4v6.4H7.6l-3 2.2v-2.2H2.8z"/></svg></i>
+            <span>Messages sent</span>
+          </div>
+          <b>{{ stats.period_requests|intcomma }}</b>
+          <small>{{ stats.total_requests|intcomma }} all time</small>
+        </div>
+        <div class="sa-tile" style="--t-bg:var(--danger-soft);--t-line:var(--danger-line);--t-icon:var(--surface);--t-fg:var(--danger)">
+          <div class="sa-tile-head">
+            <i><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 12l3.6-3.8 2.6 1.8 4.2-5.4M13.2 4.6h-2.8M13.2 4.6v2.8"/></svg></i>
+            <span>Average per message</span>
+          </div>
+          <b>{{ stats.average_tokens|intcomma }}</b>
+          <small>tokens, all time</small>
+        </div>
+      </div>
+
+      {% comment %}
+        A bar per day, scaled against the busiest one so the shape of a month
+        reads at a glance. The exact figure is on the bar you point at rather
+        than in axis labels nobody reads.
+      {% endcomment %}
+      <div class="sa-chart" role="img" aria-label="Daily token use over the last {{ days }} days">
+        {% for day in stats.series %}
+          <span class="sa-chart-col{% if not day.tokens %} is-idle{% endif %}">
+            <span class="sa-chart-tip"><b>{{ day.label }}</b><span>{{ day.tokens|intcomma }} tokens</span></span>
+            <i data-height="{{ day.height }}"></i>
+          </span>
+        {% endfor %}
+      </div>
+      <div class="sa-chart-axis">
+        <span>{{ stats.labels|first }}</span>
+        <span>{{ stats.labels|last }}</span>
+      </div>
+    </div>
+
+    {% if by_model and not model_filter %}
+      <div class="us-models card">
+        <div class="card-body">
+          <h3 class="us-models-title">Where your tokens went</h3>
+          {% for row in by_model %}
+            <a class="us-model" href="{% url 'student:usage' %}?days={{ days }}&model={{ row.key }}" data-panel-link="usage">
+              <span class="us-model-name">{{ row.name }}<small>{{ row.requests|intcomma }} request{{ row.requests|pluralize }} · {{ row.input_tokens|compact_number }} in / {{ row.output_tokens|compact_number }} out</small></span>
+              <span class="us-model-bar" aria-hidden="true"><i style="width:{{ row.percent }}%"></i></span>
+              <span class="us-model-num">{{ row.tokens|intcomma }}<small>{{ row.percent }}%</small></span>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="panel-section">
+    <div class="sa-rule" style="margin-top:0">
+      <b>Activity</b>
+      <span class="sa-count">{{ page.paginator.count }}</span>
+      <i aria-hidden="true"></i>
+    </div>
+    <div class="sa-acts">
+      {% for row in activity %}
+        <div class="sa-act is-{{ row.kind }}" style="animation-delay:{{ row.delay }}">
+          <i><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ row.glyph }}"/></svg></i>
+          <div class="sa-act-main">
+            <b>{{ row.title }}</b>
+            <small>{{ row.entry.created_at|timeago }}{% if row.model %} &middot; {{ row.model }}{% elif row.detail %} &middot; {{ row.detail }}{% endif %}</small>
+          </div>
+          <span class="sa-act-amt">{{ row.amount }}</span>
+        </div>
+      {% empty %}
+        <p class="empty" style="padding:34px 20px">
+          <svg aria-hidden="true"><use href="#i-history"/></svg>
+          Nothing here yet. Your token activity will appear as you use the assistant.
+        </p>
+      {% endfor %}
+
+      {% if page.paginator.num_pages > 1 %}
+        <nav class="sa-acts-foot" aria-label="Activity pages">
+          {% for number in page_numbers %}
+            {% if number == page.number %}
+              <span class="is-on" aria-current="page">{{ number }}</span>
+            {% else %}
+              <a href="{% url 'student:usage' %}?page={{ number }}" data-panel-link="usage">{{ number }}</a>
+            {% endif %}
+          {% endfor %}
+        </nav>
+      {% endif %}
+    </div>
+  </section>
+</div>

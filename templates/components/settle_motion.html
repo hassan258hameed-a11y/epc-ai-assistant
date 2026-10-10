@@ -1,0 +1,49 @@
+{% comment %}
+  Decorative motion is a welcome, not a screensaver.
+
+  Every page has some ambient movement: drifting orbs, sheens across buttons,
+  pulsing dots. Each one is cheap on its own, but running forever they keep
+  the browser repainting while nobody is touching the page, and on an
+  ordinary laptop that is the difference between smooth and laggy.
+
+  So once the page has been open a few seconds, every *endless decorative*
+  loop is settled: a short one (a sheen, a pulse) finishes the cycle it is on
+  and rests on its natural last frame; a long, slow one (an orb drifting for
+  twenty seconds) simply holds where it is, which no one can tell from rest.
+
+  Anything that means something keeps going: spinners, the "writing"
+  indicator, a recording, the logo strip, a text cursor — matched by name or
+  by the state class on the element it animates. Mark any other element
+  data-keep-motion to exempt it.
+{% endcomment %}
+<script>
+(function () {
+  if (!document.getAnimations) return;
+  var KEEP_NAMES = /^(spin|saSpin|caSpin|cmSpin|pmSpin|anSpin|smSpin|caret|lpBlink|blink-caret|wave|micPulse|lpMarquee|lpMarqueeR|bounce-dot|shimmer|lpDotB)$/;
+  var KEEP_INSIDE = '.typing, .net-banner, .is-busy, .is-sending, .is-working, .is-spinning, .is-loading, [aria-busy="true"], [data-keep-motion]';
+  var LONG_MS = 8000;
+
+  function settle() {
+    document.getAnimations().forEach(function (animation) {
+      var effect = animation.effect;
+      if (!effect || !effect.getComputedTiming || animation.playState !== 'running') return;
+      var timing = effect.getComputedTiming();
+      if (timing.iterations !== Infinity) return;
+      if (KEEP_NAMES.test(animation.animationName || '')) return;
+      var target = effect.target;
+      if (target && target.closest && target.closest(KEEP_INSIDE)) return;
+      try {
+        if ((timing.duration || 0) >= LONG_MS) {
+          animation.pause();
+        } else {
+          effect.updateTiming({ iterations: Math.floor(timing.currentIteration || 0) + 1, fill: 'forwards' });
+        }
+      } catch (e) { /* an animation that cannot be settled is simply left alone */ }
+    });
+  }
+
+  function schedule() { setTimeout(settle, 8000); }
+  if (document.readyState === 'complete') schedule();
+  else window.addEventListener('load', schedule);
+})();
+</script>

@@ -1,0 +1,440 @@
+{% extends "base/shell_page.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  One order, from "scan this" to "done".
+
+  Nothing on this page decides that an order is paid. It shows what the server
+  last knew and asks again — the server asks the gateway — every few seconds
+  until the order is final or its window closes. A redirect back from a bank
+  lands here too, and is treated the same way: a hint to check, not proof.
+{% endcomment %}
+
+{% block title %}Complete payment · {{ payment.reference }}{% endblock %}
+{% block back_url %}{% url 'student:pricing' %}{% endblock %}
+{% block back_label %}Pricing{% endblock %}
+
+{% block head %}
+<style>
+  .pay { display: grid; gap: 18px; align-items: start; }
+  @media (min-width: 900px) { .pay { grid-template-columns: 1.35fr 1fr; } }
+
+  .status { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+  .status-mark { width: 44px; height: 44px; border-radius: 14px; flex: none; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .status-mark svg { width: 21px; height: 21px; }
+  .status.is-paid .status-mark { background: var(--ok-soft); color: var(--ok); }
+  .status.is-bad .status-mark { background: var(--danger-soft); color: var(--danger); }
+  .status-body { min-width: 0; flex: 1 1 220px; }
+  .status-body h3 { margin: 0; font-size: 15.5px; font-weight: 600; }
+  .status-body p { margin: 3px 0 0; font-size: 12.5px; color: var(--ink-3); line-height: 1.5; }
+  .status-amount { text-align: right; }
+  .status-amount b { display: block; font-size: 26px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .status-amount span { display: block; font-size: 11.5px; color: var(--ink-3); }
+  @media (max-width: 560px) {
+    .status { align-items: flex-start; }
+    .status-amount { flex: 1 1 100%; text-align: left; padding-left: 58px; }
+  }
+
+  /* The window left to pay, as a number and as a draining bar. */
+  .timer { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-soft); font-size: 12.5px; color: var(--ink-2); }
+  .timer b { font-variant-numeric: tabular-nums; color: var(--ink); min-width: 42px; }
+  .timer-track { flex: 1 1 auto; height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+  .timer-track i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 1s linear; }
+  .timer.is-low .timer-track i { background: var(--warn); }
+  .timer.is-low b { color: var(--warn); }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-3); }
+  .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+
+  .kv { margin: 0; display: grid; gap: 11px; }
+  .kv .line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+  .kv dt { margin: 0; color: var(--ink-3); }
+  .kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+
+  .transfer { border: 1px solid var(--accent-mid); background: var(--accent-soft); border-radius: var(--r); padding: 14px; }
+  .copy-btn { width: 24px; height: 24px; border-radius: 6px; flex: none; display: grid; place-items: center; color: var(--ink-3); transition: background var(--fast), color var(--fast); }
+  .copy-btn:hover { background: var(--surface-3); color: var(--ink); }
+  .copy-btn svg { width: 13px; height: 13px; }
+  .copy-btn.is-done { color: var(--ok); }
+
+  .steps { margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--border-soft); list-style: none; display: grid; gap: 10px; }
+  .steps li { display: flex; gap: 11px; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+  .steps .n { width: 20px; height: 20px; border-radius: 50%; flex: none; margin-top: 1px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-lo); font-size: 10px; font-weight: 700; }
+
+  /* The QR sits on white in both themes: scanners read dark-on-light best. */
+  .pay-qr-card { display: grid; justify-items: center; gap: 12px; }
+  .pay-qr-frame { position: relative; padding: 16px; border-radius: 20px; border: 1px solid var(--border); background: #fff; box-shadow: 0 16px 34px -26px rgba(20, 35, 70, .55); }
+  .pay-qr-frame svg { width: min(250px, 64vw); height: auto; display: block; }
+  .pay-qr-badge { position: absolute; left: 50%; top: -11px; transform: translateX(-50%); padding: 3px 10px; border-radius: 99px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; color: #fff; white-space: nowrap; }
+  .pay-qr-badge.is-khqr { background: #E1232E; }
+  .pay-qr-badge.is-binance { background: #F0B90B; color: #1E2026; }
+  .pay-qr-amount { font-size: 19px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .pay-qr-note { margin: 0; font-size: 12px; color: var(--ink-3); text-align: center; }
+  .pay-qr-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+  .drop { display: grid; justify-items: center; gap: 7px; padding: 20px; text-align: center; border: 2px dashed var(--border-firm); border-radius: var(--r); cursor: pointer; transition: border-color var(--fast), background var(--fast); }
+  .drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .drop svg { width: 22px; height: 22px; color: var(--ink-3); }
+  .drop .l { font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+  .drop .h { font-size: 11px; color: var(--ink-4); }
+  #proofPreview { max-height: 160px; width: 100%; object-fit: contain; border-radius: var(--r); border: 1px solid var(--border); }
+  .fine { margin: 12px 2px 0; font-size: 11.5px; line-height: 1.6; color: var(--ink-3); }
+  .fine a { color: var(--accent); font-weight: 600; }
+  .emu { margin-top: 14px; padding: 12px 14px; border-radius: var(--r); border: 1px dashed var(--warn); background: var(--surface); font-size: 12px; color: var(--ink-2); }
+  .emu b { color: var(--warn); }
+
+  /* The end of the road for an order that did not complete. */
+  .outcome { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 34px 20px 28px; }
+  .outcome-mark { width: 60px; height: 60px; border-radius: 20px; display: grid; place-items: center; background: var(--surface-3); color: var(--ink-2); }
+  .outcome-mark svg { width: 26px; height: 26px; }
+  .outcome.is-failed .outcome-mark { background: var(--danger-soft); color: var(--danger); }
+  .outcome h3 { margin: 6px 0 0; font-size: 19px; font-weight: 600; letter-spacing: -.02em; }
+  .outcome p { margin: 0; max-width: 46ch; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+  .outcome .btn-row { justify-content: center; margin-top: 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .is-spinning { animation: spin .9s linear infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="panel-head">
+  <p class="panel-eyebrow mono">{{ payment.reference }}</p>
+  <h2 class="panel-title">{% if outcome %}Payment not completed{% else %}Complete your payment{% endif %}</h2>
+</header>
+
+{% if outcome %}
+  <div class="card">
+    <div class="card-body outcome{% if payment.status == 'failed' %} is-failed{% endif %}">
+      <span class="outcome-mark"><svg aria-hidden="true"><use href="#{% if payment.status == 'failed' %}i-alert{% else %}i-clock{% endif %}"/></svg></span>
+      <h3>{{ outcome.0 }}</h3>
+      <p>{{ outcome.1 }}</p>
+      <p style="font-size:12px;color:var(--ink-3)">{{ payment.plan.name }} · {{ payment.pay_display }} · {{ payment.get_method_display }}</p>
+      <div class="btn-row">
+        <a href="{% url 'payments:checkout' payment.plan.slug %}" class="btn btn-primary">
+          <svg aria-hidden="true"><use href="#i-refresh"/></svg> Try again
+        </a>
+        <a href="{% url 'student:pricing' %}" class="btn">Choose another plan</a>
+      </div>
+      <p class="fine">Paid but see this? Contact <a href="mailto:{{ BRAND.support_email }}">{{ BRAND.support_email }}</a> with reference <span class="mono">{{ payment.reference }}</span> — late payments are still found and credited.</p>
+    </div>
+  </div>
+{% else %}
+
+<div class="card">
+  <div class="card-body">
+    <div class="status" id="status">
+      <span class="status-mark" id="statusIcon"><svg aria-hidden="true"><use href="#i-clock"/></svg></span>
+      <div class="status-body">
+        <h3 id="statusTitle">{% if payment.proof and manual_review %}Receipt received — being checked{% else %}Waiting for your payment{% endif %}</h3>
+        <p id="statusBody">
+          {% if automatic %}Pay with the steps below. This page updates by itself the moment the payment is confirmed.
+          {% else %}Transfer with the steps below, then upload a screenshot. An administrator confirms it against the statement.{% endif %}
+        </p>
+      </div>
+      <div class="status-amount">
+        <b>{{ payment.pay_display }}</b>
+        {% if payment.is_converted %}<span>≈ ${{ payment.amount }}{% if payment.exchange_rate %} · rate ៛{{ payment.exchange_rate|floatformat:"0"|intcomma }} per $1{% endif %}</span>{% endif %}
+        <span>{{ payment.plan.name }} · {{ payment.tokens_to_grant|compact_number }} tokens</span>
+        {% if payment.was_discounted %}<span style="color:var(--ok);font-weight:600">{{ payment.discount_reason }} · saved ${{ payment.discount_amount }}</span>{% endif %}
+      </div>
+    </div>
+    {% if seconds_left %}
+      <div class="timer" id="timer" data-seconds="{{ seconds_left }}" data-total="{{ seconds_left }}">
+        <svg aria-hidden="true" style="width:15px;height:15px;color:var(--ink-3)"><use href="#i-clock"/></svg>
+        <span>Time left to pay</span>
+        <b id="timerText">--:--</b>
+        <span class="timer-track" aria-hidden="true"><i id="timerBar" style="width:100%"></i></span>
+        {% if automatic %}<span class="live" title="Checking with the payment provider"><i></i> Live</span>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="pay" style="margin-top:18px">
+  <section class="card">
+    <div class="card-head">
+      <h3>{{ payment.get_method_display }}</h3>
+      <p>{{ provider.description }}</p>
+    </div>
+    <div class="card-body">
+      {% if session.kind == 'handoff' and payment.status == 'pending' %}
+        {% comment %} Each press opens a fresh attempt at the gateway (see payments:pay). {% endcomment %}
+        <form method="post" action="{% url 'payments:pay' payment.reference %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary" style="width:100%;height:46px">
+            <svg aria-hidden="true"><use href="#i-shield"/></svg>
+            Pay {{ payment.pay_display }} with {{ payment.get_method_display }}
+          </button>
+        </form>
+        <p class="pay-qr-note" style="margin-top:10px">You will pay on {{ payment.get_method_display }}'s secure page, then come back here automatically.</p>
+        {% if payment.method == 'acleda_xpay' %}
+          <form method="post" action="{% url 'payments:pay' payment.reference %}" class="pay-qr-actions" style="margin-top:6px">
+            {% csrf_token %}<input type="hidden" name="show" value="qr">
+            <button type="submit" class="btn btn-sm">
+              <svg aria-hidden="true"><use href="#i-qr"/></svg> Or show ACLEDA's KHQR on this page
+            </button>
+          </form>
+        {% endif %}
+
+      {% elif session.kind == 'handoff' %}
+        <p class="pay-qr-note" style="margin:0">This order is closed — nothing more can be paid on it.</p>
+
+      {% elif session.kind == 'redirect' and session.redirect_url %}
+        {% comment %} PayWay takes the signed form as multipart, straight from the browser. {% endcomment %}
+        <form method="post" action="{{ session.redirect_url }}" id="redirectForm" enctype="multipart/form-data">
+          {% for key, value in session_fields %}
+            <input type="hidden" name="{{ key }}" value="{{ value }}">
+          {% endfor %}
+          <button type="submit" class="btn btn-primary" style="width:100%;height:46px">
+            <svg aria-hidden="true"><use href="#i-shield"/></svg>
+            Pay {{ payment.pay_display }} with {{ payment.get_method_display }}
+          </button>
+        </form>
+        <p class="pay-qr-note" style="margin-top:10px">You will pay on ABA's secure page, then come back here automatically.</p>
+
+      {% elif session.kind == 'qr' %}
+        <div class="pay-qr-card">
+          {% if qr_svg %}
+            <div class="pay-qr-frame">
+              <span class="pay-qr-badge {% if payment.method == 'binance' %}is-binance{% else %}is-khqr{% endif %}">{% if payment.method == 'binance' %}BINANCE PAY{% else %}KHQR{% endif %}</span>
+              {{ qr_svg }}
+            </div>
+          {% elif session.qr_image_url %}
+            <div class="pay-qr-frame"><img src="{{ session.qr_image_url }}" alt="Payment QR code" width="250" height="250" style="display:block;width:min(250px,64vw);height:auto"></div>
+          {% else %}
+            <div class="empty" style="padding:36px 18px">The QR code could not be drawn — use the details below.</div>
+          {% endif %}
+          <span class="pay-qr-amount">{{ payment.pay_display }}</span>
+          <p class="pay-qr-note">{% if payment.method == 'binance' %}Scan with the Binance app{% else %}Scan with ACLEDA mobile or any Cambodian banking app{% endif %}</p>
+          {% if payment.method == 'acleda_xpay' and payment.status == 'pending' %}
+            {% comment %} ACLEDA's own page, with a fresh session: the one behind this code was used to read it. {% endcomment %}
+            <form method="post" action="{% url 'payments:pay' payment.reference %}" class="pay-qr-actions">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm">Use ACLEDA Bank's own page instead</button>
+            </form>
+          {% endif %}
+          {% if session.deeplink or session.checkout_url %}
+            <div class="pay-qr-actions">
+              {% if session.deeplink %}<a href="{{ session.deeplink }}" class="btn btn-primary btn-sm" rel="noopener">
+                <svg aria-hidden="true"><use href="#i-arrow-right"/></svg> Open in the Binance app</a>{% endif %}
+              {% if session.checkout_url %}<a href="{{ session.checkout_url }}" class="btn btn-sm" target="_blank" rel="noopener">Binance checkout page</a>{% endif %}
+            </div>
+          {% endif %}
+        </div>
+        {% if session.fields %}
+          <div class="transfer" style="margin-top:16px">
+            <dl class="kv">
+              {% for label, value in session_fields %}
+                <div class="line"><dt>{{ label }}</dt>
+                  <dd style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                    <span class="mono" style="font-size:12px" data-copy-value>{{ value }}</span>
+                    <button type="button" class="copy-btn" data-copy-field aria-label="Copy {{ label }}"><svg aria-hidden="true"><use href="#i-copy"/></svg></button>
+                  </dd>
+                </div>
+              {% endfor %}
+            </dl>
+          </div>
+        {% endif %}
+
+      {% else %}
+        <div class="transfer">
+          <p style="margin:0 0 11px;font-size:13.5px;font-weight:600">Transfer details</p>
+          <dl class="kv">
+            {% for label, value in session_fields %}
+              <div class="line"><dt>{{ label }}</dt>
+                <dd style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                  <span class="mono" style="font-size:12px" data-copy-value>{{ value }}</span>
+                  <button type="button" class="copy-btn" data-copy-field aria-label="Copy {{ label }}"><svg aria-hidden="true"><use href="#i-copy"/></svg></button>
+                </dd>
+              </div>
+            {% endfor %}
+          </dl>
+        </div>
+      {% endif %}
+
+      {% if session.instructions %}
+        <ol class="steps">
+          {% for step in session.instructions %}
+            <li><span class="n">{{ forloop.counter }}</span> <span>{{ step }}</span></li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+
+      {% if emulator and automatic %}
+        <div class="emu">
+          <b>Test mode</b> — gateways are emulated on this machine.
+          <a href="/dev/payment-emulator/{{ payment.method }}/{{ payment.reference }}/" class="btn btn-sm" style="margin-left:6px">Simulate the payer</a>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <div>
+    <section class="card">
+      <div class="card-head"><h3>Order</h3></div>
+      <div class="card-body">
+        <dl class="kv">
+          <div class="line"><dt>Reference</dt><dd class="mono" style="font-size:12px">{{ payment.reference }}</dd></div>
+          <div class="line"><dt>Plan</dt><dd>{{ payment.plan.name }}</dd></div>
+          <div class="line"><dt>Tokens</dt><dd>{{ payment.tokens_to_grant|intcomma }}</dd></div>
+          <div class="line"><dt>Created</dt><dd style="font-weight:400;font-size:12px;color:var(--ink-2)">{{ payment.created_at|date:"d M Y, H:i" }}</dd></div>
+        </dl>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-soft)">
+          <span style="font-size:13px;font-weight:600;color:var(--ink-2)">To pay</span>
+          <b style="font-size:19px;font-variant-numeric:tabular-nums">{{ payment.pay_display }}</b>
+        </div>
+
+        <button type="button" id="checkStatus" class="btn" style="width:100%;margin-top:16px">
+          <svg id="checkIcon" aria-hidden="true"><use href="#i-refresh"/></svg>
+          <span id="checkLabel">I've paid — check now</span>
+        </button>
+
+        <form method="post" action="{% url 'payments:cancel' payment.reference %}" style="margin-top:8px"
+              onsubmit="return confirm('Cancel this order? Do not cancel if you have already paid.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm" style="width:100%;color:var(--ink-3)">Cancel this order</button>
+        </form>
+      </div>
+    </section>
+
+    {% if manual_review %}
+      <section class="card" style="margin-top:18px">
+        <div class="card-head">
+          <h3>Send us your receipt</h3>
+          <p>Upload a screenshot of the transfer. It is checked against the bank statement before anything is credited.</p>
+        </div>
+        <div class="card-body">
+          {% if payment.proof %}
+            <p class="flash is-ok" style="margin:0 0 14px">
+              <svg aria-hidden="true"><use href="#i-check-circle"/></svg>
+              <span>Receipt received — we're reviewing it now.</span>
+            </p>
+          {% endif %}
+          <form method="post" action="{% url 'payments:submit_proof' payment.reference %}"
+                enctype="multipart/form-data" id="proofForm" class="form-grid">
+            {% csrf_token %}
+            <label class="drop" for="id_proof" id="dropZone">
+              <svg aria-hidden="true"><use href="#i-upload"/></svg>
+              <span class="l" id="proofLabel">Tap to choose a screenshot</span>
+              <span class="h">PNG, JPG or WEBP · max 5 MB</span>
+            </label>
+            <input type="file" name="proof" id="id_proof" class="sr-only" accept="image/png,image/jpeg,image/webp" required>
+            <img id="proofPreview" alt="Receipt preview" hidden>
+            <div class="field">
+              <input type="text" name="note" maxlength="255" placeholder="Transaction ID or note (optional)">
+            </div>
+            <button type="submit" class="btn btn-primary" data-submit data-loading-label="Uploading…">Submit receipt</button>
+          </form>
+        </div>
+      </section>
+    {% endif %}
+
+    <p class="fine">
+      Trouble with this payment? E-mail <a href="mailto:{{ BRAND.support_email }}">{{ BRAND.support_email }}</a>
+      quoting <span class="mono">{{ payment.reference }}</span>.
+    </p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not outcome %}
+<script>
+(function () {
+  var receiptUrl = '{% url "payments:receipt" payment.reference %}';
+  var statusUrl = '{% url "payments:status" payment.reference %}';
+  var automatic = {{ automatic|yesno:"true,false" }};
+
+  /* ---- Copy fields ---- */
+  document.querySelectorAll('[data-copy-field]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var field = button.parentElement.querySelector('[data-copy-value]');
+      if (!field || !navigator.clipboard || !window.isSecureContext) return;
+      navigator.clipboard.writeText(field.textContent.trim()).then(function () {
+        button.classList.add('is-done');
+        setTimeout(function () { button.classList.remove('is-done'); }, 1500);
+      }).catch(function () {});
+    });
+  });
+
+  /* ---- Receipt preview ---- */
+  var proofInput = document.getElementById('id_proof');
+  if (proofInput) proofInput.addEventListener('change', function () {
+    var file = proofInput.files && proofInput.files[0];
+    if (!file) return;
+    document.getElementById('proofLabel').textContent = file.name;
+    var preview = document.getElementById('proofPreview');
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+  });
+  var proofForm = document.getElementById('proofForm');
+  if (proofForm) proofForm.addEventListener('submit', function () {
+    var button = proofForm.querySelector('[data-submit]');
+    if (button) { button.disabled = true; button.textContent = 'Uploading…'; }
+  });
+
+  /* ---- The countdown ---- */
+  var timer = document.getElementById('timer'), left = timer ? parseInt(timer.dataset.seconds, 10) : 0;
+  var total = timer ? parseInt(timer.dataset.total, 10) || 1 : 1;
+  function paintTimer() {
+    if (!timer) return;
+    var m = Math.floor(left / 60), s = left % 60;
+    document.getElementById('timerText').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    document.getElementById('timerBar').style.width = Math.max(0, left * 100 / total) + '%';
+    timer.classList.toggle('is-low', left <= 120);
+  }
+  paintTimer();
+
+  /* ---- Asking the server, which asks the gateway ----
+     Every 4 s for the first three minutes, then every 10 s, stopping once the
+     order is final. The page never marks anything paid by itself. */
+  var checkButton = document.getElementById('checkStatus');
+  var checkIcon = document.getElementById('checkIcon');
+  var checkLabel = document.getElementById('checkLabel');
+  var elapsed = 0, done = false, busy = false;
+
+  function markPaid() {
+    done = true;
+    document.getElementById('status').classList.add('is-paid');
+    document.getElementById('statusIcon').innerHTML = '<svg aria-hidden="true"><use href="#i-check-circle"/></svg>';
+    document.getElementById('statusTitle').textContent = 'Payment confirmed';
+    document.getElementById('statusBody').textContent = 'Your plan is active. Taking you to your receipt…';
+    setTimeout(function () { window.location.href = receiptUrl; }, 1200);
+  }
+
+  function check(manual) {
+    if (busy || done) return;
+    busy = true;
+    if (manual && checkButton) { checkButton.disabled = true; checkIcon.classList.add('is-spinning'); checkLabel.textContent = 'Checking…'; }
+    fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        busy = false;
+        if (data.paid) { markPaid(); return; }
+        if (data.final) { done = true; window.location.reload(); return; }
+        if (typeof data.seconds_left === 'number' && timer) { left = data.seconds_left; paintTimer(); }
+        if (manual && checkButton) {
+          checkButton.disabled = false; checkIcon.classList.remove('is-spinning');
+          checkLabel.textContent = data.message || 'Not confirmed yet — it can take a minute';
+          setTimeout(function () { checkLabel.textContent = "I've paid — check now"; }, 3000);
+        }
+      })
+      .catch(function () {
+        busy = false;
+        if (manual && checkButton) { checkButton.disabled = false; checkIcon.classList.remove('is-spinning'); checkLabel.textContent = "I've paid — check now"; }
+      });
+  }
+  if (checkButton) checkButton.addEventListener('click', function () { check(true); });
+
+  setInterval(function () {
+    if (done) return;
+    elapsed++;
+    if (timer && left > 0) { left--; paintTimer(); if (left === 0) check(false); }
+    var every = elapsed < 180 ? 4 : 10;
+    if (automatic && elapsed % every === 0 && !document.hidden) check(false);
+    if (!automatic && elapsed % 30 === 0 && !document.hidden) check(false);
+  }, 1000);
+})();
+</script>
+{% endif %}
+{% endblock %}

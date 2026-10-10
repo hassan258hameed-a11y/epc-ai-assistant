@@ -1,0 +1,97 @@
+{% extends "public/_legal_base.html" %}
+
+{% block title %}Terms of service · {{ BRAND.full_name }}{% endblock %}
+{% block doc_kicker %}Terms{% endblock %}
+{% block doc_title %}Terms of service{% endblock %}
+
+{% block doc_body %}
+<section>
+  <h2>Using the service</h2>
+  <p>
+    {{ BRAND.full_name }} gives students access to an AI study assistant. By creating an account you agree to these
+    terms. If you do not agree with them, please do not use the service.
+  </p>
+</section>
+
+<section>
+  <h2>Your account</h2>
+  <ul>
+    <li>Give accurate details when you register, and keep your e-mail address current so you can recover access.</li>
+    <li>Your account is personal to you. Do not share your password or let someone else use your balance.</li>
+    <li>Only one active session is permitted per account; signing in elsewhere ends the previous session.</li>
+    <li>Tell us immediately if you believe someone else has accessed your account.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Tokens</h2>
+  <ul>
+    <li>Tokens are the unit of usage. Every request costs the number of tokens the AI provider actually reports.</li>
+    <li>Free trial and referral tokens are promotional, have no cash value and cannot be transferred or withdrawn.</li>
+    <li>When your balance reaches zero, requests stop until you top up. Your history stays intact.</li>
+    <li>We keep a full ledger of every token movement, which you can review on your usage page.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Acceptable use</h2>
+  <p>You agree not to use the assistant to:</p>
+  <ul>
+    <li>Break the law, or produce content that harms, harasses or defames another person.</li>
+    <li>Generate malware, attack tooling or anything designed to compromise systems.</li>
+    <li>Attempt to access another user's account, conversations or data.</li>
+    <li>Automate, scrape or resell access to the service without our written agreement.</li>
+    <li>Create multiple accounts to claim the free trial or referral bonus repeatedly.</li>
+  </ul>
+  <p>Accounts that break these rules may be disabled without a refund.</p>
+</section>
+
+<section>
+  <h2>Academic honesty</h2>
+  <p>
+    The assistant is a study aid. You are responsible for following your school's or university's rules on the use of
+    AI tools. Check answers before you rely on them: AI can be confidently wrong, particularly with dates, citations
+    and arithmetic.
+  </p>
+</section>
+
+<section>
+  <h2>Your content</h2>
+  <p>
+    You keep ownership of what you send. You give us the limited permission needed to store your conversations and to
+    transmit your messages to the AI provider so a reply can be generated. We do not claim ownership of your work.
+  </p>
+</section>
+
+<section>
+  <h2>Availability</h2>
+  <p>
+    We work to keep the service running, but we cannot promise it will be uninterrupted. Maintenance, provider
+    outages and network problems can all cause downtime. If a fault on our side prevents you from using tokens you
+    paid for, contact support and we will make it right.
+  </p>
+</section>
+
+<section>
+  <h2>Payments</h2>
+  <p>
+    Prices are shown before you pay. A plan activates only after the payment is confirmed on our backend — never from
+    a browser message alone. Refunds are handled under our
+    <a href="{% url 'public:refund_policy' %}">refund policy</a>.
+  </p>
+</section>
+
+<section>
+  <h2>Changes and closure</h2>
+  <p>
+    We may update these terms as the service develops; the date at the top of this page shows the current version.
+    You may close your account at any time by contacting support. We may suspend an account that breaches these terms
+    or presents a security risk.
+  </p>
+</section>
+
+<section>
+  <h2>Contact</h2>
+  <p>Questions about these terms: <a href="mailto:{{ BRAND.support_email }}">{{ BRAND.support_email }}</a>.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,474 @@
+{% load ai_extras %}
+<div class="panel" data-panel-name="settings">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Account</p>
+    <h2 class="panel-title">Settings</h2>
+    <p class="panel-sub">How the assistant looks, and how it reaches you.</p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <section class="panel-section">
+    <div class="card">
+      <div class="card-head">
+        <h3>Appearance</h3>
+        <p>Remembered on this device. Left alone, it follows your system setting.</p>
+      </div>
+      <div class="card-body">
+        <div class="btn-row" role="group" aria-label="Theme">
+          <button type="button" class="btn" data-theme-set="light">
+            <svg aria-hidden="true"><use href="#i-sun"/></svg> Light
+          </button>
+          <button type="button" class="btn" data-theme-set="dark">
+            <svg aria-hidden="true"><use href="#i-moon"/></svg> Dark
+          </button>
+          <button type="button" class="btn" data-theme-set="system">
+            <svg aria-hidden="true"><use href="#i-settings"/></svg> System
+          </button>
+        </div>
+
+        <span class="st-flabel" style="margin-top:18px">Colour</span>
+        <div class="pal-row" role="radiogroup" aria-label="Colour theme">
+          {% for key, a, b, label in palettes %}
+            <button type="button" class="pal-chip" role="radio" aria-checked="false" data-pal-set="{{ key }}">
+              <span class="pal-pair" aria-hidden="true"><i style="background:{{ a }}"></i><i style="background:{{ b }}"></i></span>
+              <span>{{ label }}</span>
+            </button>
+          {% endfor %}
+        </div>
+
+        <label class="check" style="margin-top:16px">
+          <input type="checkbox" data-motion-set>
+          <span>Always show animations
+            <span class="hint" style="display:block">Off follows your device's “reduce motion” setting.</span></span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel-section" id="defaults">
+    <div class="card">
+      <div class="card-head">
+        <h3>Chat defaults</h3>
+        <p>Saved to your account, so they follow you to every device.</p>
+      </div>
+      <form class="card-body" method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="defaults">
+        <div class="form-grid cols">
+          <div class="field">
+            <label for="prefModel">Start new chats with</label>
+            <select id="prefModel" name="default_model_key">
+              <option value="">The platform's default</option>
+              {% for model in default_models %}
+                <option value="{{ model.key }}" {% if personal.default_model_key == model.key %}selected{% endif %}>{{ model.name }}</option>
+              {% endfor %}
+            </select>
+            <span class="hint">You can still switch model in any chat.</span>
+          </div>
+          <div class="field">
+            <label for="prefGoal">Daily goal</label>
+            <select id="prefGoal" name="daily_goal">
+              {% for value, label in goal_choices %}
+                <option value="{{ value }}" {% if personal.daily_goal == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <span class="hint">Answers a day. Your progress and streak show in the sidebar and on Study.</span>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:16px">
+          <button type="submit" class="btn btn-primary">Save defaults</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {% if personal_enabled %}
+  <section class="panel-section" id="personalise">
+    <div class="card">
+      <div class="card-head">
+        <h3>Personalisation</h3>
+        <p>Tell the assistant about you and how you like answers. Used in every chat, on every model.</p>
+      </div>
+      <form class="card-body" method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="personalise">
+
+        <label class="check">
+          <input type="checkbox" name="enabled" {% if personal.enabled %}checked{% endif %}>
+          <span>Use my preferences in new answers
+            <span class="hint" style="display:block">Turn off to get the assistant's default answers without deleting what you wrote.</span></span>
+        </label>
+
+        <div class="field" style="margin-top:14px">
+          <label>Answer style</label>
+          <div class="style-chips" role="radiogroup" aria-label="Answer style">
+            {% for value, label in styles %}
+              <label class="style-chip">
+                <input type="radio" name="style" value="{{ value }}" {% if personal.style == value %}checked{% endif %}>
+                <span>{{ label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <label for="prefAbout">What should the assistant know about you?</label>
+          <textarea id="prefAbout" name="about_me" rows="3" maxlength="{{ max_about }}" data-count
+                    placeholder="e.g. I'm a first-year nursing student. English is my second language.">{{ personal.about_me }}</textarea>
+          <span class="hint" data-count-for="prefAbout">{{ personal.about_me|length }} / {{ max_about }}</span>
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <label for="prefInstructions">How would you like it to respond?</label>
+          <textarea id="prefInstructions" name="instructions" rows="3" maxlength="{{ max_instructions }}" data-count
+                    placeholder="e.g. Use simple words, give an example, and end with one practice question.">{{ personal.instructions }}</textarea>
+          <span class="hint" data-count-for="prefInstructions">{{ personal.instructions|length }} / {{ max_instructions }}</span>
+        </div>
+
+        <div class="field" style="margin-top:14px;max-width:320px">
+          <label for="prefLanguage">Answer language <span style="font-weight:400;color:var(--ink-4)">(optional)</span></label>
+          <input type="text" id="prefLanguage" name="language" maxlength="40" value="{{ personal.language }}" placeholder="e.g. Khmer, English, French">
+        </div>
+
+        <div class="btn-row" style="margin-top:16px">
+          <button type="submit" class="btn btn-primary">Save personalisation</button>
+        </div>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="panel-section">
+    <div class="card">
+      <div class="card-head">
+        <h3>Notifications</h3>
+        <p>What we tell you about, and where.</p>
+      </div>
+      <form class="card-body" method="post" action="{% url 'student:settings' %}"
+            data-panel-form="settings">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="preferences">
+        <div class="form-grid">
+          {% for field in preference_form %}
+            {% if field.field.widget.input_type == 'checkbox' %}
+              <label class="check">
+                {{ field }}
+                <span>
+                  {{ field.label }}
+                  {% if field.help_text %}<span class="hint" style="display:block">{{ field.help_text }}</span>{% endif %}
+                </span>
+              </label>
+            {% else %}
+              <div class="field {% if field.errors %}is-bad{% endif %}">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<span class="hint">{{ field.help_text }}</span>{% endif %}
+                {% for error in field.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="btn-row" style="margin-top:16px">
+          <button type="submit" class="btn btn-primary">Save preferences</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {% include "push/_settings_card.html" %}
+
+  {% if telegram_configured %}
+    {% comment %}
+      Telegram. Four states, decided in the view: idle (Connect), pending (a
+      live single-use link, as a button and a QR code, with its expiry),
+      linked, and blocked (linked, but the student blocked the bot).
+
+      The countdown is CSS only — a fragment swapped in with innerHTML never
+      runs a <script>. The bar starts part-drained (a negative delay of the
+      time already gone) and empties at the moment the link dies; the
+      "expired" cover appears on the same clock.
+    {% endcomment %}
+    <style>
+      .tg-card .tg-lede { margin: 0 0 14px; font-size: 13px; color: var(--ink-2); line-height: 1.6; max-width: 62ch; }
+      .tg-who { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border-soft); }
+      .tg-mark { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: none; color: #fff; background: linear-gradient(140deg, #37AEE2, #1E96C8); }
+      .tg-mark svg { width: 19px; height: 19px; }
+      .tg-who-text { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+      .tg-who-text b { font-size: 13.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tg-who-text span { font-size: 12px; color: var(--ink-3); }
+      .tg-pill { flex: none; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px; border: 1px solid transparent; }
+      /* Tints mixed from the base hue: the system-dark theme does not define
+         every *-soft / *-line token, and a pastel pill on a dark card glares. */
+      .tg-pill.is-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 32%, transparent); }
+      .tg-pill.is-warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+      .tg-prefs { display: grid; gap: 12px; margin-top: 16px; }
+      .tg-actions { margin-top: 16px; align-items: flex-start; }
+      .tg-actions form { margin: 0; }
+      .tg-danger > summary { list-style: none; cursor: pointer; }
+      .tg-danger > summary::-webkit-details-marker { display: none; }
+      .tg-danger-body { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--danger-soft); border: 1px solid var(--danger-line); font-size: 12.5px; color: var(--danger-ink); line-height: 1.55; max-width: 44ch; }
+      .tg-danger-body .btn { margin-top: 10px; }
+      .tg-pending { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; position: relative; }
+      .tg-qr { flex: none; width: 156px; padding: 8px; border-radius: 14px; background: #FFFFFF; color: #15171C; border: 1px solid var(--border); }
+      .tg-qr svg { display: block; width: 100%; height: auto; }
+      .tg-steps { flex: 1 1 240px; min-width: 0; }
+      .tg-steps ol { margin: 0 0 14px; padding-left: 18px; font-size: 13px; color: var(--ink-2); line-height: 1.7; }
+      .tg-steps ol b { color: var(--ink); font-weight: 600; }
+      .tg-timer { margin-top: 12px; display: grid; gap: 6px; max-width: 320px; }
+      .tg-drain { display: block; height: 4px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+      .tg-drain i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transform-origin: left center; animation-name: tgDrain; animation-timing-function: linear; animation-fill-mode: both; }
+      .tg-timer .hint { font-size: 11.5px; color: var(--ink-3); }
+      @keyframes tgDrain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+      .tg-expired { position: absolute; inset: -4px; display: grid; place-items: center; text-align: center; padding: 16px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 94%, transparent); visibility: hidden; animation-name: tgShow; animation-duration: 1ms; animation-fill-mode: forwards; }
+      .tg-expired b { display: block; font-size: 14px; color: var(--ink); }
+      .tg-expired span { display: block; margin-top: 4px; font-size: 12.5px; color: var(--ink-3); }
+      @keyframes tgShow { to { visibility: visible; } }
+      .tg-more { margin-top: 12px; }
+      .tg-more form { margin: 0; }
+      .tg-channel { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); text-decoration: none; transition: border-color .2s, background .2s; }
+      .tg-channel:hover { border-color: #37AEE2; background: var(--surface-2); }
+      .tg-channel-text { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+      .tg-channel b { font-size: 13px; font-weight: 600; }
+      .tg-channel small { font-size: 12px; color: var(--ink-3); }
+      .tg-channel > svg:last-child { width: 16px; height: 16px; flex: none; color: var(--ink-3); }
+      .tg-channel + .tg-channel { margin-top: 10px; }
+      @media (max-width: 520px) {
+        .tg-pending { justify-content: center; }
+        .tg-qr { width: 148px; }
+        .tg-who { flex-wrap: wrap; }
+      }
+    </style>
+    <section class="panel-section" id="telegram">
+      <div class="card tg-card">
+        <div class="card-head">
+          <h3>Telegram</h3>
+          <p>Alerts — and your sign-in codes, if you want them — in a private chat with our bot.</p>
+        </div>
+        <div class="card-body">
+          {% if telegram_state == "linked" or telegram_state == "blocked" %}
+            {% if telegram_state == "blocked" %}
+              <p class="flash is-warn" style="margin:0 0 14px">
+                <svg aria-hidden="true"><use href="#i-alert"/></svg>
+                <span>You blocked the bot — open it and press <b>Start</b> to resume.
+                  {% if telegram_bot_url %}<a href="{{ telegram_bot_url }}" target="_blank" rel="noopener" style="color:inherit;font-weight:600">Open the bot</a>{% endif %}</span>
+              </p>
+            {% endif %}
+            <div class="tg-who">
+              <span class="tg-mark" aria-hidden="true"><svg><use href="#i-telegram"/></svg></span>
+              <div class="tg-who-text">
+                <b>{% if telegram.username %}@{{ telegram.username }}{% elif telegram.first_name %}{{ telegram.first_name }}{% else %}Your Telegram{% endif %}</b>
+                <span>{% if telegram.linked_at %}Connected since {{ telegram.linked_at|date:"j M Y" }}{% else %}Connected{% endif %}</span>
+              </div>
+              {% if telegram_state == "blocked" %}
+                <span class="tg-pill is-warn">Paused</span>
+              {% else %}
+                <span class="tg-pill is-ok">Connected</span>
+              {% endif %}
+            </div>
+
+            <form class="tg-prefs" method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="telegram_prefs">
+              <label class="check">
+                <input type="checkbox" name="telegram_enabled" {% if telegram_prefs.telegram_enabled %}checked{% endif %}>
+                <span>Send my alerts to Telegram
+                  <span class="hint" style="display:block">Low balance, plan reminders, payments and support replies.</span></span>
+              </label>
+              <label class="check">
+                <input type="checkbox" name="announcements" {% if telegram_prefs.announcements %}checked{% endif %}>
+                <span>Announcements on Telegram
+                  <span class="hint" style="display:block">News from the team. Shared with “Product announcements” under Notifications.</span></span>
+              </label>
+              <div class="btn-row">
+                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+              </div>
+            </form>
+
+            <div class="btn-row tg-actions">
+              {% if telegram_state == "linked" %}
+                <form method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="telegram_test">
+                  <button type="submit" class="btn btn-sm">
+                    <svg aria-hidden="true"><use href="#i-send"/></svg> Send a test message
+                  </button>
+                </form>
+              {% endif %}
+              <details class="tg-danger">
+                <summary class="btn btn-sm btn-danger">Disconnect</summary>
+                <form class="tg-danger-body" method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="telegram_unlink">
+                  Alerts{% if login_otp_enabled and login_otp_route == "telegram" %} and sign-in codes{% endif %} will stop coming to Telegram.
+                  <br><button type="submit" class="btn btn-sm btn-danger">Yes, disconnect</button>
+                </form>
+              </details>
+            </div>
+
+          {% elif telegram_state == "pending" %}
+            <div class="tg-pending" data-keep-motion>
+              <div class="tg-qr" role="img" aria-label="QR code that opens our Telegram bot">{{ telegram_qr }}</div>
+              <div class="tg-steps">
+                <ol>
+                  <li>Tap <b>Open in Telegram</b> — or scan the code with your phone's camera.</li>
+                  <li>Press <b>Start</b> in the chat with @{{ telegram_bot_name }}.</li>
+                  <li>Come back and press <b>I've pressed Start</b>.</li>
+                </ol>
+                <a href="{{ telegram_link }}" class="btn btn-primary" target="_blank" rel="noopener">
+                  <svg aria-hidden="true"><use href="#i-telegram"/></svg> Open in Telegram
+                </a>
+                <div class="tg-timer">
+                  <span class="tg-drain" aria-hidden="true"><i style="animation-duration:{{ telegram_ttl_seconds }}s;animation-delay:-{{ telegram_elapsed }}s"></i></span>
+                  <span class="hint">Works once · expires at {{ telegram.link_token_expires_at|time:"H:i" }} (about {{ telegram_minutes_left }} min)</span>
+                </div>
+              </div>
+              <div class="tg-expired" style="animation-delay:{{ telegram_seconds_left }}s" role="status">
+                <div><b>This link has expired</b><span>Make a new one below — each link works for {{ telegram_ttl }} minutes.</span></div>
+              </div>
+            </div>
+            <div class="btn-row tg-more">
+              <form method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="telegram_check">
+                <button type="submit" class="btn btn-sm">
+                  <svg aria-hidden="true"><use href="#i-check"/></svg> I've pressed Start — refresh
+                </button>
+              </form>
+              <form method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="telegram_connect">
+                <button type="submit" class="btn btn-sm">
+                  <svg aria-hidden="true"><use href="#i-refresh"/></svg> New link
+                </button>
+              </form>
+            </div>
+
+          {% else %}
+            <p class="tg-lede">
+              Connect once and we'll send low-balance, plan and support alerts to Telegram — and your
+              sign-in codes, if you turn those on under Security. Telegram only lets you start the chat, so
+              the link below opens it for you.
+            </p>
+            <form method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="telegram_connect">
+              <button type="submit" class="btn btn-primary">
+                <svg aria-hidden="true"><use href="#i-telegram"/></svg> Connect Telegram
+              </button>
+            </form>
+            {% if telegram.link_token_expires_at %}
+              <p class="hint" style="margin:10px 0 0;font-size:12px;color:var(--ink-3)">Your last link expired — connect again for a new one.</p>
+            {% endif %}
+          {% endif %}
+
+          {% if telegram_channel_url %}
+            <a href="{{ telegram_channel_url }}" class="tg-channel" target="_blank" rel="noopener">
+              <span class="tg-mark" aria-hidden="true"><svg><use href="#i-telegram"/></svg></span>
+              <span class="tg-channel-text"><b>Join our channel{% if telegram_channel_title %} — {{ telegram_channel_title }}{% endif %}</b><small>Tips, updates and announcements for everyone.</small></span>
+              <svg aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </a>
+          {% endif %}
+          {% if telegram_group_url %}
+            <a href="{{ telegram_group_url }}" class="tg-channel" target="_blank" rel="noopener">
+              <span class="tg-mark" aria-hidden="true"><svg><use href="#i-users"/></svg></span>
+              <span class="tg-channel-text"><b>Join our Telegram group{% if telegram_group_title %} — {{ telegram_group_title }}{% endif %}</b><small>Ask questions and help each other with other students.</small></span>
+              <svg aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel-section" id="security">
+    <div class="card">
+      <div class="card-head">
+        <h3>Security</h3>
+        <p>Keep your account yours, even if someone learns your password.</p>
+      </div>
+      <form class="card-body" method="post" action="{% url 'student:settings' %}" data-panel-form="settings">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="security">
+        <label class="check">
+          <input type="checkbox" name="login_otp_enabled" {% if login_otp_enabled or login_otp_required %}checked{% endif %}
+                 {% if login_otp_required or not login_otp_route and not login_otp_enabled %}disabled{% endif %}>
+          <span>Ask for a code when I sign in
+            <span class="hint" style="display:block">
+              {% if login_otp_both %}After your password we'll send a one-time code to your Telegram chat with our bot and to {{ login_otp_email }}.
+              {% elif login_otp_route == "telegram" %}After your password we'll send a one-time code to your Telegram chat with our bot.
+              {% elif login_otp_route == "email" %}After your password we'll e-mail a one-time code to {{ login_otp_email }}.
+              {% elif not login_otp_required %}Needs somewhere to send the code: verify your e-mail address or connect Telegram first.{% endif %}
+              {% if login_otp_required %}Required for every student, so it stays on.{% endif %}
+            </span></span>
+        </label>
+        {% if not login_otp_required %}
+          <div class="btn-row" style="margin-top:14px">
+            <button type="submit" class="btn btn-sm btn-primary" {% if not login_otp_route and not login_otp_enabled %}disabled{% endif %}>Save</button>
+          </div>
+        {% endif %}
+      </form>
+    </div>
+  </section>
+
+  <section class="panel-section" id="privacy">
+    <div class="card">
+      <div class="card-head"><h3>Privacy and your data</h3></div>
+      <div class="card-body">
+        <p style="margin:0;font-size:13px;color:var(--ink-2);line-height:1.65;max-width:64ch">
+          Your conversations are stored on this platform so you can come back to
+          them. They are visible to you and, for support and moderation, to
+          administrators. Nothing you send is used to train a model. You can
+          delete any conversation from its menu in the sidebar, or download it
+          from the same menu.
+        </p>
+        <div class="pv-row">
+          <div>
+            <b>Download your data</b>
+            <span>Your profile, every chat, saved prompts and answers, study sets, payments and support requests, as one JSON file.</span>
+          </div>
+          <a href="{% url 'student:account_export' %}" class="btn btn-sm" download>
+            <svg aria-hidden="true"><use href="#i-download"/></svg> Download
+          </a>
+        </div>
+        <details class="pv-danger" {% if open_close_account %}open{% endif %}>
+          <summary>
+            <span><b>Delete my account</b><span>Closes the account and permanently deletes your chats, files and personal details.</span></span>
+            <svg aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </summary>
+          {% comment %}
+            A normal form, not a panel form: success signs the student out and
+            leaves the app, which must be a real navigation.
+          {% endcomment %}
+          <form method="post" action="{% url 'student:account_close' %}" class="pv-danger-form">
+            {% csrf_token %}
+            <p>This cannot be undone. Payment records are kept for accounting, with your name and contact details removed. Any tokens left in your wallets are lost.</p>
+            <div class="form-grid cols">
+              <div class="field">
+                <label for="closePassword">Your password</label>
+                <input type="password" id="closePassword" name="password" autocomplete="current-password" required>
+              </div>
+              <div class="field">
+                <label for="closeConfirm">Type <b>DELETE</b> to confirm</label>
+                <input type="text" id="closeConfirm" name="confirm" autocomplete="off" required pattern="[Dd][Ee][Ll][Ee][Tt][Ee]">
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top:14px">
+              <button type="submit" class="btn btn-danger">
+                <svg aria-hidden="true"><use href="#i-trash"/></svg> Delete my account
+              </button>
+            </div>
+          </form>
+        </details>
+      </div>
+      <div class="card-foot">
+        <a href="{% url 'public:privacy' %}" class="btn btn-sm" target="_blank" rel="noopener">
+          Privacy policy <svg aria-hidden="true"><use href="#i-external"/></svg>
+        </a>
+        <a href="{% url 'public:terms' %}" class="btn btn-sm" target="_blank" rel="noopener">
+          Terms <svg aria-hidden="true"><use href="#i-external"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+</div>

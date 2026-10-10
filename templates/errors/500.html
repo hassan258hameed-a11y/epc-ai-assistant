@@ -1,0 +1,19 @@
+{% extends "base/public.html" %}
+{% block title %}Something went wrong · {{ BRAND.full_name }}{% endblock %}
+{% block content %}
+<section class="relative flex min-h-[70vh] items-center overflow-hidden mesh">
+  <div class="relative mx-auto max-w-lg px-4 py-20 text-center">
+    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400">
+      <svg class="h-7 w-7" aria-hidden="true"><use href="#i-alert"/></svg>
+    </div>
+    <h1 class="mt-6 text-2xl font-bold tracking-tight text-ink-900 dark:text-white sm:text-3xl">Something went wrong</h1>
+    <p class="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-ink-600 dark:text-ink-400">
+      An unexpected error stopped that request. Our team has been notified — please try again in a moment.
+    </p>
+    <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+      <a href="{% url 'public:home' %}" class="btn-primary">Back to home</a>
+      <a href="mailto:{{ BRAND.support_email }}" class="btn-outline">Contact support</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

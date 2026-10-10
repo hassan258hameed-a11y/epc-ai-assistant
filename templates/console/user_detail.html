@@ -1,0 +1,854 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}{{ student.display_name }} · Console{% endblock %}
+{% block heading %}{{ student.display_name }}{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">{{ student.email|default:student.username }}</p>
+{% endblock %}
+
+{% block header_actions %}
+  {% comment %}
+    Every action on this page is drawn only for a staff role that may use it
+    (AI/services/staff_permissions.py): tokens for Tokens & models, plans for
+    Finance, the rest for Student care. StaffAreaMiddleware enforces the same.
+  {% endcomment %}
+  {% if console_can.support %}
+  <a href="{% url 'console:conversations' %}?student={{ student.pk }}" class="btn-outline btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chat"/></svg> Chats
+  </a>
+  {% endif %}
+  {% if console_can.student_care %}
+  <a href="{% url 'console:user_edit' student.pk %}" class="btn-outline btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg> Edit
+  </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{% url 'console:settings' as settings_url %}
+<div class="space-y-6">
+  <a href="{% url 'console:users' %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> All students
+  </a>
+
+  {# ---------- Identity ---------- #}
+  <section class="card overflow-hidden reveal">
+    <div class="flex flex-wrap items-center gap-4 p-5 sm:p-6">
+      <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl2 bg-gradient-to-br from-brand-600 to-accent-600 text-lg font-bold text-white">
+        {{ student.initials }}
+      </span>
+
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="truncate text-lg font-bold text-ink-900 dark:text-white">{{ student.display_name }}</h2>
+          {% with badge=student.status_badge %}<span class="{{ badge.1|tone_classes }}">{{ badge.0 }}</span>{% endwith %}
+          {% if student.is_admin_user %}<span class="badge-brand">Administrator</span>{% endif %}
+          {% if student.is_verified %}<span class="badge-info">Verified</span>{% endif %}
+          {% if is_self %}<span class="badge-neutral">You</span>{% endif %}
+        </div>
+        <p class="mt-1 truncate text-sm text-ink-500 dark:text-ink-400">
+          {{ student.username }} · {{ student.get_source_display }} · joined {{ student.date_joined|date:"d M Y" }}
+        </p>
+        {% if student.disabled_reason %}
+          <p class="mt-1.5 text-xs text-rose-600 dark:text-rose-400">Disabled: {{ student.disabled_reason }}</p>
+        {% endif %}
+      </div>
+
+      {% if console_can.tokens or console_can.student_care or console_can.finance %}
+      <div class="flex flex-wrap gap-2">
+        {% if console_can.tokens %}
+        <button type="button" class="btn-primary btn-sm" data-open-grant>
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-coin"/></svg> Manage tokens
+        </button>
+        {% endif %}
+
+        {# Disabling asks why, in its own dialog below; enabling needs no reason. #}
+        {% if not is_self and console_can.student_care %}
+          {% if student.status == 'active' %}
+            <button type="button" class="btn-outline btn-sm" data-open-disable>Disable</button>
+          {% else %}
+            <form method="post" action="{% url 'console:user_toggle' student.pk %}"
+                  onsubmit="return confirm('Enable this account?');">
+              {% csrf_token %}
+              <button type="submit" class="btn-accent btn-sm">Enable</button>
+            </form>
+          {% endif %}
+        {% endif %}
+
+        {% if console_can.student_care %}
+        <button type="button" class="btn-outline btn-sm" data-open-modal="messageModal">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-send"/></svg> Message
+        </button>
+        {% endif %}
+        {% if console_can.finance %}
+        <button type="button" class="btn-outline btn-sm" data-open-modal="planModal">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-card"/></svg> Grant plan
+        </button>
+        {% endif %}
+
+        {% comment %}
+          A reset signs the account out everywhere, so on your own page it
+          would end this session before the new password could be shown.
+          Your own password is changed from your account settings instead.
+        {% endcomment %}
+        {% if not is_self and console_can.student_care %}
+          <form method="post" action="{% url 'console:user_reset_password' student.pk %}"
+                onsubmit="return confirm('Reset this password? The student will be signed out everywhere.');">
+            {% csrf_token %}
+            <button type="submit" class="btn-ghost btn-sm">Reset password</button>
+          </form>
+          <form method="post" action="{% url 'console:student_sign_out' student.pk %}"
+                onsubmit="return confirm('Sign {{ student.display_name|escapejs }} out on every device? The account stays active.');">
+            {% csrf_token %}
+            <button type="submit" class="btn-ghost btn-sm">Sign out everywhere</button>
+          </form>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <dl class="grid gap-px border-t hairline bg-ink-200/70 dark:bg-white/8 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="bg-white p-4 dark:bg-ink-900/60">
+        <dt class="text-xs text-ink-500 dark:text-ink-400">Balance</dt>
+        <dd class="mt-1 text-xl font-bold tabular-nums {% if account.balance <= 0 %}text-rose-600 dark:text-rose-400{% else %}text-ink-900 dark:text-white{% endif %}">
+          {{ account.balance|intcomma }}
+        </dd>
+      </div>
+      <div class="bg-white p-4 dark:bg-ink-900/60">
+        <dt class="text-xs text-ink-500 dark:text-ink-400">Total allocated</dt>
+        <dd class="mt-1 text-xl font-bold tabular-nums text-ink-900 dark:text-white">{{ account.total_allocated|compact_number }}</dd>
+      </div>
+      <div class="bg-white p-4 dark:bg-ink-900/60">
+        <dt class="text-xs text-ink-500 dark:text-ink-400">Total consumed</dt>
+        <dd class="mt-1 text-xl font-bold tabular-nums text-ink-900 dark:text-white">{{ account.total_consumed|compact_number }}</dd>
+      </div>
+      <div class="bg-white p-4 dark:bg-ink-900/60">
+        <dt class="text-xs text-ink-500 dark:text-ink-400">Active plan</dt>
+        <dd class="mt-1 truncate text-xl font-bold text-ink-900 dark:text-white">
+          {% if subscription %}{{ subscription.plan.name }}{% else %}<span class="text-ink-500 dark:text-ink-400">None</span>{% endif %}
+        </dd>
+        {% if subscription %}
+          <p class="text-[11px] text-ink-500 dark:text-ink-400">until {{ subscription.ends_at|date:"d M Y" }}</p>
+        {% endif %}
+      </div>
+    </dl>
+  </section>
+
+  {# ---------- Models & access ---------- #}
+  {% comment %}
+    One row per model: what the student holds of it, whether they may use it,
+    how much of each usage window has gone — and a plain answer to "can they
+    send a message right now?", built from the same checks, in the same order,
+    as the chat itself makes them. Where a failing check has a fix on this
+    page, the fix sits beside it.
+  {% endcomment %}
+  <section class="card overflow-hidden reveal" id="models">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <div class="min-w-0">
+        <h2 class="section-title">Models &amp; access</h2>
+        <p class="section-note mt-0.5">Tokens, access and limits per model — and whether a message would go through right now.</p>
+      </div>
+      {% if access.rows %}
+        <span class="{% if access.ready == access.rows|length %}badge-success{% elif access.ready %}badge-warning{% else %}badge-danger{% endif %}">
+          {{ access.ready }} of {{ access.rows|length }} can chat
+        </span>
+      {% endif %}
+    </div>
+
+    {% if access.account %}
+      <div class="space-y-1 border-b border-rose-500/20 bg-rose-500/[.06] px-5 py-3">
+        {% for check in access.account %}
+          <p class="flex items-start gap-2 text-sm text-rose-800 dark:text-rose-200">
+            <svg class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"><use href="#i-alert"/></svg>
+            <span><b>{{ check.label }}:</b> {{ check.detail }}</span>
+          </p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if access.rows %}
+      <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+        {% for row in access.rows %}
+          <li class="px-4 py-4 sm:px-5" id="model-{{ row.model.key|slugify }}">
+            <div class="flex flex-wrap items-start gap-3">
+              <span class="model-tile" aria-hidden="true" style="--from: {{ row.tone.from }}; --to: {{ row.tone.to }}">
+                <svg><use href="#{{ row.tone.icon }}"/></svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <h3 class="text-[15px] font-bold text-ink-900 dark:text-white">{{ row.model.name }}</h3>
+                  <span class="text-[11.5px] font-medium text-ink-500 dark:text-ink-400">{{ row.model.provider_name }}</span>
+                  {% if row.in_plan %}<span class="badge-brand">In their plan</span>{% endif %}
+                </div>
+                <p class="mt-1.5 flex flex-wrap items-center gap-2">
+                  <span class="{% if row.verdict.state == 'ready' %}badge-success{% elif row.verdict.state == 'warn' %}badge-warning{% else %}badge-danger{% endif %}">
+                    {{ row.verdict.label }}
+                  </span>
+                  {% if row.verdict.state != 'ready' %}
+                    <span class="text-[12px] text-ink-600 dark:text-ink-300">{{ row.verdict.detail }}</span>
+                  {% endif %}
+                </p>
+              </div>
+              {% if row.verdict.action and console_can.tokens %}{% if row.verdict.action.url != settings_url or console_can.settings %}
+                <div class="flex shrink-0 flex-wrap gap-2">
+                  {% include "console/_access_action.html" with action=row.verdict.action %}
+                </div>
+              {% endif %}{% endif %}
+            </div>
+
+            <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+              <div>
+                <dt class="stat-label">Balance</dt>
+                <dd class="mt-0.5 text-base font-bold tabular-nums {% if row.balance <= 0 %}text-rose-600 dark:text-rose-400{% else %}text-ink-900 dark:text-white{% endif %}">{{ row.balance|intcomma }}</dd>
+              </div>
+              <div>
+                <dt class="stat-label">Allocated</dt>
+                <dd class="mt-0.5 text-base font-bold tabular-nums text-ink-900 dark:text-white">{{ row.allocated|intcomma }}</dd>
+              </div>
+              <div>
+                <dt class="stat-label">Used</dt>
+                <dd class="mt-0.5 text-base font-bold tabular-nums text-ink-900 dark:text-white">
+                  {{ row.used|intcomma }}{% if row.allocated %} <span class="text-xs font-semibold text-ink-500 dark:text-ink-400">({{ row.percent_used }}%)</span>{% endif %}
+                </dd>
+              </div>
+              <div>
+                <dt class="stat-label">Access</dt>
+                <dd class="mt-0.5 flex flex-wrap items-center gap-2">
+                  {% if row.is_enabled %}<span class="badge-success">On</span>{% else %}<span class="badge-neutral">Off</span>{% endif %}
+                  {% if console_can.tokens %}
+                  <form method="post" action="{% url 'console:ai_toggle_access' student.pk row.model.pk %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}#models">
+                    <button type="submit" class="link text-xs">{% if row.is_enabled %}Turn off{% else %}Turn on{% endif %}</button>
+                  </form>
+                  {% endif %}
+                </dd>
+              </div>
+            </dl>
+
+            {% if row.metered %}
+              <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                {% for window in row.windows %}
+                  <div class="rounded-xl border hairline p-3">
+                    <p class="flex items-baseline justify-between gap-2">
+                      <span class="stat-label">{{ window.label }}</span>
+                      {% if window.enforced %}
+                        <span class="text-xs font-bold tabular-nums {% if window.full %}text-rose-600 dark:text-rose-400{% else %}text-ink-800 dark:text-ink-100{% endif %}">
+                          {{ window.used|intcomma }} / {{ window.limit|intcomma }}
+                        </span>
+                      {% else %}
+                        <span class="text-xs font-medium text-ink-500 dark:text-ink-400">No limit</span>
+                      {% endif %}
+                    </p>
+                    {% if window.enforced %}
+                      <span class="cell-meter mt-2 max-w-none" aria-hidden="true">
+                        <i style="width: {{ window.percent }}%; background: {% if window.full %}#E11D48{% elif window.percent >= 80 %}#D97706{% else %}#2563EB{% endif %}"></i>
+                      </span>
+                      {% if window.reset %}<p class="mt-1 text-[11px] text-ink-500 dark:text-ink-400">Resets {{ window.reset }}</p>{% endif %}
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="mt-3 text-xs text-ink-500 dark:text-ink-400">No daily, weekly or monthly limit applies to these tokens.</p>
+            {% endif %}
+
+            <details class="access-why mt-3 rounded-xl border hairline">
+              <summary class="flex cursor-pointer select-none items-center gap-2 px-3 py-2.5 text-[13px] font-semibold text-ink-700 dark:text-ink-200">
+                <svg class="access-why-chev h-4 w-4 shrink-0 text-ink-500 dark:text-ink-400" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                Can this student chat? — every check
+              </summary>
+              <ul class="space-y-2 border-t hairline px-3 py-3">
+                {% for check in row.checks %}
+                  <li class="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                    <span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full
+                                 {% if check.state == 'ok' %}bg-emerald-500/12 text-emerald-700 dark:text-emerald-300{% elif check.state == 'block' %}bg-rose-500/12 text-rose-700 dark:text-rose-300{% elif check.state == 'warn' %}bg-amber-500/14 text-amber-700 dark:text-amber-300{% else %}bg-ink-500/10 text-ink-600 dark:bg-white/8 dark:text-ink-300{% endif %}"
+                          aria-hidden="true">
+                      <svg class="h-3 w-3"><use href="#{% if check.state == 'ok' %}i-check{% elif check.state == 'block' %}i-x{% elif check.state == 'warn' %}i-alert{% else %}i-info{% endif %}"/></svg>
+                    </span>
+                    <span class="min-w-0 flex-1 text-[13px] leading-relaxed">
+                      <span class="font-semibold text-ink-900 dark:text-white">{{ check.label }}</span>
+                      <span class="sr-only">— {% if check.state == 'ok' %}passes{% elif check.state == 'block' %}blocks sending{% elif check.state == 'warn' %}warning{% else %}for information{% endif %}:</span>
+                      <span class="text-ink-600 dark:text-ink-300">{{ check.detail }}</span>
+                    </span>
+                    {% if check.action and check.state == 'block' and console_can.tokens %}{% if check.action.url != settings_url or console_can.settings %}
+                      <span class="shrink-0">{% include "console/_access_action.html" with action=check.action %}</span>
+                    {% endif %}{% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+              {% if console_can.tokens %}
+              <div class="flex flex-wrap items-center gap-2 border-t hairline px-3 py-2.5">
+                <p class="min-w-0 flex-1 text-[11.5px] text-ink-500 dark:text-ink-400">
+                  Balance looks wrong? Rebuild it from this model's ledger.
+                </p>
+                <form method="post" action="{% url 'console:ai_recalculate' student.pk row.model.pk %}"
+                      onsubmit="return confirm('Rebuild the {{ row.model.name|escapejs }} balance from its ledger?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.path }}#models">
+                  <button type="submit" class="btn-ghost btn-sm">
+                    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-refresh"/></svg> Rebuild balance
+                  </button>
+                </form>
+              </div>
+              {% endif %}
+            </details>
+          </li>
+        {% endfor %}
+      </ul>
+      <p class="border-t hairline px-5 py-3 text-[11.5px] text-ink-500 dark:text-ink-400">
+        A reply needs at least {{ access.floor|intcomma }} tokens in the wallet. Checks run in the order a message is sent, so the first one that fails is the reason the student sees.
+      </p>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-sparkles" title="No models yet" body="Add a model in Token management to give this student access." %}
+    {% endif %}
+  </section>
+
+  {# ---------- Usage + contact ---------- #}
+  <div class="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="section-title">Token usage</h2>
+      <p class="section-note mt-0.5">Last 14 days</p>
+      {% if usage.period_tokens %}
+        <div class="mt-4" data-chart="area" data-height="190" data-title="Token usage" data-config='{{ usage_chart|safe }}'></div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-chart" title="No recent usage" body="This student has not used the assistant in the last 14 days." %}
+      {% endif %}
+      <dl class="mt-4 grid grid-cols-3 gap-4 border-t hairline pt-4 text-center">
+        <div><dt class="text-xs text-ink-500 dark:text-ink-400">Requests</dt><dd class="mt-0.5 font-bold tabular-nums text-ink-900 dark:text-white">{{ usage.total_requests|intcomma }}</dd></div>
+        <div><dt class="text-xs text-ink-500 dark:text-ink-400">Input</dt><dd class="mt-0.5 font-bold tabular-nums text-ink-900 dark:text-white">{{ usage.input_tokens|compact_number }}</dd></div>
+        <div><dt class="text-xs text-ink-500 dark:text-ink-400">Output</dt><dd class="mt-0.5 font-bold tabular-nums text-ink-900 dark:text-white">{{ usage.output_tokens|compact_number }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="section-title">Account details</h2>
+      <dl class="mt-4 space-y-3 text-sm">
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Username</dt><dd class="min-w-0 truncate font-medium text-ink-900 dark:text-white">{{ student.username }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="shrink-0 text-ink-500 dark:text-ink-400">E-mail</dt><dd class="min-w-0 truncate font-medium text-ink-900 dark:text-white">{{ student.email|default:"—" }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Phone</dt><dd class="font-medium text-ink-900 dark:text-white">{{ student.phone|default:"—" }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Referral code</dt><dd class="font-mono text-xs font-bold text-brand-600 dark:text-brand-300">{{ student.referral_code }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Referred by</dt><dd class="font-medium text-ink-900 dark:text-white">{{ student.referred_by.display_name|default:"—" }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Created by</dt><dd class="font-medium text-ink-900 dark:text-white">{{ student.created_by.display_name|default:"Self-registered" }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Last seen</dt><dd class="font-medium text-ink-900 dark:text-white">{% if student.last_seen_at %}{{ student.last_seen_at|timeago }}{% else %}Never{% endif %}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Last IP</dt><dd class="font-mono text-xs text-ink-700 dark:text-ink-200">{{ student.last_login_ip|default:"—" }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-500 dark:text-ink-400">Telegram</dt>
+          <dd class="font-medium">
+            {% if student.telegram.is_linked %}<span class="badge-success">Linked</span>{% else %}<span class="text-ink-500 dark:text-ink-400">Not linked</span>{% endif %}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  </div>
+
+  {# ---------- Notes & tags (admins only) ---------- #}
+  <section class="card overflow-hidden reveal" id="notes">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <div>
+        <h2 class="section-title">Notes &amp; tags</h2>
+        <p class="section-note mt-0.5">For administrators only — the student never sees these.</p>
+      </div>
+      {% if console_can.student_care %}
+      <form method="post" action="{% url 'console:student_tags' student.pk %}" class="flex min-w-0 flex-1 basis-full items-center justify-end gap-2 sm:basis-auto sm:max-w-md">
+        {% csrf_token %}
+        <input type="text" name="tags" class="input py-2 text-sm" list="knownTags" value="{{ student.tags|join:', ' }}"
+               placeholder="scholarship, year 1" aria-label="Tags, separated by commas">
+        <datalist id="knownTags">{% for tag in known_tags %}<option value="{{ tag }}">{% endfor %}</datalist>
+        <button type="submit" class="btn-outline btn-sm shrink-0">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-tag"/></svg> Save tags
+        </button>
+      </form>
+      {% elif student.tags %}
+      <p class="flex flex-wrap justify-end gap-1.5">{% for tag in student.tags %}<span class="badge-neutral">{{ tag }}</span>{% endfor %}</p>
+      {% endif %}
+    </div>
+    <div class="grid gap-0 {% if console_can.student_care %}lg:grid-cols-[1fr_1.3fr]{% endif %}">
+      {% if console_can.student_care %}
+      <form method="post" action="{% url 'console:student_note_add' student.pk %}" class="border-b hairline p-5 lg:border-b-0 lg:border-r">
+        {% csrf_token %}
+        <label class="label" for="noteBody">Add a note</label>
+        <textarea class="input resize-y leading-relaxed" id="noteBody" name="body" rows="4" maxlength="2000" required
+                  placeholder="What happened, what was agreed, what to watch for…"></textarea>
+        <div class="mt-3 flex justify-end">
+          <button type="submit" class="btn-primary btn-sm">
+            <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-plus"/></svg> Add note
+          </button>
+        </div>
+      </form>
+      {% endif %}
+      <div class="max-h-[340px] overflow-y-auto scroll-slim">
+        {% if notes or student.notes %}
+          <ul class="divide-y divide-ink-100 dark:divide-white/5">
+            {% for note in notes %}
+              <li class="flex gap-3 px-5 py-3.5{% if note.is_pinned %} bg-amber-500/5{% endif %}">
+                <div class="min-w-0 flex-1">
+                  <p class="whitespace-pre-line text-sm leading-relaxed text-ink-800 dark:text-ink-100">{{ note.body }}</p>
+                  <p class="mt-1 text-[11px] text-ink-500 dark:text-ink-400">
+                    {% if note.is_pinned %}<span class="badge-warning mr-1">Pinned</span>{% endif %}
+                    {{ note.author.display_name|default:"Someone" }} · {{ note.created_at|timeago }}
+                  </p>
+                </div>
+                {% if console_can.student_care %}
+                <form method="post" action="{% url 'console:student_note_action' student.pk note.pk %}" class="flex shrink-0 items-start gap-1">
+                  {% csrf_token %}
+                  <button type="submit" name="action" value="pin" class="btn-icon h-7 w-7" title="{% if note.is_pinned %}Unpin{% else %}Pin to the top{% endif %}"
+                          aria-label="{% if note.is_pinned %}Unpin{% else %}Pin{% endif %} this note">
+                    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-pin"/></svg>
+                  </button>
+                  <button type="submit" name="action" value="delete" class="btn-icon h-7 w-7" title="Delete" aria-label="Delete this note"
+                          onclick="return confirm('Delete this note?');">
+                    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-trash"/></svg>
+                  </button>
+                </form>
+                {% endif %}
+              </li>
+            {% endfor %}
+            {% if student.notes %}
+              <li class="px-5 py-3.5">
+                <p class="whitespace-pre-line text-sm leading-relaxed text-ink-700 dark:text-ink-200">{{ student.notes }}</p>
+                <p class="mt-1 text-[11px] text-ink-500 dark:text-ink-400">From the account's notes field · edit it on the Edit page</p>
+              </li>
+            {% endif %}
+          </ul>
+        {% else %}
+          {% include "components/empty_state.html" with icon="i-edit" title="No notes yet" body="Keep a record of calls, agreements and anything the next admin should know." %}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {# ---------- Token history ---------- #}
+  <section class="card overflow-hidden reveal">
+    <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <h2 class="section-title">Token history</h2>
+      <span class="text-xs text-ink-500 dark:text-ink-400">Most recent 25 entries</span>
+    </div>
+    {% if transactions %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="th">Date</th><th class="th">Type</th><th class="th">Description</th>
+              <th class="th">By</th><th class="th text-right">Amount</th><th class="th text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in transactions %}
+              <tr class="row group/row">
+                <td class="td text-xs text-ink-500 dark:text-ink-400">{{ entry.created_at|date:"d M Y, H:i" }}</td>
+                <td class="td"><span class="{{ entry.tone|tone_classes }}">{{ entry.get_transaction_type_display }}</span></td>
+                <td class="td max-w-xs truncate text-sm tap-expand" tabindex="0" title="{{ entry.description }}">{{ entry.description|default:"—" }}</td>
+                <td class="td text-xs">{{ entry.created_by.display_name|default:"System" }}</td>
+                <td class="td text-right text-sm font-bold tabular-nums {% if entry.is_credit %}text-emerald-600 dark:text-emerald-400{% else %}text-ink-700 dark:text-ink-200{% endif %}">
+                  {% if entry.is_credit %}+{% else %}−{% endif %}{{ entry.abs_amount|intcomma }}
+                </td>
+                <td class="td text-right text-sm tabular-nums text-ink-500 dark:text-ink-400">{{ entry.balance_after|intcomma }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-coin" title="No token movements yet" body="Grants, purchases and usage will appear here." %}
+    {% endif %}
+  </section>
+
+  {# ---------- Payments + subscriptions ---------- #}
+  <div class="grid gap-6 xl:grid-cols-2">
+    <section class="card overflow-hidden reveal">
+      <div class="border-b hairline px-5 py-4"><h2 class="section-title">Payments</h2></div>
+      {% if payments %}
+        <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+          {% for payment in payments %}
+            <li>
+              {% if console_can.finance %}<a href="{% url 'console:payment_detail' payment.reference %}" class="flex items-center gap-3 px-5 py-3 transition hover:bg-ink-50 dark:hover:bg-white/[.03]">{% else %}<div class="flex items-center gap-3 px-5 py-3">{% endif %}
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium text-ink-800 dark:text-ink-100">{{ payment.plan.name }}</span>
+                  <span class="block truncate font-mono text-[11px] text-ink-500 dark:text-ink-400">{{ payment.reference }} · {{ payment.get_method_display }}</span>
+                </span>
+                <span class="shrink-0 text-right">
+                  <span class="block text-sm font-bold tabular-nums text-ink-900 dark:text-white">${{ payment.amount }}</span>
+                  <span class="{{ payment.status_tone|tone_classes }} mt-0.5">{{ payment.get_status_display }}</span>
+                </span>
+              {% if console_can.finance %}</a>{% else %}</div>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-receipt" title="No payments" body="This student has not purchased a plan yet." %}
+      {% endif %}
+    </section>
+
+    {% if console_can.support %}
+    <section class="card overflow-hidden reveal">
+      <div class="border-b hairline px-5 py-4"><h2 class="section-title">Conversations</h2></div>
+      {% if conversations %}
+        <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+          {% for conversation in conversations %}
+            <li>
+              <a href="{% url 'console:conversation_detail' conversation.pk %}" class="flex items-center gap-3 px-5 py-3 transition hover:bg-ink-50 dark:hover:bg-white/[.03]">
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium text-ink-800 dark:text-ink-100">{{ conversation.title }}</span>
+                  <span class="block text-[11px] text-ink-500 dark:text-ink-400">{{ conversation.message_count }} messages · {{ conversation.updated_at|timeago }}</span>
+                </span>
+                <span class="shrink-0 text-sm font-semibold tabular-nums text-ink-600 dark:text-ink-300">
+                  {{ conversation.total_tokens|compact_number }}
+                </span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+        <p class="border-t hairline px-5 py-3 text-[11px] text-ink-500 dark:text-ink-400">
+          Opening a conversation shows its full transcript. Every view is recorded in the audit log.
+        </p>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-chat" title="No conversations" body="This student has not chatted with the assistant yet." %}
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+
+  {# ---------- Audit ---------- #}
+  <section class="card overflow-hidden reveal">
+    <div class="border-b hairline px-5 py-4"><h2 class="section-title">Audit history</h2></div>
+    {% if audit %}
+      <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+        {% for entry in audit %}
+          <li class="flex items-start gap-3 px-5 py-3">
+            <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full
+                         {% if entry.tone == 'danger' %}bg-rose-500{% elif entry.tone == 'success' %}bg-emerald-500{% else %}bg-ink-300 dark:bg-white/20{% endif %}"></span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm text-ink-800 dark:text-ink-100">
+                <span class="font-medium">{{ entry.actor.display_name|default:"System" }}</span>
+                — {{ entry.get_action_display|lower }}
+              </span>
+              {% if entry.description %}
+                <span class="block truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400 tap-expand" tabindex="0" title="{{ entry.description }}">{{ entry.description }}</span>
+              {% endif %}
+            </span>
+            <span class="shrink-0 text-[11px] text-ink-500 dark:text-ink-400">{{ entry.created_at|timeago }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-history" title="No audit entries" body="Actions taken on this account will be recorded here." %}
+    {% endif %}
+  </section>
+</div>
+
+{% if console_can.tokens %}
+{# ---------- Token grant modal ---------- #}
+<div id="grantModal" class="fixed inset-0 z-[75] hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="grantTitle">
+  <div class="absolute inset-0 bg-ink-950/55 animate-fade-in" data-close-grant></div>
+  <div class="dialog-panel relative w-full max-w-md animate-scale-in rounded-xl2 border hairline bg-white p-5 shadow-lift dark:bg-ink-900">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="section-title" id="grantTitle">Manage tokens</h2>
+        <p class="section-note mt-0.5">
+          {{ student.display_name }} · only the model you pick changes
+        </p>
+      </div>
+      <button type="button" class="btn-icon h-7 w-7" data-close-grant aria-label="Close">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+
+    {% comment %}
+      Tokens are a separate currency per model, so the change is made by the
+      same per-model distribution the Distribute page uses: drawn from (or
+      returned to) that model's pool, written to its ledger, and audited. It
+      comes back here afterwards.
+    {% endcomment %}
+    <form method="post" action="{% url 'console:ai_distribute_apply' %}" class="mt-5 space-y-4" id="grantForm">
+      {% csrf_token %}
+      <input type="hidden" name="user_id" value="{{ student.pk }}">
+      <input type="hidden" name="next" value="{{ request.path }}" id="grantNext">
+
+      <div>
+        <label for="grantModel" class="label">AI model</label>
+        <select name="model_id" id="grantModel" class="input" required>
+          {% for model in grant_models %}
+            <option value="{{ model.pk }}">{{ model.name }} · {{ model.student_balance|intcomma }} held</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Action">
+        <label class="cursor-pointer">
+          <input type="radio" name="action" value="add" class="peer sr-only" checked>
+          <span class="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border hairline px-3 py-2.5 text-sm font-semibold transition
+                       peer-checked:border-emerald-500 peer-checked:bg-emerald-500/10 peer-checked:text-emerald-700 dark:peer-checked:text-emerald-300
+                       peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/70">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> Add
+          </span>
+        </label>
+        <label class="cursor-pointer">
+          <input type="radio" name="action" value="remove" class="peer sr-only">
+          <span class="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border hairline px-3 py-2.5 text-sm font-semibold transition
+                       peer-checked:border-rose-500 peer-checked:bg-rose-500/10 peer-checked:text-rose-700 dark:peer-checked:text-rose-300
+                       peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/70">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg> Remove
+          </span>
+        </label>
+      </div>
+
+      <div>
+        <label for="grantAmount" class="label">Token amount</label>
+        <input type="number" name="amount" id="grantAmount" min="1" max="100000000" required inputmode="numeric"
+               class="input text-lg font-semibold tabular-nums" placeholder="100000" autocomplete="off">
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          <button type="button" class="btn-outline btn-sm" data-amount="50000">50K</button>
+          <button type="button" class="btn-outline btn-sm" data-amount="100000">100K</button>
+          <button type="button" class="btn-outline btn-sm" data-amount="500000">500K</button>
+          <button type="button" class="btn-outline btn-sm" data-amount="1000000">1M</button>
+          <button type="button" class="btn-outline btn-sm" data-amount="5000000">5M</button>
+        </div>
+      </div>
+
+      <div>
+        <label for="grantReason" class="label">Reason <span class="font-normal text-ink-500 dark:text-ink-400">(recorded in the audit log)</span></label>
+        <input type="text" name="reason" id="grantReason" maxlength="255" class="input"
+               placeholder="e.g. Promotional grant, support credit">
+      </div>
+
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="btn-ghost" data-close-grant>Cancel</button>
+        <button type="submit" class="btn-primary" id="grantSubmit">Apply change</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if console_can.student_care %}
+{# ---------- Message dialog ---------- #}
+<div id="messageModal" class="fixed inset-0 z-[75] hidden items-center justify-center p-4" data-modal role="dialog" aria-modal="true" aria-labelledby="messageTitle">
+  <div class="absolute inset-0 bg-ink-950/55 animate-fade-in" data-close-modal></div>
+  <div class="dialog-panel relative w-full max-w-lg animate-scale-in rounded-xl2 border hairline bg-white p-5 shadow-lift dark:bg-ink-900">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="section-title" id="messageTitle">Message {{ student.display_name }}</h2>
+        <p class="section-note mt-0.5">Arrives in their notifications, and Telegram if linked.</p>
+      </div>
+      <button type="button" class="btn-icon h-7 w-7" data-close-modal aria-label="Close">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{% url 'console:student_message' student.pk %}" class="mt-5 space-y-4" data-loading-form data-loading-label="Sending…">
+      {% csrf_token %}
+      <div class="grid gap-3 sm:grid-cols-[1fr_150px]">
+        <div>
+          <label for="msgTitle" class="label">Title</label>
+          <input type="text" name="title" id="msgTitle" maxlength="140" required class="input" placeholder="About your payment" data-autofocus>
+        </div>
+        <div>
+          <label for="msgLevel" class="label">Tone</label>
+          <select name="level" id="msgLevel" class="input">
+            {% for value, label in message_levels %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="msgBody" class="label">Message</label>
+        <textarea name="body" id="msgBody" rows="5" maxlength="2000" required class="input resize-y"></textarea>
+      </div>
+      <label class="flex items-start gap-2.5 text-sm text-ink-700 dark:text-ink-200">
+        <input type="checkbox" name="email" class="checkbox mt-0.5" {% if not student.email %}disabled{% endif %}>
+        <span>Also send by e-mail{% if student.email %} to {{ student.email }}{% else %} (no address on the account){% endif %}</span>
+      </label>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="btn-ghost" data-close-modal>Cancel</button>
+        <button type="submit" class="btn-primary" data-submit>Send message</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if console_can.finance %}
+{# ---------- Grant plan dialog ---------- #}
+<div id="planModal" class="fixed inset-0 z-[75] hidden items-center justify-center p-4" data-modal role="dialog" aria-modal="true" aria-labelledby="planTitle">
+  <div class="absolute inset-0 bg-ink-950/55 animate-fade-in" data-close-modal></div>
+  <div class="dialog-panel relative w-full max-w-md animate-scale-in rounded-xl2 border hairline bg-white p-5 shadow-lift dark:bg-ink-900">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="section-title" id="planTitle">Grant a plan</h2>
+        <p class="section-note mt-0.5">
+          No payment is taken. {% if subscription %}It starts when {{ subscription.plan.name }} ends ({{ subscription.ends_at|date:"d M Y" }}).{% else %}It starts now.{% endif %}
+          Every model the plan includes is credited.
+        </p>
+      </div>
+      <button type="button" class="btn-icon h-7 w-7" data-close-modal aria-label="Close">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <form method="post" action="{% url 'console:student_grant_plan' student.pk %}" class="mt-5 space-y-4" data-loading-form data-loading-label="Granting…">
+      {% csrf_token %}
+      <div>
+        <label for="planPick" class="label">Plan</label>
+        <select name="plan_id" id="planPick" class="input" required data-autofocus>
+          {% for plan in plans %}
+            <option value="{{ plan.pk }}">{{ plan.name }} · {% for row in plan.grant_rows %}{{ row.tokens|compact_number }} {{ row.model.name }}{% if not forloop.last %} + {% endif %}{% empty %}no tokens{% endfor %} · {{ plan.duration_days }} days</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="planReason" class="label">Reason <span class="font-normal text-ink-500 dark:text-ink-400">(recorded in the audit log)</span></label>
+        <input type="text" name="reason" id="planReason" maxlength="200" class="input" placeholder="e.g. Scholarship, support goodwill">
+      </div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="btn-ghost" data-close-modal>Cancel</button>
+        <button type="submit" class="btn-primary" data-submit>Grant plan</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{# ---------- Disable dialog ---------- #}
+{% if student.status == 'active' and not is_self and console_can.student_care %}
+<div id="disableModal" class="fixed inset-0 z-[75] hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="disableTitle">
+  <div class="absolute inset-0 bg-ink-950/55 animate-fade-in" data-close-disable></div>
+  <div class="dialog-panel relative w-full max-w-md animate-scale-in rounded-xl2 border hairline bg-white p-5 shadow-lift dark:bg-ink-900">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="section-title" id="disableTitle">Disable this account?</h2>
+        <p class="section-note mt-0.5">
+          {{ student.display_name }} is signed out everywhere and cannot sign in or chat until enabled again.
+        </p>
+      </div>
+      <button type="button" class="btn-icon h-7 w-7" data-close-disable aria-label="Close">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+
+    <form method="post" action="{% url 'console:user_toggle' student.pk %}" class="mt-5 space-y-4">
+      {% csrf_token %}
+      <div>
+        <label for="disableReason" class="label">Reason <span class="font-normal text-ink-500 dark:text-ink-400">(optional, recorded in the audit log)</span></label>
+        <input type="text" name="reason" id="disableReason" maxlength="255" class="input"
+               placeholder="e.g. Shared login, payment dispute" autocomplete="off">
+      </div>
+
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="btn-ghost" data-close-disable>Cancel</button>
+        <button type="submit" class="btn-danger">Disable account</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+  /* The explainer's disclosure arrow turns when it is open. */
+  .access-why > summary { list-style: none; min-height: 44px; }
+  .access-why > summary::-webkit-details-marker { display: none; }
+  .access-why-chev { transition: transform .2s ease; }
+  .access-why[open] .access-why-chev { transform: rotate(90deg); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var modal = document.getElementById('grantModal');
+    var picker = document.getElementById('grantModel');
+    var next = document.getElementById('grantNext');
+    var basePath = next ? next.value : '';
+    var lastOpener = null;
+
+    function lockPage(on) { document.body.style.overflow = on ? 'hidden' : ''; }
+
+    var open = function (event) {
+      if (!modal) return;
+      var trigger = event && event.currentTarget;
+      lastOpener = trigger || null;
+      // Opened from a model row: that model is already picked, and the page
+      // comes back to the Models & access section afterwards.
+      var model = trigger && trigger.getAttribute('data-grant-model');
+      if (model && picker) picker.value = model;
+      if (next) next.value = model ? basePath + '#models' : basePath;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      lockPage(true);
+      setTimeout(function () { document.getElementById('grantAmount').focus(); }, 40);
+    };
+    var close = function () {
+      if (!modal || modal.classList.contains('hidden')) return;
+      modal.classList.add('hidden'); modal.classList.remove('flex');
+      lockPage(false);
+      if (lastOpener) lastOpener.focus();
+    };
+
+    document.querySelectorAll('[data-open-grant]').forEach(function (n) { n.addEventListener('click', open); });
+    document.querySelectorAll('[data-close-grant]').forEach(function (n) { n.addEventListener('click', close); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+    document.querySelectorAll('[data-amount]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        document.getElementById('grantAmount').value = button.dataset.amount;
+      });
+    });
+
+    var form = document.getElementById('grantForm');
+    if (form) form.addEventListener('submit', function () {
+      var button = document.getElementById('grantSubmit');
+      setTimeout(function () { button.disabled = true; button.textContent = 'Applying…'; }, 0);
+    });
+
+    /* The message and plan dialogs share one opener. */
+    document.querySelectorAll('[data-open-modal]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var target = document.getElementById(button.dataset.openModal);
+        target.classList.remove('hidden'); target.classList.add('flex');
+        target.dataset.opener = button.dataset.openModal;
+        lockPage(true);
+        var first = target.querySelector('[data-autofocus]');
+        if (first) setTimeout(function () { first.focus(); }, 40);
+      });
+    });
+    document.querySelectorAll('[data-modal]').forEach(function (modal) {
+      var shut = function () {
+        if (modal.classList.contains('hidden')) return;
+        modal.classList.add('hidden'); modal.classList.remove('flex');
+        lockPage(false);
+      };
+      modal.querySelectorAll('[data-close-modal]').forEach(function (n) { n.addEventListener('click', shut); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') shut(); });
+    });
+
+    // Only rendered while the account is active; an inactive one shows Enable.
+    var disable = document.getElementById('disableModal');
+    if (disable) {
+      var openDisable = function () {
+        disable.classList.remove('hidden');
+        disable.classList.add('flex');
+        lockPage(true);
+        setTimeout(function () { document.getElementById('disableReason').focus(); }, 40);
+      };
+      var closeDisable = function () {
+        if (disable.classList.contains('hidden')) return;
+        disable.classList.add('hidden'); disable.classList.remove('flex');
+        lockPage(false);
+      };
+      document.querySelectorAll('[data-open-disable]').forEach(function (n) { n.addEventListener('click', openDisable); });
+      document.querySelectorAll('[data-close-disable]').forEach(function (n) { n.addEventListener('click', closeDisable); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDisable(); });
+    }
+
+    // Arriving at #models (back from a fix made there): open the row that
+    // is still blocked, so the result of the change is in view.
+    if (window.location.hash === '#models') {
+      var blocked = document.querySelector('#models .badge-danger');
+      if (blocked) {
+        var row = blocked.closest('li');
+        var why = row && row.querySelector('details.access-why');
+        if (why) why.open = true;
+      }
+    }
+  })();
+</script>
+{% endblock %}

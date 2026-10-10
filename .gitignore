@@ -1,0 +1,47 @@
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Django — no database file of any kind: they hold students' personal data
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+*.sqlite3-journal
+*.bak
+/staticfiles/
+/media/uploads/
+/media/receipts/
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Dev scratch output
+_dev/out/
+_dev/markdown_extracted.js
+
+# Dev-only node deps for the Tailwind compile check
+_dev/tw/node_modules/
+_dev/tw/package-lock.json
+_dev/tw/package.json
+.env.backup*
+
+# Scratch files that aren't part of the project
+Untitled-*.c
+
+# Deployment output: the zip, and the production .env (it holds live keys)
+/dist/
+.env.production
+/deploy/.env.production

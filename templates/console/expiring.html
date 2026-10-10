@@ -1,0 +1,108 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Expiring access · Console{% endblock %}
+{% block heading %}Access expiring soon{% endblock %}
+{% block subheading %}
+  <p>Subscriptions ending within the window, and the tokens each student is still holding. Tokens themselves never expire in this product — what lapses is the plan that granted them.</p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-clock" label="Expiring" value=total|intcomma foot=days_label %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-coin" label="Tokens still held" value=tokens_at_stake|compact_number foot="behind those plans" %}
+    {% include "console/_kpi.html" with variant="brand" icon="i-layers" label="Model" value=model_scope.label foot="plans grant one model each" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-calendar" label="Window" value=days|stringformat:"s"|add:" days" foot="change it below" %}
+  </section>
+
+  <div class="card flex flex-wrap items-center gap-2 p-4">
+    <span class="stat-label mr-1 text-ink-400">Ending within</span>
+    {% for window in windows %}
+      <a href="{% qs request days=window page='' %}" class="chip{% if days == window %} chip-active{% endif %}">{{ window }} days</a>
+    {% endfor %}
+  </div>
+
+  <section class="card overflow-hidden reveal">
+    {% if rows %}
+      <div class="table-wrap">
+        <table class="table min-w-[900px]">
+          <thead>
+            <tr>
+              <th class="th">Student</th>
+              <th class="th">Plan</th>
+              <th class="th col-model">Model</th>
+              <th class="th text-right">Tokens held</th>
+              <th class="th">Ends</th>
+              <th class="th text-right">Days left</th>
+              <th class="th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr class="row group/row">
+                <td class="td">
+                  <a href="{% url 'console:user_detail' row.subscription.user.pk %}" class="flex items-center gap-3">
+                    {% with av=row.subscription.user|avatar_tone %}<span class="student-mark" aria-hidden="true" style="background: linear-gradient(140deg, {{ av.from }}, {{ av.to }})">{{ row.subscription.user.initials }}</span>{% endwith %}
+                    <span class="min-w-0">
+                      <span class="block truncate text-sm font-semibold text-ink-900 dark:text-white">{{ row.subscription.user.display_name|truncatechars:26 }}</span>
+                      <span class="block truncate text-[11px] text-ink-500 dark:text-ink-400">{{ row.subscription.user.email|truncatechars:30 }}</span>
+                    </span>
+                  </a>
+                </td>
+                <td class="td text-xs">{{ row.subscription.plan.name }}</td>
+                <td class="td col-model text-xs">
+                  {% if row.subscription.plan.ai_model %}{{ row.subscription.plan.ai_model.name }}{% else %}<span class="text-ink-400">—</span>{% endif %}
+                </td>
+                <td class="td text-right text-sm font-semibold tabular-nums">
+                  {% if row.wallet %}{{ row.wallet.balance|intcomma }}{% else %}<span class="text-ink-400">0</span>{% endif %}
+                </td>
+                <td class="td text-xs text-ink-500 dark:text-ink-400">{{ row.subscription.ends_at|date:"d M Y" }}</td>
+                <td class="td text-right">
+                  <span class="badge {% if row.days_left <= 3 %}badge-danger{% elif row.days_left <= 7 %}badge-warning{% else %}badge-neutral{% endif %}">
+                    {{ row.days_left }} day{{ row.days_left|pluralize }}
+                  </span>
+                </td>
+                <td class="td text-right">
+                  {% comment %}
+                    A reminder is student care; moving the end date is Finance's.
+                    The view link sits outside the form so it is there for everyone.
+                  {% endcomment %}
+                  <div class="inline-flex items-center justify-end gap-1">
+                  {% if console_can.student_care or console_can.finance %}
+                  <form method="post" action="{% url 'console:expiring_action' row.subscription.pk %}" class="inline-flex items-center justify-end gap-1">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    {% if console_can.student_care %}
+                    <button type="submit" name="action" value="remind" class="btn-icon h-7 w-7" title="Send a renewal reminder"
+                            aria-label="Remind {{ row.subscription.user.display_name }}">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-bell"/></svg>
+                    </button>
+                    {% endif %}
+                    {% if console_can.finance %}
+                    <button type="submit" name="action" value="extend" class="btn-icon h-7 w-7" title="Extend by 30 days"
+                            aria-label="Extend {{ row.subscription.user.display_name }}'s plan by 30 days"
+                            onclick="return confirm('Extend {{ row.subscription.plan.name|escapejs }} by 30 days for {{ row.subscription.user.display_name|escapejs }}?');">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-calendar"/></svg>
+                    </button>
+                    {% endif %}
+                  </form>
+                  {% endif %}
+                    <a href="{% url 'console:user_detail' row.subscription.user.pk %}" class="btn-icon h-7 w-7" title="View student" aria-label="View {{ row.subscription.user.display_name }}">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-eye"/></svg>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-check-circle" title="Nothing lapsing" body="No subscription ends within this window." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

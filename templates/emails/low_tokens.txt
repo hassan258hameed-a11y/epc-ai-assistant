@@ -1,0 +1,24 @@
+{{ model_name }} tokens are running low
+
+Hello {{ user.display_name }},
+
+Your available tokens for {{ model_name }} are nearly used up.
+
+  Remaining: {{ remaining|floatformat:0 }} tokens
+  Allocation: {{ allocated|floatformat:0 }} tokens
+  Left: {{ percent }}%
+
+To keep using the assistant without interruption, renew your plan or add more
+{{ model_name }} tokens. Your other models are not affected - tokens are held
+separately for each one.
+
+Renew here:
+{{ pricing_url }}
+
+You will be asked to sign in first if you are not already.
+
+--
+{{ brand.full_name }}
+Sent to {{ user.email }} because your {{ model_name }} balance fell below {{ threshold }}%.
+You can turn these alerts off in your notification settings.
+Need help? Write to {{ brand.support_email }}

@@ -1,0 +1,11 @@
+{% comment %}
+  Carries the selected model through a GET filter form.
+
+  The console-wide selector lives in the URL as `?model=`. A filter form that
+  submits without it would rewrite the querystring and silently widen the page
+  back to every model — so searching inside GPT-4o would quietly hand you all
+  four. One hidden field, included by every filter form on a model-aware page.
+{% endcomment %}
+{% if model_scope and not model_scope.is_all %}
+  <input type="hidden" name="model" value="{{ model_scope.key }}">
+{% endif %}

@@ -1,0 +1,128 @@
+{% load ai_extras %}
+{% comment %}
+  Compare models — every model the platform serves, side by side.
+
+  Prices come from the live packages and balances from the student's own
+  wallets, so nothing here can disagree with Pricing or the picker. "Chat with
+  it" selects the model in the composer exactly as the picker does, so the
+  switch is announced the same way.
+{% endcomment %}
+<div class="panel" data-panel-name="models">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Models</p>
+    <h2 class="panel-title">Compare models</h2>
+    <p class="panel-sub">
+      Each model has its own tokens and its own strengths. Cheaper models are
+      great for everyday questions; the most capable ones are worth it for hard
+      problems and long work.
+    </p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  {% if rows %}
+    <div class="cmp-grid">
+      {% for row in rows %}
+        <article class="cmp-card{% if row.model.key == selected %} is-focus{% endif %}"
+                 style="--m-from:{{ row.tone.from }};--m-to:{{ row.tone.to }};--m-ink:{{ row.tone.ink }};animation-delay:{{ row.delay }}"
+                 data-cmp-model="{{ row.model.key }}">
+          <header class="cmp-head">
+            <span class="cmp-tile" aria-hidden="true"><svg><use href="#{{ row.tone.icon }}"/></svg></span>
+            <div class="cmp-title">
+              <h3>{{ row.model.name }}</h3>
+              <span>{{ row.model.provider_name }}</span>
+            </div>
+            <div class="cmp-tags">
+              {% if row.is_best_value %}<span class="cmp-tag is-value">Best value</span>{% endif %}
+              {% if row.is_most_capable %}<span class="cmp-tag is-top">Most capable</span>{% endif %}
+              {% if row.model.is_default %}<span class="cmp-tag">Default</span>{% endif %}
+            </div>
+          </header>
+
+          <p class="cmp-desc">{{ row.model.description }}</p>
+
+          <div class="cmp-price">
+            {% if row.per_100k is not None %}
+              <b>${{ row.per_100k|floatformat:"-2" }}</b><span>per 100k tokens</span>
+            {% else %}
+              <b>—</b><span>not on sale</span>
+            {% endif %}
+          </div>
+          <div class="cmp-bar" role="img" aria-label="Relative cost {{ row.cost_percent }} of 100">
+            <i style="width:{{ row.cost_percent }}%"></i>
+          </div>
+
+          <dl class="cmp-specs">
+            <div><dt>Reads images</dt>
+              <dd class="{% if row.vision %}is-yes{% else %}is-no{% endif %}">
+                <svg aria-hidden="true"><use href="#{% if row.vision %}i-check{% else %}i-x{% endif %}"/></svg>
+                {{ row.vision|yesno:"Yes,No" }}
+              </dd></div>
+            <div><dt>Thinks before answering</dt>
+              <dd class="{% if row.reasoning %}is-yes{% else %}is-no{% endif %}">
+                <svg aria-hidden="true"><use href="#{% if row.reasoning %}i-check{% else %}i-x{% endif %}"/></svg>
+                {{ row.reasoning|yesno:"Yes,No" }}
+              </dd></div>
+            <div><dt>Longest reply</dt>
+              <dd>{% if row.reply_budget %}{{ row.reply_budget|intcomma }} tokens{% else %}Standard{% endif %}</dd></div>
+            <div><dt>Student rating</dt>
+              <dd>{% if row.satisfaction is not None %}{{ row.satisfaction }}% helpful{% else %}<span class="cmp-muted">Not enough ratings</span>{% endif %}</dd></div>
+            <div><dt>Your balance</dt>
+              <dd class="{% if row.wallet and row.wallet.balance > 0 %}is-yes{% else %}cmp-muted{% endif %}">
+                {% if row.wallet %}{{ row.wallet.balance|intcomma }} tokens{% else %}0 tokens{% endif %}
+              </dd></div>
+          </dl>
+
+          <footer class="cmp-foot">
+            {% if row.wallet and row.wallet.usable %}
+              <button type="button" class="btn btn-sm btn-primary" data-use-model="{{ row.model.key }}">
+                <svg aria-hidden="true"><use href="#i-chat"/></svg> Chat with it
+              </button>
+            {% endif %}
+            {% if row.plan %}
+              <a href="{% url 'student:pricing' %}?model={{ row.model.key|urlencode }}" data-panel-link="pricing"
+                 class="btn btn-sm{% if not row.wallet or not row.wallet.usable %} btn-primary{% endif %}">
+                <svg aria-hidden="true"><use href="#i-coin"/></svg> Buy tokens
+              </a>
+            {% endif %}
+          </footer>
+        </article>
+      {% endfor %}
+    </div>
+
+    <section class="panel-section">
+      <div class="sa-rule" style="margin-top:0"><b>At a glance</b><i aria-hidden="true"></i></div>
+      <div class="card cmp-table-wrap">
+        <table class="cmp-table">
+          <thead>
+            <tr>
+              <th scope="col">Model</th>
+              <th scope="col">Per 100k</th>
+              <th scope="col">Images</th>
+              <th scope="col">Reasoning</th>
+              <th scope="col">Rating</th>
+              <th scope="col">Your balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <th scope="row"><i class="cmp-dot" style="--m-from:{{ row.tone.from }};--m-to:{{ row.tone.to }}" aria-hidden="true"></i>{{ row.model.name }}</th>
+                <td>{% if row.per_100k is not None %}${{ row.per_100k|floatformat:"-2" }}{% else %}—{% endif %}</td>
+                <td>{% if row.vision %}<svg role="img" aria-label="Yes" style="width:15px;height:15px;color:var(--ok)"><use href="#i-check"/></svg>{% else %}—{% endif %}</td>
+                <td>{% if row.reasoning %}<svg role="img" aria-label="Yes" style="width:15px;height:15px;color:var(--ok)"><use href="#i-check"/></svg>{% else %}—{% endif %}</td>
+                <td>{% if row.satisfaction is not None %}{{ row.satisfaction }}%{% else %}—{% endif %}</td>
+                <td>{% if row.wallet %}{{ row.wallet.balance|intcomma }}{% else %}0{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <p class="empty">
+      <svg aria-hidden="true"><use href="#i-cpu"/></svg>
+      No models are available right now.
+    </p>
+  {% endif %}
+</div>

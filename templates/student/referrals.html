@@ -1,0 +1,223 @@
+{% extends "base/shell_page.html" %}
+{% load ai_extras %}
+
+{% block title %}Referrals · {{ BRAND.full_name }}{% endblock %}
+
+{% block head %}
+<style>
+  .invite {
+    position: relative; overflow: hidden;
+    padding: 26px 24px; border-radius: var(--r-lg);
+    border: 1px solid var(--accent-mid); background: var(--accent-soft);
+  }
+  .invite-mark {
+    width: 46px; height: 46px; border-radius: var(--r); display: grid; place-items: center;
+    background: var(--surface); color: var(--accent); box-shadow: var(--shadow-xs);
+  }
+  .invite-mark svg { width: 22px; height: 22px; }
+  .invite h3 { margin: 16px 0 0; font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
+  .invite p.lede { margin: 8px 0 0; max-width: 56ch; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+  .copy-row { display: flex; gap: 8px; }
+  .copy-row input { flex: 1; min-width: 0; }
+  .code-input { font-family: var(--mono); font-size: 17px; font-weight: 700; letter-spacing: .18em; }
+
+  .how { display: grid; gap: 16px; }
+  @media (min-width: 640px) { .how { grid-template-columns: repeat(3, 1fr); } }
+  .how li { display: flex; gap: 11px; }
+  .how .n {
+    width: 26px; height: 26px; border-radius: 8px; flex: none;
+    display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent-lo);
+    font-size: 11.5px; font-weight: 700;
+  }
+  .how b { display: block; font-size: 13.5px; }
+  .how span.d { display: block; margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="panel-head">
+  <p class="panel-eyebrow">Growth</p>
+  <h2 class="panel-title">Referrals</h2>
+  <p class="panel-sub">Invite classmates, and you both earn tokens.</p>
+</header>
+
+<section class="invite">
+  <span class="invite-mark"><svg aria-hidden="true"><use href="#i-gift"/></svg></span>
+  <h3>Give {{ stats.bonus_referred|intcomma }} tokens, get {{ stats.bonus_referrer|intcomma }}</h3>
+  <p class="lede">
+    Share your code with a classmate. When they create an account and verify it, you both receive
+    bonus tokens automatically — with no limit on how many people you invite.
+  </p>
+
+  {% if referral_enabled %}
+    <div class="form-grid" style="margin-top:20px">
+      <div class="field">
+        <label for="refCode">Your referral code</label>
+        <div class="copy-row">
+          <input id="refCode" class="code-input" type="text" readonly value="{{ user.referral_code }}"
+                 aria-label="Your referral code">
+          <button type="button" class="btn" data-copy="refCode" aria-label="Copy referral code">
+            <svg aria-hidden="true"><use href="#i-copy"/></svg> <span class="m-hide">Copy</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="refLink">Your invite link</label>
+        <div class="copy-row">
+          <input id="refLink" type="text" readonly value="{{ referral_link }}" aria-label="Your invite link">
+          <button type="button" class="btn btn-primary" data-copy="refLink" aria-label="Copy invite link">
+            <svg aria-hidden="true"><use href="#i-copy"/></svg> <span class="m-hide">Copy link</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <a id="shareTelegram" href="#" target="_blank" rel="noopener" class="btn btn-sm">
+          <svg aria-hidden="true"><use href="#i-telegram"/></svg> Share on Telegram
+        </a>
+        <button type="button" id="shareNative" class="btn btn-sm" hidden>
+          <svg aria-hidden="true"><use href="#i-send"/></svg> Share…
+        </button>
+      </div>
+    </div>
+  {% else %}
+    <p class="flash is-warn" style="margin:20px 0 0">
+      <svg aria-hidden="true"><use href="#i-info"/></svg>
+      <span>The referral programme is paused at the moment. Your code will start working again when it reopens.</span>
+    </p>
+  {% endif %}
+</section>
+
+<section class="panel-section">
+  <div class="grid grid-3">
+    <div class="stat">
+      <span class="stat-label">People invited</span>
+      <span class="stat-value">{{ stats.total|intcomma }}</span>
+      <span class="stat-note">signed up with your code</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Rewarded</span>
+      <span class="stat-value">{{ stats.rewarded|intcomma }}</span>
+      <span class="stat-note">verified their account</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Tokens earned</span>
+      <span class="stat-value">{{ stats.tokens_earned|intcomma }}</span>
+      <span class="stat-note">added to your balance</span>
+    </div>
+  </div>
+</section>
+
+<section class="panel-section">
+  <div class="card">
+    <div class="card-head"><h3>How it works</h3></div>
+    <div class="card-body">
+      <ol class="how" style="list-style:none;margin:0;padding:0">
+        <li>
+          <span class="n">1</span>
+          <span><b>Share your link</b><span class="d">Send it to a classmate or post it in your study group.</span></span>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <span><b>They sign up</b><span class="d">Your code is filled in for them automatically.</span></span>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <span><b>You both earn</b><span class="d">Bonus tokens land as soon as they verify.</span></span>
+        </li>
+      </ol>
+      <p style="margin:18px 0 0;padding-top:14px;border-top:1px solid var(--border-soft);font-size:12px;line-height:1.6;color:var(--ink-3)">
+        Referring yourself, or creating extra accounts to claim bonuses, is not permitted and may
+        result in the bonus being reversed.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="panel-section">
+  <h3 class="section-title">
+    Your invites
+    <span class="count">{{ stats.total }}</span>
+  </h3>
+  <div class="card">
+    <div class="rows">
+      {% for referral in stats.referrals %}
+        <div class="row">
+          <span class="row-main">
+            <span class="row-title">{{ referral.referred_user.display_name }}</span>
+            <span class="row-sub">Joined {{ referral.created_at|date:"d M Y" }}</span>
+          </span>
+          {% if referral.status == 'rewarded' %}
+            <span class="badge is-ok">Rewarded</span>
+          {% elif referral.status == 'pending' %}
+            <span class="badge is-warn">Awaiting verification</span>
+          {% else %}
+            <span class="badge">{{ referral.get_status_display }}</span>
+          {% endif %}
+          <span class="row-value {% if referral.referrer_bonus %}is-plus{% endif %}">
+            {% if referral.referrer_bonus %}+{{ referral.referrer_bonus|intcomma }}{% else %}—{% endif %}
+          </span>
+        </div>
+      {% empty %}
+        <p class="empty">
+          <svg aria-hidden="true"><use href="#i-users"/></svg>
+          No invites yet. Share your link above and they will appear here as they join.
+        </p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ referral_link|json_script:"referralLinkData" }}
+<script>
+(function () {
+  /* Copy, with the confirmation on the button that was pressed — a toast
+     somewhere else does not tell you *which* of the two you copied. */
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    var original = button.innerHTML;
+    button.addEventListener('click', function () {
+      var field = document.getElementById(button.dataset.copy);
+      if (!field) return;
+      field.select();
+      field.setSelectionRange(0, 99999);
+
+      var done = function () {
+        button.innerHTML = '<svg aria-hidden="true"><use href="#i-check"/></svg> Copied';
+        setTimeout(function () { button.innerHTML = original; }, 1800);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(field.value).then(done).catch(function () {
+          try { document.execCommand('copy'); done(); } catch (e) {}
+        });
+      } else {
+        try { document.execCommand('copy'); done(); } catch (e) {}
+      }
+    });
+  });
+
+  var raw = document.getElementById('referralLinkData');
+  if (!raw) return;
+  var link = JSON.parse(raw.textContent);
+  var message = 'I use {{ BRAND.full_name|escapejs }} for homework and coding help — ' +
+                'join with my link and we both get bonus tokens: ';
+
+  var telegram = document.getElementById('shareTelegram');
+  if (telegram) {
+    telegram.href = 'https://t.me/share/url?url=' + encodeURIComponent(link) +
+                    '&text=' + encodeURIComponent(message.trim());
+  }
+
+  var native = document.getElementById('shareNative');
+  if (native && navigator.share) {
+    native.hidden = false;
+    native.addEventListener('click', function () {
+      navigator.share({ title: '{{ BRAND.full_name|escapejs }}', text: message, url: link }).catch(function () {});
+    });
+  }
+})();
+</script>
+{% endblock %}

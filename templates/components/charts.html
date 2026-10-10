@@ -1,0 +1,379 @@
+{% comment %}
+Chart engine — hand-rolled inline SVG, no external library and no network call.
+
+Markup contract:
+  <div data-chart="area" data-config='{"labels":["Mon"],"series":[{"name":"Tokens","values":[1]}]}'></div>
+  <div data-chart="donut" data-config='[{"label":"ABA","value":12}]'></div>
+Types: area | bars | donut
+
+Two visual languages live here. The default is the one the student app has
+always used. When a page sets `window.EPC_CHART_THEME = 'console'` before this
+script runs — base/console_design.html does — the charts switch to the admin
+console's language: colours read from CSS custom properties, smoothed area
+curves, pill bars with the peak picked out, and a dark tooltip. Nothing else
+about the contract changes, so the same markup works on either side.
+{% endcomment %}
+<script>
+(function () {
+  'use strict';
+
+  var CONSOLE = window.EPC_CHART_THEME === 'console';
+
+  function cssVar(name, fallback) {
+    try {
+      var value = getComputedStyle(document.documentElement).getPropertyValue(name);
+      return (value || '').trim() || fallback;
+    } catch (e) { return fallback; }
+  }
+
+  var LEGACY_PALETTE = ['#6E51F0', '#12B3AA', '#F5B547', '#EC5C8D', '#4C87F0', '#8B77FB'];
+
+  function palette() {
+    if (!CONSOLE) return LEGACY_PALETTE;
+    return [
+      cssVar('--chart-1', '#2563EB'), cssVar('--chart-2', '#E11D48'), cssVar('--chart-3', '#10B981'),
+      cssVar('--chart-4', '#F59E0B'), cssVar('--chart-5', '#60A5FA'), cssVar('--chart-6', '#06B6D4')
+    ];
+  }
+
+  function theme() {
+    var dark = document.documentElement.classList.contains('dark');
+    return {
+      dark: dark,
+      grid: dark ? 'rgba(255,255,255,.07)' : 'rgba(11,13,16,.06)',
+      axis: dark ? 'rgba(255,255,255,.42)' : 'rgba(11,13,16,.40)',
+      surface: CONSOLE ? cssVar('--chart-surface', dark ? '#14171C' : '#ffffff') : (dark ? '#171D33' : '#ffffff'),
+      idle: CONSOLE ? cssVar('--chart-idle', dark ? 'rgba(255,255,255,.09)' : 'rgba(11,13,16,.08)')
+                    : (dark ? 'rgba(255,255,255,.09)' : 'rgba(11,16,32,.08)'),
+      ink: dark ? '#ffffff' : '#14171C'
+    };
+  }
+
+  function el(tag, attrs, children) {
+    var node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (var key in attrs) if (attrs[key] !== undefined && attrs[key] !== null) node.setAttribute(key, attrs[key]);
+    (children || []).forEach(function (child) { node.appendChild(child); });
+    return node;
+  }
+
+  function niceMax(value) {
+    if (value <= 0) return 10;
+    var magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+    var scaled = value / magnitude;
+    var step = scaled <= 1 ? 1 : scaled <= 2 ? 2 : scaled <= 5 ? 5 : 10;
+    return step * magnitude;
+  }
+
+  function format(value) {
+    var n = Number(value) || 0;
+    if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+    if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+    return String(Math.round(n * 100) / 100);
+  }
+
+  /* ---------------------------------------------------------------- tooltip */
+  function tooltip() {
+    var node = document.getElementById('epcChartTip');
+    if (node) return node;
+    node = document.createElement('div');
+    node.id = 'epcChartTip';
+    node.className = CONSOLE
+      ? 'pointer-events-none fixed z-[90] hidden rounded-xl bg-ink-900 px-3 py-2 text-xs font-semibold ' +
+        'text-white shadow-lift ring-1 ring-white/10 transition-opacity duration-150 dark:bg-ink-800'
+      : 'pointer-events-none fixed z-[90] hidden rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs ' +
+        'font-medium shadow-lift dark:border-white/12 dark:bg-ink-900 dark:text-white';
+    document.body.appendChild(node);
+    return node;
+  }
+
+  function showTip(event, html) {
+    var tip = tooltip();
+    tip.innerHTML = html;
+    tip.classList.remove('hidden');
+    var rect = tip.getBoundingClientRect();
+    var left = Math.min(window.innerWidth - rect.width - 12, Math.max(12, event.clientX - rect.width / 2));
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(12, event.clientY - rect.height - 14) + 'px';
+  }
+
+  function hideTip() { tooltip().classList.add('hidden'); }
+
+  function tipMarkup(label, name, value) {
+    if (CONSOLE) {
+      return '<div class="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-white/55">' + label + '</div>' +
+             '<div class="text-white">' + (name ? name + ': ' : '') + '<b class="tabular-nums">' + format(value) + '</b></div>';
+    }
+    return '<div class="mb-0.5 text-ink-500 dark:text-ink-400">' + label + '</div><div>' +
+           (name || '') + ': <b>' + format(value) + '</b></div>';
+  }
+
+  /* --------------------------------------------------------- smooth curves */
+  /* A monotone-ish cubic through the points. Control points are pulled back to
+     a third of the gap so the curve never overshoots into a false peak — the
+     line looks designed without lying about the data. */
+  function smoothPath(points) {
+    if (points.length < 3) {
+      return points.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+    }
+    var d = 'M' + points[0][0].toFixed(1) + ' ' + points[0][1].toFixed(1);
+    for (var i = 0; i < points.length - 1; i++) {
+      var p0 = points[i === 0 ? 0 : i - 1], p1 = points[i], p2 = points[i + 1];
+      var p3 = points[i + 2 < points.length ? i + 2 : i + 1];
+      var c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      var c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      d += ' C' + c1x.toFixed(1) + ' ' + c1y.toFixed(1) + ',' + c2x.toFixed(1) + ' ' + c2y.toFixed(1) +
+           ',' + p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return d;
+  }
+
+  /* ------------------------------------------------------------------ */
+  function drawAreaOrBars(host, kind) {
+    // Either data-config='{"labels":[],"series":[]}' or separate attributes.
+    var config = host.dataset.config ? JSON.parse(host.dataset.config) : null;
+    var labels = config ? (config.labels || []) : JSON.parse(host.dataset.labels || '[]');
+    var series = config ? (config.series || []) : JSON.parse(host.dataset.series || '[]');
+    if (!labels.length || !series.length) return;
+
+    var t = theme();
+    var colors = palette();
+    var width = Math.max(320, host.clientWidth || 640);
+    var height = Number(host.dataset.height || 240);
+    var padLeft = 44, padRight = 12, padTop = 14, padBottom = 28;
+    var plotW = width - padLeft - padRight;
+    var plotH = height - padTop - padBottom;
+
+    var peak = 0;
+    series.forEach(function (s) { (s.values || []).forEach(function (v) { peak = Math.max(peak, Number(v) || 0); }); });
+    var max = niceMax(peak);
+
+    var svg = el('svg', {
+      viewBox: '0 0 ' + width + ' ' + height, width: '100%', height: height,
+      class: 'overflow-visible', role: 'img', 'aria-label': host.dataset.title || 'Chart'
+    });
+
+    // Horizontal grid + y labels
+    for (var i = 0; i <= 4; i++) {
+      var y = padTop + (plotH / 4) * i;
+      svg.appendChild(el('line', {
+        x1: padLeft, y1: y, x2: width - padRight, y2: y, stroke: t.grid, 'stroke-width': 1,
+        'stroke-dasharray': CONSOLE && i !== 4 ? '3 5' : null
+      }));
+      var text = el('text', {
+        x: padLeft - 10, y: y + 4, 'text-anchor': 'end', fill: t.axis,
+        'font-size': 10, 'font-weight': CONSOLE ? 600 : 400
+      });
+      text.textContent = format(max - (max / 4) * i);
+      svg.appendChild(text);
+    }
+
+    var count = labels.length;
+    var xAt = function (index) { return count === 1 ? padLeft + plotW / 2 : padLeft + (plotW / (count - 1)) * index; };
+    var yAt = function (value) { return padTop + plotH - ((Number(value) || 0) / max) * plotH; };
+
+    if (kind === 'bars') {
+      var groupW = plotW / count;
+      var barW = Math.max(4, Math.min(CONSOLE ? 34 : 28, (groupW * (CONSOLE ? .58 : .62)) / series.length));
+      // In console mode a single-series chart reads as a distribution: every
+      // bar is quiet except the tallest, which is picked out in brand blue.
+      var single = CONSOLE && series.length === 1;
+      var peakIndex = -1;
+      if (single) {
+        var best = -Infinity;
+        (series[0].values || []).forEach(function (v, i) { if ((Number(v) || 0) > best) { best = Number(v) || 0; peakIndex = i; } });
+      }
+
+      series.forEach(function (s, si) {
+        (s.values || []).forEach(function (value, index) {
+          var h = Math.max(CONSOLE ? 3 : 1, ((Number(value) || 0) / max) * plotH);
+          var x = padLeft + groupW * index + groupW / 2 - (barW * series.length) / 2 + si * barW;
+          var accent = s.color || colors[si % colors.length];
+          var fill = single ? (index === peakIndex ? colors[1] : t.idle) : accent;
+          var rect = el('rect', {
+            x: x, y: padTop + plotH - h, width: Math.max(3, barW - (CONSOLE ? 4 : 1.5)), height: h,
+            rx: CONSOLE ? Math.min(barW / 2, 7) : Math.min(4, barW / 2),
+            fill: fill, 'fill-opacity': single ? 1 : .92,
+            class: 'transition-[fill,fill-opacity] duration-200'
+          });
+          if (CONSOLE) {
+            // Bars grow from the baseline once, on arrival.
+            rect.style.transformOrigin = (x + barW / 2) + 'px ' + (padTop + plotH) + 'px';
+            rect.style.transform = 'scaleY(0)';
+            rect.style.transition = 'transform .7s cubic-bezier(.2,.7,.2,1) ' + Math.min(index * 22, 340) + 'ms, fill .2s ease';
+            requestAnimationFrame(function () { rect.style.transform = 'scaleY(1)'; });
+          }
+          rect.addEventListener('mouseenter', function (e) {
+            if (single) rect.setAttribute('fill', colors[1]);
+            else rect.setAttribute('fill-opacity', 1);
+            showTip(e, tipMarkup(labels[index], s.name || '', value));
+          });
+          rect.addEventListener('mouseleave', function () {
+            if (single) rect.setAttribute('fill', fill);
+            else rect.setAttribute('fill-opacity', .92);
+            hideTip();
+          });
+          svg.appendChild(rect);
+        });
+      });
+    } else {
+      series.forEach(function (s, si) {
+        var color = s.color || colors[si % colors.length];
+        var values = s.values || [];
+        var points = values.map(function (v, i) { return [xAt(i), yAt(v)]; });
+        var line = CONSOLE
+          ? smoothPath(points)
+          : points.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+        var gradientId = 'g' + Math.random().toString(36).slice(2, 8);
+
+        var defs = el('defs', {});
+        var gradient = el('linearGradient', { id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1 });
+        gradient.appendChild(el('stop', { offset: '0%', 'stop-color': color, 'stop-opacity': CONSOLE ? .34 : .28 }));
+        gradient.appendChild(el('stop', { offset: '100%', 'stop-color': color, 'stop-opacity': 0 }));
+        defs.appendChild(gradient);
+        svg.appendChild(defs);
+
+        svg.appendChild(el('path', {
+          d: line + ' L' + xAt(values.length - 1).toFixed(1) + ' ' + (padTop + plotH) + ' L' + xAt(0).toFixed(1) + ' ' + (padTop + plotH) + ' Z',
+          fill: 'url(#' + gradientId + ')'
+        }));
+
+        var stroke = el('path', {
+          d: line, fill: 'none', stroke: color, 'stroke-width': CONSOLE ? 2.6 : 2.4,
+          'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+        });
+        var length = 0;
+        svg.appendChild(stroke);
+        try { length = stroke.getTotalLength(); } catch (e) {}
+        if (length) {
+          stroke.style.strokeDasharray = length;
+          stroke.style.strokeDashoffset = length;
+          stroke.style.transition = 'stroke-dashoffset 1.9s cubic-bezier(.2,.7,.2,1)';
+          requestAnimationFrame(function () { stroke.style.strokeDashoffset = '0'; });
+        }
+
+        values.forEach(function (value, index) {
+          var dot = el('circle', {
+            cx: xAt(index), cy: yAt(value), r: 3.5, fill: t.surface, stroke: color, 'stroke-width': 2,
+            opacity: count > 20 ? 0 : 1, class: 'transition-opacity'
+          });
+          dot.addEventListener('mouseenter', function (e) {
+            dot.setAttribute('r', CONSOLE ? 5.5 : 5); dot.setAttribute('opacity', 1);
+            showTip(e, tipMarkup(labels[index], s.name || '', value));
+          });
+          dot.addEventListener('mouseleave', function () {
+            dot.setAttribute('r', 3.5); if (count > 20) dot.setAttribute('opacity', 0); hideTip();
+          });
+          svg.appendChild(dot);
+        });
+      });
+    }
+
+    // X labels — thinned so they never collide
+    var every = Math.ceil(count / (width < 480 ? 4 : 8));
+    labels.forEach(function (label, index) {
+      if (index % every !== 0 && index !== count - 1) return;
+      var text = el('text', {
+        x: xAt(index), y: height - 8, 'text-anchor': 'middle', fill: t.axis,
+        'font-size': 10, 'font-weight': CONSOLE ? 600 : 400
+      });
+      text.textContent = label;
+      svg.appendChild(text);
+    });
+
+    host.innerHTML = '';
+    host.appendChild(svg);
+  }
+
+  /* ------------------------------------------------------------------ */
+  function drawDonut(host) {
+    var config = host.dataset.config ? JSON.parse(host.dataset.config) : null;
+    var series = config ? (config.series || config) : JSON.parse(host.dataset.series || '[]');
+    if (!series.length) return;
+    var total = series.reduce(function (sum, item) { return sum + (Number(item.value) || 0); }, 0);
+    if (total <= 0) { host.innerHTML = ''; return; }
+
+    var t = theme();
+    var colors = palette();
+    // `data-height` was read for every other chart type and silently ignored
+    // here, so a donut asked to be smaller simply was not. The radius and the
+    // ring's thickness scale with it, keeping the proportions the 190px
+    // default was drawn at.
+    var size = Number(host.dataset.height) || 190;
+    var radius = size * 0.389, thickness = size * (CONSOLE ? 0.0947 : 0.1158), centre = size / 2;
+    var svg = el('svg', { viewBox: '0 0 ' + size + ' ' + size, width: size, height: size, class: 'mx-auto' });
+    var angle = -Math.PI / 2;
+    // A hair of space between segments reads as separate quantities.
+    var gap = CONSOLE ? 0.035 : 0;
+
+    series.forEach(function (item, index) {
+      var fraction = (Number(item.value) || 0) / total;
+      if (fraction <= 0) return;
+      var sweep = fraction * Math.PI * 2;
+      var end = angle + sweep;
+      var a1 = angle + (sweep > gap * 2 ? gap : 0);
+      var a2 = end - (sweep > gap * 2 ? gap : 0);
+      var large = (a2 - a1) > Math.PI ? 1 : 0;
+      var x1 = centre + radius * Math.cos(a1), y1 = centre + radius * Math.sin(a1);
+      var x2 = centre + radius * Math.cos(a2), y2 = centre + radius * Math.sin(a2);
+
+      var arc = el('path', {
+        d: 'M' + x1 + ' ' + y1 + ' A' + radius + ' ' + radius + ' 0 ' + large + ' 1 ' + x2 + ' ' + y2,
+        fill: 'none', stroke: item.color || colors[index % colors.length],
+        'stroke-width': thickness, 'stroke-linecap': CONSOLE ? 'round' : 'butt',
+        class: 'transition-all duration-200 hover:opacity-80'
+      });
+      arc.addEventListener('mouseenter', function (e) {
+        arc.setAttribute('stroke-width', thickness + (CONSOLE ? 4 : 0));
+        showTip(e, CONSOLE
+          ? '<div class="text-white">' + item.label + ': <b class="tabular-nums">' + format(item.value) + '</b>' +
+            ' <span class="text-white/55">' + Math.round(fraction * 100) + '%</span></div>'
+          : '<div>' + item.label + ': <b>' + format(item.value) + '</b> (' + Math.round(fraction * 100) + '%)</div>');
+      });
+      arc.addEventListener('mouseleave', function () { arc.setAttribute('stroke-width', thickness); hideTip(); });
+      svg.appendChild(arc);
+      angle = end;
+    });
+
+    var value = el('text', {
+      x: centre, y: centre - 2, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': CONSOLE ? 800 : 700,
+      fill: CONSOLE ? t.ink : (t.dark ? '#fff' : '#171D33')
+    });
+    value.textContent = format(total);
+    svg.appendChild(value);
+
+    var caption = el('text', {
+      x: centre, y: centre + 17, 'text-anchor': 'middle', 'font-size': 10.5, fill: t.axis,
+      'font-weight': CONSOLE ? 600 : 400
+    });
+    caption.textContent = host.dataset.caption || 'Total';
+    svg.appendChild(caption);
+
+    host.innerHTML = '';
+    host.appendChild(svg);
+  }
+
+  function draw(host) {
+    try {
+      var kind = host.dataset.chart;
+      if (kind === 'donut') drawDonut(host);
+      else drawAreaOrBars(host, kind);
+    } catch (e) {
+      host.innerHTML = '<p class="py-8 text-center text-sm text-ink-500">Chart unavailable</p>';
+    }
+  }
+
+  function redrawAll() { document.querySelectorAll('[data-chart]').forEach(draw); }
+
+  window.EPCCharts = { redrawAll: redrawAll, draw: draw, palette: palette() };
+
+  document.addEventListener('DOMContentLoaded', redrawAll);
+  if (document.readyState !== 'loading') redrawAll();
+
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(redrawAll, 180);
+  });
+})();
+</script>

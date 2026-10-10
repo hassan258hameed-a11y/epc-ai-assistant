@@ -1,0 +1,282 @@
+{% extends "auth/_auth_base.html" %}
+{% load ai_extras %}
+
+{% block title %}{% if is_login %}Confirm it's you{% else %}Verify your account{% endif %} · {{ BRAND.full_name }}{% endblock %}
+{% block panel_title %}One code, and you're in.{% endblock %}
+{% block panel_body %}
+  {% if required_for_everyone %}
+    Every sign-in needs a one-time code, so a stolen password alone is never enough to open your account.
+  {% elif is_login %}
+    You asked for a code at every sign-in, so a stolen password alone is never enough to open your account.
+  {% else %}
+    Verification keeps your tokens and your conversation history safe. Use e-mail or Telegram — either one works.
+  {% endif %}
+{% endblock %}
+
+{% block form_content %}
+<header class="text-center">
+  <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-500/20 bg-gradient-to-br from-brand-500/12 to-accent-500/12 text-brand-600 dark:text-brand-300">
+    <svg class="h-6 w-6" aria-hidden="true"><use href="#i-shield"/></svg>
+  </div>
+  <h1 class="mt-5 text-2xl font-bold tracking-tight text-ink-900 dark:text-white">{% if is_login %}Enter your sign-in code{% else %}Enter your code{% endif %}</h1>
+  <p class="mt-2 text-sm leading-relaxed text-ink-600 dark:text-ink-400">
+    {% if sent_via == "both" %}
+      We sent the same {% if is_login %}sign-in{% else %}verification{% endif %} code to your Telegram chat with our bot
+      and to <span class="font-semibold text-ink-700 dark:text-ink-200">{{ masked_email }}</span>. Use whichever arrives first.
+    {% elif sent_via == "telegram" %}
+      We sent a {% if is_login %}sign-in{% else %}verification{% endif %} code to your Telegram chat with our bot
+      {% if sent_to and sent_to != "Telegram" %}(<span class="font-semibold text-ink-700 dark:text-ink-200">{{ sent_to }}</span>){% endif %}.
+    {% else %}
+      We sent a {% if is_login %}sign-in{% else %}verification{% endif %} code to
+      <span class="font-semibold text-ink-700 dark:text-ink-200">{{ sent_to|default:masked_email|default:"your account" }}</span>.
+    {% endif %}
+    It expires in a few minutes.
+  </p>
+  {% if telegram_blocked %}
+    <p class="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+      You blocked our Telegram bot, so codes can't reach you there.
+      {% if telegram_bot_url %}<a href="{{ telegram_bot_url }}" target="_blank" rel="noopener" class="font-semibold underline">Open the bot</a>, press Start, then resend.{% endif %}
+    </p>
+  {% endif %}
+</header>
+
+<form method="post" class="mt-8" data-loading-form novalidate id="otpForm">
+  {% csrf_token %}
+  <input type="hidden" name="code" id="otpValue">
+
+  <div class="flex justify-center gap-2 sm:gap-2.5" id="otpBoxes">
+    {% for i in "123456" %}
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit {{ forloop.counter }}"
+             class="otp-box h-14 w-11 rounded-xl border border-ink-200 bg-white text-center text-xl font-bold text-ink-900
+                    shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-500/12
+                    dark:border-white/12 dark:bg-ink-950/60 dark:text-white sm:w-12"
+             {% if forloop.first %}autofocus{% endif %}>
+    {% endfor %}
+  </div>
+
+  {% for error in form.code.errors %}
+    <p class="field-error mt-3 justify-center">
+      <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true"><use href="#i-alert"/></svg>{{ error }}
+    </p>
+  {% endfor %}
+
+  <button type="submit" class="btn-primary mt-6 w-full py-3" data-submit data-loading-label="Verifying…" id="otpSubmit">
+    Verify and continue
+  </button>
+</form>
+
+{% if mail_is_console_only %}
+  {# Development only — never rendered once SMTP is configured. #}
+  <div class="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/8 p-4">
+    <div class="flex items-start gap-3">
+      <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true">
+        <use href="#i-alert"/>
+      </svg>
+      <div class="min-w-0">
+        <h2 class="text-sm font-semibold text-ink-900 dark:text-white">No e-mail was actually sent</h2>
+        <p class="mt-1 text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+          SMTP is not configured, so the code was printed to the terminal running
+          <code class="rounded bg-ink-900/8 px-1 py-0.5 font-mono text-[11px] dark:bg-white/10">runserver</code>
+          instead. Look for the line beginning <strong>“Verification code for …”</strong>.
+        </p>
+        <p class="mt-2 text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+          To send real e-mail, set <code class="font-mono text-[11px]">EMAIL_HOST_USER</code> and
+          <code class="font-mono text-[11px]">EMAIL_HOST_PASSWORD</code> in <code class="font-mono text-[11px]">.env</code>.
+        </p>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% comment %}
+  Resend options. The channel the last code used comes first, as "resend";
+  the other one, when the account has it, is offered as "instead".
+{% endcomment %}
+<div class="mt-6 flex flex-col gap-2.5">
+  {% if sends_everywhere %}
+    {# Codes go to Telegram and e-mail together, so there is nothing to choose. #}
+    <form method="post" action="{% url 'auth:otp_resend' %}">
+      {% csrf_token %}
+      <input type="hidden" name="channel" value="email">
+      <button type="submit" class="btn-outline w-full" id="resendEmail" data-label="Send a new code">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-refresh"/></svg>
+        <span id="resendEmailLabel">Send a new code</span>
+      </button>
+    </form>
+  {% else %}
+  {% if telegram_available %}
+    <form method="post" action="{% url 'auth:otp_resend' %}" {% if sent_via != "telegram" %}class="order-2"{% endif %}>
+      {% csrf_token %}
+      <input type="hidden" name="channel" value="telegram">
+      <button type="submit" class="btn-outline w-full" id="resendTelegram">
+        <svg class="h-4 w-4 text-[#229ED9]" aria-hidden="true"><use href="#i-telegram"/></svg>
+        {% if sent_via == "telegram" %}Send a new code to Telegram{% else %}Send the code to Telegram instead{% endif %}
+      </button>
+    </form>
+  {% endif %}
+
+  {% if has_email %}
+    <form method="post" action="{% url 'auth:otp_resend' %}" {% if sent_via == "telegram" and telegram_available %}class="order-2"{% endif %}>
+      {% csrf_token %}
+      <input type="hidden" name="channel" value="email">
+      <button type="submit" class="btn-outline w-full" id="resendEmail"
+              data-label="{% if sent_via == 'telegram' %}Send it by e-mail instead{% else %}Send a new code by e-mail{% endif %}">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-mail"/></svg>
+        <span id="resendEmailLabel">{% if sent_via == "telegram" %}Send it by e-mail instead{% else %}Send a new code by e-mail{% endif %}</span>
+      </button>
+    </form>
+  {% endif %}
+  {% endif %}
+</div>
+
+{# ---------- Telegram linking explainer (new sign-ups only) ---------- #}
+{% if telegram_link_url %}
+  <div class="mt-7 rounded-2xl border border-[#229ED9]/25 bg-[#229ED9]/6 p-4">
+    <div class="flex items-start gap-3">
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#229ED9]/15 text-[#229ED9]">
+        <svg class="h-5 w-5" aria-hidden="true"><use href="#i-telegram"/></svg>
+      </span>
+      <div class="min-w-0 flex-1">
+        <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Prefer Telegram?</h2>
+        <p class="mt-1 text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+          Telegram bots cannot message you first — you have to start the chat. It only takes a moment:
+        </p>
+        {% comment %}
+          Each step's text sits in one span: bare text and <strong> side by side
+          in a flex row would each become a column of their own.
+        {% endcomment %}
+        <ol class="mt-3 space-y-1.5">
+          <li class="flex gap-2 text-xs leading-relaxed text-ink-600 dark:text-ink-300">
+            <span class="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#229ED9]/20 text-[9px] font-bold text-[#229ED9]">1</span>
+            <span>Tap <strong>Start our Telegram bot</strong> below, or scan the code with your phone.</span>
+          </li>
+          <li class="flex gap-2 text-xs leading-relaxed text-ink-600 dark:text-ink-300">
+            <span class="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#229ED9]/20 text-[9px] font-bold text-[#229ED9]">2</span>
+            <span>Press <strong>Start</strong> in Telegram. Your account links automatically.</span>
+          </li>
+          <li class="flex gap-2 text-xs leading-relaxed text-ink-600 dark:text-ink-300">
+            <span class="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#229ED9]/20 text-[9px] font-bold text-[#229ED9]">3</span>
+            <span>Come back here, press <strong>I've pressed Start</strong>, then send the code to Telegram.</span>
+          </li>
+        </ol>
+        {% if telegram_link_qr %}
+          <div class="mt-3.5 flex items-center gap-3">
+            <div class="h-24 w-24 shrink-0 rounded-xl bg-white p-1.5 text-ink-900 [&>svg]:h-full [&>svg]:w-full"
+                 role="img" aria-label="QR code that opens our Telegram bot">{{ telegram_link_qr }}</div>
+            <p class="text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+              Scan with your phone's camera. Handy if Telegram isn't on this device, or this network won't open Telegram links.
+            </p>
+          </div>
+        {% endif %}
+        <a href="{{ telegram_link_url }}" target="_blank" rel="noopener"
+           class="btn mt-3.5 w-full bg-[#229ED9] py-2.5 text-white hover:bg-[#1e8dc2]">
+          <svg class="h-4 w-4" aria-hidden="true"><use href="#i-telegram"/></svg>
+          Start our Telegram bot
+        </a>
+        {% if telegram_app_url %}
+          {# Straight into an installed Telegram app, skipping the t.me web page. #}
+          <a href="{{ telegram_app_url }}" class="mt-2 block text-center text-xs font-semibold text-[#229ED9] hover:underline">
+            Open in the Telegram app instead
+          </a>
+        {% endif %}
+        {# The link happens in Telegram, so this page can't know until it is reloaded. #}
+        <a href="{% url 'auth:otp' %}" class="btn-outline mt-2 w-full py-2.5" id="telegramLinkedCheck">
+          <svg class="h-4 w-4" aria-hidden="true"><use href="#i-refresh"/></svg>
+          I've pressed Start
+        </a>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<p class="mt-7 text-center text-xs text-ink-600 dark:text-ink-400">
+  Wrong account?
+  <a href="{% url 'auth:logout' %}" class="tap-inline font-semibold text-ink-800 transition hover:text-brand-600 dark:text-ink-200 dark:hover:text-brand-300">Start over</a>
+</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.otp-box'));
+    var hidden = document.getElementById('otpValue');
+    var form = document.getElementById('otpForm');
+    if (!boxes.length) return;
+
+    var sync = function () {
+      hidden.value = boxes.map(function (box) { return box.value; }).join('');
+    };
+
+    boxes.forEach(function (box, index) {
+      box.addEventListener('input', function () {
+        box.value = box.value.replace(/\D/g, '').slice(0, 1);
+        sync();
+        if (box.value && index < boxes.length - 1) boxes[index + 1].focus();
+        // Auto-submit the moment all six digits are present.
+        if (hidden.value.length === boxes.length) {
+          setTimeout(function () { form.requestSubmit ? form.requestSubmit() : form.submit(); }, 120);
+        }
+      });
+
+      box.addEventListener('keydown', function (event) {
+        if (event.key === 'Backspace' && !box.value && index > 0) {
+          boxes[index - 1].focus();
+          boxes[index - 1].value = '';
+          sync();
+          event.preventDefault();
+        }
+        if (event.key === 'ArrowLeft' && index > 0) boxes[index - 1].focus();
+        if (event.key === 'ArrowRight' && index < boxes.length - 1) boxes[index + 1].focus();
+      });
+
+      box.addEventListener('paste', function (event) {
+        event.preventDefault();
+        var digits = (event.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+        boxes.forEach(function (target, i) { target.value = digits[i] || ''; });
+        sync();
+        var next = Math.min(digits.length, boxes.length - 1);
+        boxes[next].focus();
+        if (hidden.value.length === boxes.length) {
+          setTimeout(function () { form.requestSubmit ? form.requestSubmit() : form.submit(); }, 120);
+        }
+      });
+    });
+
+    form.addEventListener('submit', function (event) {
+      sync();
+      if (hidden.value.length < boxes.length) {
+        event.preventDefault();
+        boxes[hidden.value.length].focus();
+      }
+    });
+  })();
+
+  // Cooldown so the resend button cannot be hammered.
+  (function () {
+    var button = document.getElementById('resendEmail');
+    var label = document.getElementById('resendEmailLabel');
+    if (!button) return;
+    var KEY = 'epcai-otp-sent-at';
+    var COOLDOWN = 45;
+
+    var tick = function () {
+      var sentAt = Number(localStorage.getItem(KEY) || 0);
+      var elapsed = Math.floor((Date.now() - sentAt) / 1000);
+      if (!sentAt || elapsed >= COOLDOWN) {
+        button.disabled = false;
+        label.textContent = button.getAttribute('data-label') || 'Send a new code by e-mail';
+        return;
+      }
+      button.disabled = true;
+      label.textContent = 'Resend available in ' + (COOLDOWN - elapsed) + 's';
+      setTimeout(tick, 1000);
+    };
+
+    button.closest('form').addEventListener('submit', function () {
+      try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
+    });
+
+    try { tick(); } catch (e) {}
+  })();
+</script>
+{% endblock %}

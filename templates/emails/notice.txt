@@ -1,0 +1,16 @@
+{% autoescape off %}{{ heading }}
+
+Hello {{ user.display_name }}, {{ intro }}
+{% if body %}
+{{ body }}
+{% endif %}{% if button_url %}
+{{ button_label }}:
+{{ button_url }}
+
+You will be asked to sign in first if you are not already.
+{% endif %}
+--
+{{ brand.full_name }}
+Sent to {{ recipient }} {{ reason }}
+You can turn e-mail off in your notification settings.
+Need help? Write to {{ brand.support_email }}{% endautoescape %}

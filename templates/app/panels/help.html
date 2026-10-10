@@ -1,0 +1,287 @@
+{% load ai_extras %}
+{% comment %}
+  Help — the Student App design's support desk.
+
+  Ordered by how quickly each route gets an answer: reach a person first
+  (WhatsApp, by tap or by scan), then the questions we are asked most — with
+  a search over them — then a written request for anything the rest could not
+  settle. Every contact route here is whatever the administrator configured;
+  the ones that are not set simply do not appear.
+{% endcomment %}
+<div class="panel" data-panel-name="help">
+
+  <section class="sa-help-hero">
+    <span class="sheen" aria-hidden="true"></span>
+    <span class="orb" aria-hidden="true"></span>
+    <div class="sa-help-hero-in">
+      <span class="sa-help-badge">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.4 9.4 6.6 13.6 8 9.4 9.4 8 13.6 6.6 9.4 2.4 8 6.6 6.6z"/></svg>
+        SUPPORT
+      </span>
+      <h2>Need <span class="serif">help?</span></h2>
+      <p>
+        {% if whatsapp.available %}Message us on WhatsApp for the quickest answer, look
+        through the common questions below, or send us a note and we will reply by email.
+        {% else %}Look through the common questions below, or send us a note and we will
+        reply to the email address on your account.{% endif %}
+      </p>
+    </div>
+  </section>
+
+  {% include "app/panels/_messages.html" %}
+
+  {% if whatsapp.available %}
+    <div class="sa-help-row">
+      <div class="sa-wa">
+        <div class="sa-wa-head">
+          <span class="sa-wa-mark"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 16.6l1.1-3.4A7 7 0 1 1 7 15.6zM7.2 7.6c.4 1.6 1.5 3.4 3.6 4.4l1-1.2 2 .8-.3 1.6c-2.4.5-5.6-1.8-6.8-4.6z"/></svg></span>
+          <div style="min-width:0">
+            <b>Chat on WhatsApp</b>
+            <small>{% if support_hours %}{{ support_hours }}{% else %}We usually reply within a few hours.{% endif %}</small>
+          </div>
+        </div>
+        <div class="sa-wa-num">{{ whatsapp.display }}</div>
+        {% comment %}
+          rel="noopener" because target=_blank otherwise hands the opened tab
+          a handle back to this one.
+        {% endcomment %}
+        <a class="sa-wa-cta" href="{{ whatsapp.url }}" target="_blank" rel="noopener noreferrer">
+          <span class="sheen" aria-hidden="true"></span>
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 16.6l1.1-3.4A7 7 0 1 1 7 15.6zM7.2 7.6c.4 1.6 1.5 3.4 3.6 4.4l1-1.2 2 .8-.3 1.6c-2.4.5-5.6-1.8-6.8-4.6z"/></svg>
+          Chat on WhatsApp
+        </a>
+        <p>Opens WhatsApp with a message ready to send. Tell us your registered email and we will find your account faster.</p>
+      </div>
+
+      <div class="sa-qr">
+        <div class="sa-qr-frame">
+          <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
+          {% comment %}
+            Drawn on the server as inline SVG: no image file, no third-party
+            service, and nothing that tells anyone else who opened this page.
+          {% endcomment %}
+          {% if whatsapp.qr %}{{ whatsapp.qr }}{% else %}<span>{{ whatsapp.display }}</span>{% endif %}
+        </div>
+        <b>{% if whatsapp.qr %}Scan to contact us on WhatsApp{% else %}{{ whatsapp.display }}{% endif %}</b>
+        <small>{% if whatsapp.qr %}Point your phone camera at the code.{% else %}Save this number to message us on WhatsApp.{% endif %}</small>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="sa-help-row">
+    {% if support_email %}
+      <a class="sa-contact" href="mailto:{{ support_email }}" style="--c-bg:var(--accent-soft);--c-fg:var(--accent);animation-delay:.06s">
+        <i><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 4.4h10.8v7.2H2.6zM2.6 4.4 8 8.8l5.4-4.4"/></svg></i>
+        <span class="sa-contact-main"><b>Email us</b><small>{{ support_email }}</small></span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;color:var(--ink-3)" aria-hidden="true"><path d="M6.4 3.6 10.8 8l-4.4 4.4"/></svg>
+      </a>
+    {% endif %}
+    {% if support_telegram %}
+      <a class="sa-contact" href="https://t.me/{{ support_telegram|cut:'@' }}" target="_blank" rel="noopener noreferrer"
+         style="--c-bg:var(--accent-soft);--c-fg:var(--accent);animation-delay:.12s">
+        <i><svg aria-hidden="true"><use href="#i-telegram"/></svg></i>
+        <span class="sa-contact-main"><b>Telegram</b><small>{{ support_telegram }}</small></span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;color:var(--ink-3)" aria-hidden="true"><path d="M6.4 3.6 10.8 8l-4.4 4.4"/></svg>
+      </a>
+    {% endif %}
+    <a class="sa-contact" href="{% url 'student:tickets' %}" style="--c-bg:var(--surface-3);--c-fg:var(--accent-2);animation-delay:.18s">
+      <i><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 2.6h7.2v10.8H4.4zM6.6 5.8h2.8M6.6 8.2h2.8"/></svg></i>
+      <span class="sa-contact-main">
+        <b>Your requests</b>
+        <small>{% if open_tickets %}{{ open_tickets }} open{% else %}Track anything you have sent us{% endif %}</small>
+      </span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;color:var(--ink-3)" aria-hidden="true"><path d="M6.4 3.6 10.8 8l-4.4 4.4"/></svg>
+    </a>
+  </div>
+
+  {% comment %}
+    Telegram: the bot (connected from Settings, so that link goes there), the
+    channel and the community group. Each tile appears only when it is set up.
+  {% endcomment %}
+  {% if telegram_bot_url or telegram_channel_url or telegram_group_url %}
+    <section class="panel-section">
+      <div class="sa-rule" style="margin-top:0"><b>Telegram</b><i aria-hidden="true"></i></div>
+      <div class="sa-help-row">
+        {% if telegram_bot_url %}
+          <a class="sa-contact" href="{% url 'student:settings' %}#telegram" data-panel-link="settings"
+             style="--c-bg:var(--accent-soft);--c-fg:var(--accent);animation-delay:.06s">
+            <i><svg aria-hidden="true"><use href="#i-telegram"/></svg></i>
+            <span class="sa-contact-main"><b>Alerts from our bot</b><small>Connect it in Settings</small></span>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;color:var(--ink-3)" aria-hidden="true"><path d="M6.4 3.6 10.8 8l-4.4 4.4"/></svg>
+          </a>
+        {% endif %}
+        {% if telegram_channel_url %}
+          <a class="sa-contact" href="{{ telegram_channel_url }}" target="_blank" rel="noopener noreferrer"
+             style="--c-bg:var(--accent-soft);--c-fg:var(--accent);animation-delay:.12s">
+            <i><svg aria-hidden="true"><use href="#i-bell"/></svg></i>
+            <span class="sa-contact-main"><b>Our channel</b><small>{{ telegram_channel_title|default:"News, tips and announcements" }}</small></span>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;color:var(--ink-3)" aria-hidden="true"><path d="M6.4 3.6 10.8 8l-4.4 4.4"/></svg>
+          </a>
+        {% endif %}
+        {% if telegram_group_url %}
+          <a class="sa-contact" href="{{ telegram_group_url }}" target="_blank" rel="noopener noreferrer"
+             style="--c-bg:var(--surface-3);--c-fg:var(--accent-2);animation-delay:.18s">
+            <i><svg aria-hidden="true"><use href="#i-users"/></svg></i>
+            <span class="sa-contact-main"><b>Community group</b><small>{{ telegram_group_title|default:"Ask other students and help each other" }}</small></span>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;color:var(--ink-3)" aria-hidden="true"><path d="M6.4 3.6 10.8 8l-4.4 4.4"/></svg>
+          </a>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel-section">
+    <div class="sa-rule" style="margin-top:0">
+      <b>Common questions</b>
+      <i aria-hidden="true"></i>
+      <div class="sa-faq-search">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 13.4 13.4"/></svg>
+        <input type="search" data-faq-search placeholder="Search the answers" aria-label="Search the answers">
+      </div>
+    </div>
+
+    <div class="sa-groups">
+      {% for section in faq %}
+        <div class="sa-group">
+          <div class="sa-group-head" style="--g-bg:{{ section.bg }};--g-fg:{{ section.fg }}">
+            <i><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ section.glyph }}"/></svg></i>
+            <b>{{ section.group }}</b>
+            <small data-faq-count>{{ section.count }} answer{{ section.count|pluralize }}</small>
+          </div>
+          <div class="sa-qs">
+            {% for item in section.items %}
+              <div class="sa-q">
+                <button type="button" class="faq-q" aria-expanded="false">
+                  <span>{{ item.q }}</span>
+                  <span class="chev"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.2 8 10.2l4-4"/></svg></span>
+                </button>
+                <div class="sa-q-body" hidden><p>{{ item.a }}</p></div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+      <div class="sa-no-answer" data-faq-none hidden>
+        <b>No answer matches &ldquo;<span data-faq-term></span>&rdquo;</b>
+        <span>Try a shorter phrase, or send us the question below.</span>
+      </div>
+    </div>
+  </section>
+
+  {% if tickets %}
+    <section class="panel-section">
+      <div class="sa-rule" style="margin-top:0">
+        <b>Your requests</b>
+        {% if open_tickets %}<span class="sa-count">{{ open_tickets }} open</span>{% endif %}
+        <i aria-hidden="true"></i>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="rows">
+          {% for ticket in tickets %}
+            <a class="row" href="{% url 'student:ticket_detail' ticket.reference %}">
+              <span class="row-main">
+                <span class="row-title">{{ ticket.subject }}</span>
+                <span class="row-sub">{{ ticket.reference }} · {{ ticket.created_at|timeago }}</span>
+              </span>
+              <span class="badge {% if ticket.status == 'resolved' or ticket.status == 'closed' %}is-ok{% elif ticket.status == 'waiting_user' %}is-warn{% endif %}">
+                {{ ticket.get_status_display }}
+              </span>
+            </a>
+          {% endfor %}
+        </div>
+        <div class="card-foot">
+          <a href="{% url 'student:tickets' %}" class="btn btn-sm">All requests</a>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel-section" id="ask">
+    <div class="sa-ask">
+      <h3>Ask us anything</h3>
+      <p>
+        Stuck on something, or think something is wrong? Tell us what happened and we
+        will get back to you by email. There is no such thing as a question that is
+        too small.
+      </p>
+
+      <form method="post" enctype="multipart/form-data"
+            action="{% url 'student:submit_request' %}"
+            data-panel-form="help" data-request-form>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="sa-no-answer" style="text-align:left;margin-top:16px;border-color:var(--danger-line);background:var(--danger-soft)">
+            {% for error in form.non_field_errors %}<b style="color:var(--danger)">{{ error }}</b>{% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="sa-fields">
+          {% for field in form %}
+            {% if field.name == 'full_name' or field.name == 'email' or field.name == 'phone' %}
+              <div class="sa-field {% if field.value %}is-set{% endif %}">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <div class="sa-field">
+          <label>What is this about?</label>
+          {% comment %}
+            The chips write the same field the select does, so the form posts
+            one category either way — and the select stays for the categories
+            the chips do not cover, and for anyone without the script.
+          {% endcomment %}
+          <div class="sa-topics">
+            {% for topic in topics %}
+              <button type="button" class="sa-topic{% if form.category.value == topic.value or not form.category.value and forloop.first %} is-on{% endif %}"
+                      data-topic="{{ topic.value }}" aria-pressed="{% if form.category.value == topic.value %}true{% else %}false{% endif %}"
+                      style="--tp:{{ topic.to }};--tp2:{{ topic.from }}">
+                <i aria-hidden="true"></i>{{ topic.label }}
+              </button>
+            {% endfor %}
+          </div>
+          <div style="margin-top:10px" data-category-fallback>{{ form.category }}</div>
+          {% for error in form.category.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+        </div>
+
+        <div class="sa-field {% if form.subject.value %}is-set{% endif %}">
+          <div class="sa-field-top">
+            <label for="{{ form.subject.id_for_label }}">{{ form.subject.label }}</label>
+            <span class="sa-field-count" data-count></span>
+          </div>
+          {{ form.subject }}
+          {% for error in form.subject.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+        </div>
+
+        <div class="sa-field {% if form.description.value %}is-set{% endif %}">
+          <div class="sa-field-top">
+            <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+            <span class="sa-field-count" data-count></span>
+          </div>
+          {{ form.description }}
+          {% for error in form.description.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+        </div>
+
+        <div class="sa-send-row">
+          <label class="sa-attach" data-attach>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto" aria-hidden="true"><path d="M8 11.4V3.6M5.4 6.2 8 3.6l2.6 2.6M3 12.4h10"/></svg>
+            <span data-idle="Attach a screenshot (optional)">Attach a screenshot (optional)</span>
+            {{ form.attachment }}
+          </label>
+          <span style="flex:1 1 10px"></span>
+          <button type="submit" class="sa-send">
+            <span class="sheen" aria-hidden="true" hidden></span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 8.4 13.4 3.2 9.8 13.4 7.8 9.2z"/></svg>
+            <span data-send-label>Send request</span>
+          </button>
+        </div>
+        {% for error in form.attachment.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+        <p class="sa-ask-note">We reply to the email address on your account.</p>
+      </form>
+    </div>
+  </section>
+</div>

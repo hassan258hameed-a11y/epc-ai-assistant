@@ -1,0 +1,35 @@
+{% load ai_extras %}
+{% comment %}
+  The model selector. Rendered by the console shell on every page the registry
+  in AI/services/model_scope.py marks as model-specific, so it is one control
+  in one place rather than a different control on each page.
+
+  Switching model drops `page` as well: page 7 of the GPT-4o ledger is not
+  page 7 of the Claude one, and landing on an empty page after switching reads
+  as "this model has no data" when it only means "not this far in".
+{% endcomment %}
+<nav class="model-scope" aria-label="Filter by AI model">
+  <span class="model-scope-label" aria-hidden="true">Model</span>
+  <div class="model-scope-track" role="tablist">
+    {% for option in model_scope_options %}
+      <a role="tab"
+         aria-selected="{% if option.is_active %}true{% else %}false{% endif %}"
+         href="{% qs request model=option.key page='' %}"
+         class="model-scope-tab{% if option.is_active %} is-on{% endif %}"
+         {% if option.provider %}title="{{ option.label }} · {{ option.provider }}"{% endif %}>
+        {% if option.key == 'all' %}
+          <svg class="model-scope-icon" aria-hidden="true"><use href="#i-layers"/></svg>
+        {% elif option.model and not option.model.is_active %}
+          {% comment %}
+            A model that is switched off keeps its history, and an administrator
+            needs to see that history is what they are looking at.
+          {% endcomment %}
+          <span class="model-scope-dot is-off" aria-hidden="true"></span>
+        {% else %}
+          <span class="model-scope-dot" aria-hidden="true"></span>
+        {% endif %}
+        <span class="model-scope-name">{{ option.label }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</nav>

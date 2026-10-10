@@ -1,0 +1,489 @@
+{% extends "base/console.html" %}
+{% load ai_extras humanize %}
+
+{% comment %}
+  Telegram → Send a message. One form for the four places a message can go:
+  the channel, the community group, one student's private chat with the bot,
+  or every connected student's. Each staff role only sees the destinations
+  it may use (Content: channel and group; Student care: students). The
+  preview on the right is drawn from the same fields as they are typed.
+{% endcomment %}
+
+{% block title %}Send a message · Telegram · Console{% endblock %}
+{% block heading %}Send a message{% endblock %}
+{% block subheading %}
+  <p>Write it once, then send it to your Telegram channel, the community group, or students' private chats with the bot.</p>
+{% endblock %}
+
+{% block head %}
+<style>
+  .ts-tile { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 14px;
+    border: 1px solid rgba(100, 116, 139, .22); background: transparent; cursor: pointer; text-align: left;
+    transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+  .ts-tile:hover { border-color: rgba(37, 99, 235, .45); }
+  .ts-tile:focus-within { outline: 2px solid rgba(37, 99, 235, .55); outline-offset: 2px; }
+  .ts-tile.is-on { border-color: #2563EB; background: rgba(37, 99, 235, .06); box-shadow: 0 10px 24px -18px rgba(37, 99, 235, .9); }
+  .dark .ts-tile { border-color: rgba(255, 255, 255, .12); }
+  .dark .ts-tile.is-on { border-color: #60A5FA; background: rgba(96, 165, 250, .10); }
+  .ts-tile.is-off { cursor: not-allowed; opacity: .62; }
+  .ts-tile.is-off:hover { border-color: rgba(100, 116, 139, .22); }
+  .ts-tile input { position: absolute; opacity: 0; pointer-events: none; }
+  .ts-ico { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+    color: #1D4ED8; background: rgba(37, 99, 235, .1); transition: background-color .18s ease, color .18s ease; }
+  .ts-ico svg { width: 18px; height: 18px; }
+  .ts-tile.is-on .ts-ico { color: #fff; background: #2563EB; }
+  .dark .ts-ico { color: #93C5FD; background: rgba(96, 165, 250, .14); }
+  .dark .ts-tile.is-on .ts-ico { color: #0B1020; background: #60A5FA; }
+  .ts-check { position: absolute; right: 12px; top: 12px; width: 18px; height: 18px; border-radius: 99px; display: grid; place-items: center;
+    color: #fff; background: #2563EB; opacity: 0; transform: scale(.6); transition: opacity .18s ease, transform .18s ease; }
+  .ts-check svg { width: 11px; height: 11px; }
+  .ts-tile.is-on .ts-check { opacity: 1; transform: none; }
+  .dark .ts-check { color: #0B1020; background: #60A5FA; }
+
+  .ts-pick { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; }
+  .ts-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 11px; cursor: pointer; transition: background-color .15s ease; }
+  .ts-row:hover { background: rgba(100, 116, 139, .08); }
+  .ts-row.is-on { background: rgba(37, 99, 235, .08); }
+  .dark .ts-row.is-on { background: rgba(96, 165, 250, .12); }
+  .ts-row input { width: 16px; height: 16px; accent-color: #2563EB; flex: none; }
+  .ts-avatar { flex: none; width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; font-size: 11px; font-weight: 700;
+    color: #1D4ED8; background: rgba(37, 99, 235, .1); }
+  .dark .ts-avatar { color: #93C5FD; background: rgba(96, 165, 250, .14); }
+
+  /* The preview: a Telegram-like chat, light or dark with the console. */
+  .ts-phone { border-radius: 18px; overflow: hidden; border: 1px solid rgba(100, 116, 139, .2); background: #E7EBF0; }
+  .dark .ts-phone { background: #0E1621; border-color: rgba(255, 255, 255, .1); }
+  .ts-phone-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: #fff; border-bottom: 1px solid rgba(100, 116, 139, .15); }
+  .dark .ts-phone-head { background: #17212B; border-color: rgba(255, 255, 255, .06); }
+  .ts-phone-avatar { flex: none; width: 34px; height: 34px; border-radius: 99px; display: grid; place-items: center; color: #fff;
+    background: linear-gradient(135deg, #2AABEE, #229ED9); }
+  .ts-phone-avatar svg { width: 17px; height: 17px; }
+  .ts-phone-body { padding: 18px 14px 20px; min-height: 220px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .ts-bubble { align-self: flex-start; max-width: 92%; padding: 9px 12px 7px; border-radius: 14px 14px 14px 4px; background: #fff;
+    color: #0F172A; font-size: 14px; line-height: 1.5; box-shadow: 0 1px 1px rgba(15, 23, 42, .08); overflow-wrap: anywhere; }
+  .dark .ts-bubble { background: #182533; color: #E6EDF3; }
+  .ts-bubble-title { font-weight: 700; margin-bottom: 6px; }
+  .ts-bubble-text { white-space: pre-wrap; }
+  .ts-bubble-foot { margin-top: 8px; font-style: italic; font-size: 13px; color: #64748B; }
+  .dark .ts-bubble-foot { color: #8B98A5; }
+  .ts-bubble-time { text-align: right; font-size: 11px; color: #94A3B8; margin-top: 2px; }
+  .ts-btn { align-self: flex-start; max-width: 92%; margin-top: 4px; padding: 8px 12px; border-radius: 10px; text-align: center; font-size: 13px;
+    font-weight: 600; color: #fff; background: rgba(15, 23, 42, .38); overflow-wrap: anywhere; }
+  .dark .ts-btn { background: rgba(24, 37, 51, .9); color: #6AB3F3; }
+  .ts-empty { color: #94A3B8; font-style: italic; }
+
+  .ts-status { white-space: nowrap; }
+  .ts-reveal { animation: tsIn .28s ease both; }
+  @keyframes tsIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .ts-tile, .ts-ico, .ts-check, .ts-row { transition: none; }
+    .ts-reveal { animation: none; }
+  }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:telegram' %}" class="btn-ghost btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-settings"/></svg> Telegram setup
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+{% if not dest.configured %}
+  <section class="card p-6 sm:p-8 text-center reveal">
+    <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-300">
+      <svg class="h-6 w-6" aria-hidden="true"><use href="#i-telegram"/></svg>
+    </div>
+    <h2 class="section-title mt-4">The Telegram bot isn't set up yet</h2>
+    <p class="section-note mx-auto mt-1 max-w-md">Add the bot token on the Telegram page first. Then you can send messages from here.</p>
+    <a href="{% url 'console:telegram' %}#setup" class="btn-primary mt-5 inline-flex">Open Telegram setup</a>
+  </section>
+{% elif not allowed %}
+  <section class="card p-6 text-center reveal">
+    <h2 class="section-title">Nothing to send from your role</h2>
+    <p class="section-note mt-1">Posting to the channel or group needs the Content area; messaging students needs Student care. Ask an owner.</p>
+  </section>
+{% else %}
+
+<form method="post" id="tsForm" class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" novalidate>
+  {% csrf_token %}
+  <div class="min-w-0 space-y-5">
+
+    {# ---------- 1. Where ---------- #}
+    <section class="card p-5 sm:p-6 reveal">
+      <h2 class="section-title">1. Where should it go?</h2>
+      <p class="section-note mt-0.5">Pick one. Private messages go only to students who connected Telegram and kept it on.</p>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Where to send it" id="tsTargets">
+        {% if "channel" in allowed %}
+          <label class="ts-tile{% if not dest.channel.ready %} is-off{% endif %}" data-target="channel"
+                 data-head="{{ dest.channel.name }}" data-kind="channel" data-label="Post to the channel">
+            <input type="radio" name="target" value="channel" {% if not dest.channel.ready %}disabled{% endif %}
+                   {% if preset_target == "channel" %}checked{% endif %}>
+            <span class="ts-ico"><svg aria-hidden="true"><use href="#i-globe"/></svg></span>
+            <span class="min-w-0 pr-5">
+              <span class="block text-sm font-semibold text-ink-900 dark:text-white">Channel</span>
+              <span class="mt-0.5 block text-xs text-ink-500 dark:text-ink-400">
+                {% if dest.channel.ready %}{{ dest.channel.name }} · everyone following it{% else %}Not set up yet{% endif %}
+              </span>
+            </span>
+            <span class="ts-check" aria-hidden="true"><svg><use href="#i-check"/></svg></span>
+          </label>
+        {% endif %}
+        {% if "group" in allowed %}
+          <label class="ts-tile{% if not dest.group.ready %} is-off{% endif %}" data-target="group"
+                 data-head="{{ dest.group.name }}" data-kind="group" data-label="Post to the group">
+            <input type="radio" name="target" value="group" {% if not dest.group.ready %}disabled{% endif %}
+                   {% if preset_target == "group" %}checked{% endif %}>
+            <span class="ts-ico"><svg aria-hidden="true"><use href="#i-users"/></svg></span>
+            <span class="min-w-0 pr-5">
+              <span class="block text-sm font-semibold text-ink-900 dark:text-white">Community group</span>
+              <span class="mt-0.5 block text-xs text-ink-500 dark:text-ink-400">
+                {% if dest.group.ready %}{{ dest.group.name }} · everyone in the group{% else %}Not set up yet{% endif %}
+              </span>
+            </span>
+            <span class="ts-check" aria-hidden="true"><svg><use href="#i-check"/></svg></span>
+          </label>
+        {% endif %}
+        {% if "student" in allowed %}
+          <label class="ts-tile{% if not dest.student_count %} is-off{% endif %}" data-target="student"
+                 data-head="{{ bot_name }}" data-kind="bot" data-label="Send to the student">
+            <input type="radio" name="target" value="student" {% if not dest.student_count %}disabled{% endif %}
+                   {% if preset_target == "student" %}checked{% endif %}>
+            <span class="ts-ico"><svg aria-hidden="true"><use href="#i-user"/></svg></span>
+            <span class="min-w-0 pr-5">
+              <span class="block text-sm font-semibold text-ink-900 dark:text-white">One student</span>
+              <span class="mt-0.5 block text-xs text-ink-500 dark:text-ink-400">
+                {% if dest.student_count %}Their private chat with the bot{% else %}No student has connected Telegram yet{% endif %}
+              </span>
+            </span>
+            <span class="ts-check" aria-hidden="true"><svg><use href="#i-check"/></svg></span>
+          </label>
+        {% endif %}
+        {% if "students" in allowed %}
+          <label class="ts-tile{% if not dest.student_count %} is-off{% endif %}" data-target="students"
+                 data-head="{{ bot_name }}" data-kind="bot" data-count="{{ dest.student_count }}"
+                 data-label="Send to {{ dest.student_count|intcomma }} student{{ dest.student_count|pluralize }}">
+            <input type="radio" name="target" value="students" {% if not dest.student_count %}disabled{% endif %}
+                   {% if preset_target == "students" %}checked{% endif %}>
+            <span class="ts-ico"><svg aria-hidden="true"><use href="#i-send"/></svg></span>
+            <span class="min-w-0 pr-5">
+              <span class="block text-sm font-semibold text-ink-900 dark:text-white">All connected students</span>
+              <span class="mt-0.5 block text-xs text-ink-500 dark:text-ink-400">
+                {% if dest.student_count %}{{ dest.student_count|intcomma }} private chat{{ dest.student_count|pluralize }}{% else %}No student has connected Telegram yet{% endif %}
+              </span>
+            </span>
+            <span class="ts-check" aria-hidden="true"><svg><use href="#i-check"/></svg></span>
+          </label>
+        {% endif %}
+      </div>
+
+      {% if "channel" in allowed and not dest.channel.ready or "group" in allowed and not dest.group.ready %}
+        <p class="mt-3 text-xs text-ink-500 dark:text-ink-400">
+          Greyed-out places aren't connected yet. <a href="{% url 'console:telegram' %}#setup" class="font-semibold text-brand-600 hover:underline dark:text-brand-300">Set them up</a>.
+        </p>
+      {% endif %}
+
+      {# ---------- Which student ---------- #}
+      {% if "student" in allowed and students %}
+        <div class="mt-5 hidden ts-reveal" id="tsPicker">
+          <label for="tsSearch" class="label">Which student?</label>
+          <div class="relative">
+            <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true"><use href="#i-search"/></svg>
+            <input type="search" id="tsSearch" class="input pl-9" placeholder="Search by name, username or Telegram" autocomplete="off">
+          </div>
+          <div class="ts-pick mt-2 rounded-xl border hairline p-1" role="radiogroup" aria-label="Student" id="tsStudents">
+            {% for s in students %}
+              <label class="ts-row" data-search="{{ s.name|lower }} {{ s.username|lower }} {{ s.telegram|lower }}">
+                <input type="radio" name="student" value="{{ s.id }}" data-name="{{ s.name }}"
+                       {% if preset_student == s.id %}checked{% endif %}>
+                <span class="ts-avatar" aria-hidden="true">{{ s.name|slice:":2"|upper }}</span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ s.name }}</span>
+                  <span class="block truncate text-xs text-ink-500 dark:text-ink-400">{{ s.username }}{% if s.telegram %} · {{ s.telegram }}{% endif %}</span>
+                </span>
+              </label>
+            {% endfor %}
+            <p class="hidden px-3 py-6 text-center text-sm text-ink-500 dark:text-ink-400" id="tsNoMatch">No connected student matches that.</p>
+          </div>
+          <p class="mt-2 text-xs text-ink-500 dark:text-ink-400">Only students who connected Telegram are listed.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ---------- 2. Message ---------- #}
+    <section class="card p-5 sm:p-6 reveal">
+      <h2 class="section-title">2. Write the message</h2>
+      <p class="section-note mt-0.5">Plain text. Line breaks are kept, and links in the text become clickable in Telegram.</p>
+
+      <div class="mt-4 space-y-4">
+        <div>
+          <label for="tsTitle" class="label">Title <span class="font-normal text-ink-400">(optional, shown in bold)</span></label>
+          <input type="text" name="title" id="tsTitle" maxlength="140" class="input" placeholder="New study guides are live"
+                 value="{{ draft.title }}" autocomplete="off">
+        </div>
+        <div>
+          <div class="flex items-baseline justify-between gap-3">
+            <label for="tsBody" class="label">Message</label>
+            <span class="text-[11px] tabular-nums text-ink-400" id="tsCount" aria-live="polite">0 / {{ max_body|intcomma }}</span>
+          </div>
+          <textarea name="body" id="tsBody" rows="7" maxlength="{{ max_body }}" required class="input resize-y leading-relaxed"
+                    placeholder="Write what you want students to read…">{{ draft.body }}</textarea>
+        </div>
+
+        <details class="group rounded-xl border hairline" {% if draft.button_label or draft.button_url %}open{% endif %}>
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink-800 dark:text-ink-100">
+            <span class="flex items-center gap-2"><svg class="h-4 w-4 text-brand-600 dark:text-brand-300" aria-hidden="true"><use href="#i-plus"/></svg> Add a link button <span class="font-normal text-ink-400">(optional)</span></span>
+            <svg class="h-4 w-4 text-ink-400 transition-transform group-open:rotate-180" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </summary>
+          <div class="grid gap-3 border-t hairline px-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <div>
+              <label for="tsBtnLabel" class="label">Button text</label>
+              <input type="text" name="button_label" id="tsBtnLabel" maxlength="40" class="input" placeholder="Open the guides"
+                     value="{{ draft.button_label }}" autocomplete="off">
+            </div>
+            <div>
+              <label for="tsBtnUrl" class="label">Link</label>
+              <input type="text" name="button_url" id="tsBtnUrl" maxlength="300" class="input" placeholder="https://… or /app/pricing/"
+                     value="{{ draft.button_url }}" autocomplete="off" inputmode="url">
+            </div>
+          </div>
+        </details>
+
+        <label class="hidden items-start gap-2.5 text-sm text-ink-700 dark:text-ink-200" id="tsInApp">
+          <input type="checkbox" name="in_app" class="checkbox mt-0.5" {% if draft.in_app or not draft %}checked{% endif %}>
+          <span>Also put it in their notifications on the site
+            <span class="block text-xs text-ink-500 dark:text-ink-400">So it is still there if Telegram can't deliver it.</span></span>
+        </label>
+      </div>
+    </section>
+
+  </div>
+
+  {% comment %}
+    The preview sits beside the form on a wide screen; on a phone it comes
+    after the message and before Send, so it is read before sending.
+  {% endcomment %}
+  <aside class="card p-5 sm:p-6 reveal lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="section-title">Preview</h2>
+      <span class="badge-neutral" id="tsPreviewWhere">Telegram</span>
+    </div>
+    <div class="ts-phone mt-4" aria-label="How the message will look in Telegram">
+      <div class="ts-phone-head">
+        <span class="ts-phone-avatar" aria-hidden="true"><svg><use href="#i-telegram"/></svg></span>
+        <span class="min-w-0">
+          <span class="block truncate text-sm font-semibold text-ink-900 dark:text-white" id="tsHead">{{ bot_name }}</span>
+          <span class="block text-xs text-ink-500 dark:text-ink-400" id="tsHeadKind">bot</span>
+        </span>
+      </div>
+      <div class="ts-phone-body">
+        <div class="ts-bubble">
+          <div class="ts-bubble-title hidden" id="tsPTitle"></div>
+          <div class="ts-bubble-text" id="tsPBody"><span class="ts-empty">Your message appears here as you type.</span></div>
+          <div class="ts-bubble-foot hidden" id="tsPFoot">From the {{ bot_name }} team</div>
+          <div class="ts-bubble-time">now</div>
+        </div>
+        <div class="ts-btn hidden" id="tsPBtn"></div>
+      </div>
+    </div>
+    <p class="mt-3 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+      Private messages end with a short "From the team" line, so students know it came from you and not an automatic alert.
+    </p>
+  </aside>
+
+  {# ---------- Send ---------- #}
+  <section class="card flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 reveal lg:col-start-1">
+    <p class="text-sm text-ink-600 dark:text-ink-300" id="tsSummary" aria-live="polite">Choose where to send it, then write the message.</p>
+    <button type="submit" class="btn-primary w-full flex-none justify-center sm:w-auto" id="tsSubmit">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-send"/></svg>
+      <span id="tsSubmitLabel">Send</span>
+    </button>
+  </section>
+</form>
+{% endif %}
+
+{# ---------- History ---------- #}
+{% if allowed %}
+<section class="card overflow-hidden reveal" id="history">
+  <div class="flex flex-wrap items-start justify-between gap-3 border-b hairline px-5 py-4">
+    <div class="min-w-0">
+      <h2 class="section-title">Recent messages</h2>
+      <p class="section-note mt-0.5">What was sent from this page and whether it arrived. Channel and group posts can be deleted for 48 hours.</p>
+    </div>
+    {% if history %}<a href="{% url 'console:telegram_send' %}#history" class="btn-ghost btn-sm"><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-refresh"/></svg> Refresh</a>{% endif %}
+  </div>
+  {% if history %}
+    <ul class="divide-y divide-ink-100 dark:divide-white/5">
+      {% for m in history %}
+        <li class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start">
+          <span class="ts-ico" aria-hidden="true"><svg><use href="#{% if m.target == 'channel' %}i-globe{% elif m.target == 'group' %}i-users{% elif m.target == 'student' %}i-user{% else %}i-send{% endif %}"/></svg></span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm text-ink-900 dark:text-white">
+              <span class="font-semibold">{% if m.target == "student" %}{{ m.recipient.display_name|default:"A deleted account" }}{% else %}{{ m.get_target_display }}{% endif %}</span>
+              <span class="text-ink-400">·</span>
+              <span class="text-xs text-ink-500 dark:text-ink-400" title="{{ m.created_at|date:'d M Y, H:i' }}">{{ m.created_at|timeago }}{% if m.created_by %} by {{ m.created_by.display_name }}{% endif %}</span>
+            </p>
+            <p class="mt-1 line-clamp-2 text-sm text-ink-600 dark:text-ink-300">{% if m.title %}<b class="font-semibold">{{ m.title }}</b> — {% endif %}{{ m.body }}</p>
+            {% if m.target == "students" %}
+              <p class="mt-1 text-xs text-ink-500 dark:text-ink-400 tabular-nums">{{ m.sent|intcomma }} of {{ m.recipients|intcomma }} delivered{% if m.failed %} · {{ m.failed|intcomma }} failed{% endif %}{% if m.skipped %} · {{ m.skipped|intcomma }} skipped{% endif %}</p>
+            {% endif %}
+            {% if m.error and m.status != "sent" %}<p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ m.error }}</p>{% endif %}
+          </div>
+          <div class="flex flex-none items-center gap-2 sm:flex-col sm:items-end">
+            {% if m.status == "sent" %}<span class="badge-success ts-status">Delivered</span>
+            {% elif m.status == "partly" %}<span class="badge-warning ts-status">Partly delivered</span>
+            {% elif m.status == "failed" %}<span class="badge-danger ts-status">Not delivered</span>
+            {% elif m.status == "deleted" %}<span class="badge-neutral ts-status">Deleted</span>
+            {% else %}<span class="badge-neutral ts-status">Sending…</span>{% endif %}
+            {% if m.deletable %}
+              <form method="post" action="{% url 'console:telegram_message_delete' m.pk %}"
+                    onsubmit="return confirm('Delete this post from Telegram? Everyone stops seeing it.');">
+                {% csrf_token %}
+                <button type="submit" class="btn-ghost btn-sm text-rose-600 dark:text-rose-400">
+                  <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-trash"/></svg> Delete
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="px-5 py-10 text-center text-sm text-ink-500 dark:text-ink-400">Nothing sent from here yet. Your messages will be listed here.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  var form = document.getElementById('tsForm');
+  if (!form) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var tiles = Array.prototype.slice.call(form.querySelectorAll('.ts-tile'));
+  var picker = $('tsPicker'), search = $('tsSearch'), inApp = $('tsInApp');
+  var title = $('tsTitle'), body = $('tsBody'), btnLabel = $('tsBtnLabel'), btnUrl = $('tsBtnUrl');
+  var KIND = { channel: 'channel', group: 'group', bot: 'bot' };
+
+  function target() {
+    var on = form.querySelector('input[name=target]:checked');
+    return on ? on.value : '';
+  }
+  function tileOf(value) {
+    return tiles.filter(function (t) { return t.dataset.target === value; })[0];
+  }
+  function student() {
+    return form.querySelector('input[name=student]:checked');
+  }
+
+  function paintTiles() {
+    var value = target();
+    tiles.forEach(function (t) { t.classList.toggle('is-on', t.dataset.target === value); });
+    var tile = tileOf(value);
+    if (picker) picker.classList.toggle('hidden', value !== 'student');
+    if (inApp) { inApp.classList.toggle('hidden', value !== 'student'); inApp.classList.toggle('flex', value === 'student'); }
+    $('tsHead').textContent = tile ? tile.dataset.head : '{{ bot_name|escapejs }}';
+    $('tsHeadKind').textContent = tile ? KIND[tile.dataset.kind] : 'bot';
+    $('tsPreviewWhere').textContent = tile ? tile.querySelector('.text-sm').textContent.trim() : 'Telegram';
+    $('tsPFoot').classList.toggle('hidden', !(value === 'student' || value === 'students'));
+    paintRows();
+    summarise();
+  }
+
+  function paintRows() {
+    form.querySelectorAll('.ts-row').forEach(function (row) {
+      row.classList.toggle('is-on', row.querySelector('input').checked);
+    });
+  }
+
+  function summarise() {
+    var value = target(), tile = tileOf(value), label = 'Send', text;
+    if (!value) text = 'Choose where to send it, then write the message.';
+    else if (value === 'student') {
+      var s = student();
+      label = s ? 'Send to ' + s.dataset.name : 'Send to the student';
+      text = s ? 'Goes to ' + s.dataset.name + "'s private chat with the bot." : 'Now pick the student.';
+    } else {
+      label = tile.dataset.label;
+      text = value === 'students'
+        ? 'Each connected student gets it in their own chat with the bot. It sends in the background.'
+        : 'One post that everyone in the ' + (value === 'channel' ? 'channel' : 'group') + ' sees.';
+    }
+    $('tsSubmitLabel').textContent = label;
+    $('tsSummary').textContent = text;
+  }
+
+  function preview() {
+    var t = title.value.trim(), b = body.value;
+    $('tsPTitle').textContent = t;
+    $('tsPTitle').classList.toggle('hidden', !t);
+    var pb = $('tsPBody');
+    if (b.trim()) { pb.textContent = b; }
+    else { pb.innerHTML = '<span class="ts-empty">Your message appears here as you type.</span>'; }
+    var l = btnLabel.value.trim();
+    $('tsPBtn').textContent = l;
+    $('tsPBtn').classList.toggle('hidden', !(l && btnUrl.value.trim()));
+    $('tsCount').textContent = b.length.toLocaleString() + ' / {{ max_body|intcomma }}';
+  }
+
+  form.addEventListener('change', function (e) {
+    if (e.target.name === 'target' || e.target.name === 'student') paintTiles();
+  });
+  [title, body, btnLabel, btnUrl].forEach(function (f) { f.addEventListener('input', preview); });
+
+  if (search) {
+    search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase(), shown = 0;
+      form.querySelectorAll('.ts-row').forEach(function (row) {
+        var hit = !q || row.dataset.search.indexOf(q) !== -1;
+        row.classList.toggle('hidden', !hit);
+        if (hit) shown++;
+      });
+      $('tsNoMatch').classList.toggle('hidden', shown > 0);
+    });
+  }
+
+  form.addEventListener('submit', function (e) {
+    var value = target(), problem = '';
+    if (!value) problem = 'Choose where to send it.';
+    else if (value === 'student' && !student()) problem = 'Pick the student to send it to.';
+    else if (!body.value.trim()) problem = 'Write the message first.';
+    else if ((btnLabel.value.trim() === '') !== (btnUrl.value.trim() === '')) problem = 'The button needs both its text and a link, or neither.';
+    if (problem) {
+      e.preventDefault();
+      $('tsSummary').textContent = problem;
+      $('tsSummary').classList.add('text-rose-600', 'dark:text-rose-400');
+      if (!value) { var first = form.querySelector('input[name=target]:not([disabled])'); if (first) first.focus(); }
+      else if (value === 'student' && !student() && search) search.focus();
+      else if (!body.value.trim()) body.focus();
+      return;
+    }
+    if (value === 'students') {
+      var count = tileOf('students').dataset.count;
+      if (!window.confirm('Send this to ' + count + ' student' + (count === '1' ? '' : 's') + ' on Telegram? It cannot be taken back from their chats.')) {
+        e.preventDefault();
+        return;
+      }
+    }
+    var submit = $('tsSubmit');
+    submit.disabled = true;
+    $('tsSubmitLabel').textContent = 'Sending…';
+  });
+
+  body.addEventListener('input', function () { $('tsSummary').classList.remove('text-rose-600', 'dark:text-rose-400'); });
+
+  // A preselected student is scrolled into view in the list.
+  var pre = student();
+  if (pre) pre.closest('.ts-row').scrollIntoView({ block: 'nearest' });
+  paintTiles();
+  preview();
+})();
+</script>
+{% endblock %}

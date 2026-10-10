@@ -1,0 +1,241 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Support tickets · {{ BRAND.full_name }}{% endblock %}
+{% block heading %}Support tickets{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    {% if stats.needs_attention %}{{ stats.needs_attention }} waiting on us{% else %}Nothing waiting — the queue is clear{% endif %}
+  </p>
+{% endblock %}
+
+{% block measure %}max-w-[88rem]{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ---------- Queue health ---------- #}
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "components/stat_card.html" with icon="i-info" label="Needs attention" value=stats.needs_attention|intcomma tone=stats.needs_attention|yesno:"warning,success" hint="new, open or in progress" %}
+    {% include "components/stat_card.html" with icon="i-clock" label="Never answered" value=stats.unanswered|intcomma tone=stats.unanswered|yesno:"danger,success" hint="still awaiting a first reply" %}
+    {% include "components/stat_card.html" with icon="i-bolt" label="Raised today" value=stats.today|intcomma tone="brand" hint="in the last 24 hours" %}
+    {% include "components/stat_card.html" with icon="i-check-circle" label="Resolved" value=stats.resolved|intcomma tone="success" hint=stats.total|stringformat:"s"|add:" tickets all time" %}
+  </div>
+
+  {# ---------- Queue ---------- #}
+  <div class="card overflow-hidden reveal">
+    <div class="border-b hairline bg-ink-50/50 p-4 dark:bg-white/[.02]">
+      <form method="get" class="flex flex-wrap items-center gap-2">
+        <div class="search-shell min-w-[15rem] flex-1">
+          <svg aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="search" name="q" value="{{ form.q.value|default:'' }}" class="input pl-9"
+                 placeholder="Search reference, subject, description or student" aria-label="Search tickets">
+        </div>
+        <select name="status" class="select w-auto min-w-[10rem]" aria-label="Status">
+          {% for value, label in form.status.field.choices %}
+            <option value="{{ value }}" {% if form.status.value == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="category" class="select w-auto min-w-[10rem]" aria-label="Category">
+          {% for value, label in form.category.field.choices %}
+            <option value="{{ value }}" {% if form.category.value == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="priority" class="select w-auto min-w-[9rem]" aria-label="Priority">
+          {% for value, label in form.priority.field.choices %}
+            <option value="{{ value }}" {% if form.priority.value == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="days" class="select w-auto min-w-[9rem]" aria-label="Raised">
+          {% for value, label in form.days.field.choices %}
+            <option value="{{ value }}" {% if form.days.value == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="assignee" class="select w-auto min-w-[9rem]" aria-label="Assigned">
+          {% for value, label in form.assignee.field.choices %}
+            <option value="{{ value }}" {% if assignee == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+          {% if admins|length > 1 %}
+            <optgroup label="Assigned to">
+              {% for admin in admins %}
+                <option value="{{ admin.pk }}" {% if assignee == admin.pk|stringformat:"s" %}selected{% endif %}>{{ admin.display_name }}</option>
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+        </select>
+        <button type="submit" class="btn-primary btn-sm">Apply</button>
+        <a href="{% url 'console:tickets' %}" class="btn-ghost btn-sm">Clear</a>
+      </form>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table min-w-[60rem]">
+        <thead>
+          <tr>
+            <th class="th w-10"><input type="checkbox" class="checkbox pick-check" data-pick-all aria-label="Select every ticket on this page"></th>
+            <th class="th">Ticket</th>
+            <th class="th">Student</th>
+            <th class="th">Category</th>
+            <th class="th">Priority</th>
+            <th class="th">Status</th>
+            <th class="th text-right">Raised</th>
+            <th class="th text-right"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ticket in page.object_list %}
+            <tr class="row group/row">
+              <td class="td w-10"><input type="checkbox" class="checkbox pick-check" data-pick-id="{{ ticket.pk }}" aria-label="Select ticket {{ ticket.reference }}"></td>
+              <td class="td max-w-[24rem]">
+                <a href="{% url 'console:ticket_detail' ticket.reference %}"
+                   class="block truncate font-semibold text-ink-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300">
+                  {{ ticket.subject }}
+                </a>
+                <p class="truncate text-[11px] text-ink-500 dark:text-ink-400">
+                  <span class="font-mono">{{ ticket.reference }}</span>
+                  {% if ticket.assigned_to %} · {{ ticket.assigned_to.display_name }}{% endif %}
+                  {% if ticket.reply_count %} · {{ ticket.reply_count }} repl{{ ticket.reply_count|pluralize:"y,ies" }}{% endif %}
+                  {% if not ticket.first_response_at and ticket.is_open %}
+                    · <span class="font-semibold text-rose-600 dark:text-rose-400">
+                        unanswered {{ ticket.waiting_hours }}h
+                      </span>
+                  {% endif %}
+                </p>
+              </td>
+              <td class="td">
+                <a href="{% url 'console:user_detail' ticket.user_id %}"
+                   class="font-medium text-ink-700 hover:text-brand-700 dark:text-ink-200">{{ ticket.full_name }}</a>
+                <p class="truncate text-[11px] text-ink-500 dark:text-ink-400">{{ ticket.email }}</p>
+              </td>
+              <td class="td text-xs">{{ ticket.get_category_display }}</td>
+              <td class="td"><span class="{{ ticket.priority_tone|tone_classes }}">{{ ticket.get_priority_display }}</span></td>
+              <td class="td"><span class="{{ ticket.status_tone|tone_classes }}">{{ ticket.get_status_display }}</span></td>
+              <td class="td text-right">
+                <span class="text-xs text-ink-500 dark:text-ink-400">{{ ticket.created_at|timeago }}</span>
+                <p class="text-[10px] text-ink-500 dark:text-ink-400">{{ ticket.created_at|date:"d M, H:i" }}</p>
+              </td>
+              <td class="td text-right">
+                <a href="{% url 'console:ticket_detail' ticket.reference %}" class="btn-outline btn-sm">Open</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="px-4 py-16 text-center">
+              <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl2 border border-brand-500/15 bg-brand-500/[.06] text-brand-500/70">
+                <svg class="h-6 w-6" aria-hidden="true"><use href="#i-check-circle"/></svg>
+              </span>
+              <p class="mt-3.5 text-sm font-semibold text-ink-600 dark:text-ink-300">No tickets match those filters</p>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="px-4 pb-4">{% include "components/pagination.html" %}</div>
+  </div>
+</div>
+
+{% if page.object_list %}
+  {# ---------- Bulk bar: shown once a ticket is ticked ---------- #}
+  <form method="post" action="{% url 'console:tickets_bulk' %}" class="pick-bar" id="pickBar" aria-live="polite">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <input type="hidden" name="action" value="">
+    <span class="pick-count"><span data-pick-count>0</span> selected</span>
+    <div class="pick-actions">
+      <button type="button" data-pick-act="close" title="Close" aria-label="Close the selected tickets">
+        <svg aria-hidden="true"><use href="#i-check-circle"/></svg><span class="pick-word">Close</span>
+      </button>
+      <button type="button" data-pick-act="resolve" title="Mark resolved" aria-label="Mark the selected tickets resolved">
+        <svg aria-hidden="true"><use href="#i-check"/></svg><span class="pick-word">Resolve</span>
+      </button>
+      <label class="pick-assign">
+        <span class="sr-only">Assign the selected tickets to</span>
+        <select name="assign" data-pick-assign>
+          <option value="">Assign to…</option>
+          <option value="me">Me</option>
+          {% for admin in admins %}{% if admin.pk != request.user.pk %}<option value="{{ admin.pk }}">{{ admin.display_name }}</option>{% endif %}{% endfor %}
+          <option value="none">Nobody (unassign)</option>
+        </select>
+      </label>
+    </div>
+    <button type="button" data-pick-clear aria-label="Clear the selection" title="Clear the selection"><svg aria-hidden="true"><use href="#i-x"/></svg></button>
+  </form>
+{% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+  .pick-bar { position: fixed; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; width: min(760px, calc(100vw - 24px)); display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 16px; background: #0F172A; color: #fff; box-shadow: 0 22px 48px -18px rgba(15,23,42,.65); transform: translate(-50%, 14px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .25s cubic-bezier(.2,.7,.2,1); }
+  .pick-bar.is-on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .dark .pick-bar { background: #1E293B; border: 1px solid rgba(255,255,255,.08); }
+  .pick-count { flex: 0 0 auto; font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .pick-actions { display: flex; flex: 1 1 auto; min-width: 0; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .pick-actions::-webkit-scrollbar { display: none; }
+  .pick-bar button, .pick-assign select { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; min-width: 40px; padding: 0 11px; border-radius: 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #E2E8F0; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); }
+  .pick-assign select { color-scheme: dark; padding-right: 8px; }
+  .pick-assign select option { background: #0F172A; color: #F3F4F6; }
+  .pick-bar button:hover { background: rgba(255,255,255,.16); color: #fff; }
+  .pick-bar svg { width: 15px; height: 15px; flex: 0 0 auto; }
+  @media (max-width: 639px) { .pick-word { display: none; } .pick-bar button { width: 40px; padding: 0; } }
+  body.has-pick-bar { padding-bottom: 5.5rem; }
+  .row.is-picked { background: rgba(37,99,235,.06); }
+  .dark .row.is-picked { background: rgba(96,165,250,.08); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var bar = document.getElementById('pickBar');
+  if (!bar) return;
+  /* Out of <main>, so the fixed bar is pinned to the screen, not the page. */
+  document.body.appendChild(bar);
+  var all = document.querySelector('[data-pick-all]');
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-pick-id]'));
+  var count = bar.querySelector('[data-pick-count]');
+  var assign = bar.querySelector('[data-pick-assign]');
+
+  function picked() { return boxes.filter(function (b) { return b.checked; }); }
+  function paint() {
+    var n = picked().length;
+    count.textContent = n;
+    bar.classList.toggle('is-on', n > 0);
+    document.body.classList.toggle('has-pick-bar', n > 0);
+    boxes.forEach(function (b) { b.closest('tr').classList.toggle('is-picked', b.checked); });
+    if (all) { all.checked = n > 0 && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+  }
+  function send(action) {
+    var rows = picked();
+    if (!rows.length) return;
+    bar.querySelectorAll('input[name="ids"]').forEach(function (n) { n.remove(); });
+    rows.forEach(function (b) {
+      var input = document.createElement('input');
+      input.type = 'hidden'; input.name = 'ids'; input.value = b.getAttribute('data-pick-id');
+      bar.appendChild(input);
+    });
+    bar.querySelector('input[name="action"]').value = action;
+    HTMLFormElement.prototype.submit.call(bar);
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', paint); });
+  if (all) all.addEventListener('change', function () { boxes.forEach(function (b) { b.checked = all.checked; }); paint(); });
+  bar.querySelector('[data-pick-clear]').addEventListener('click', function () {
+    boxes.forEach(function (b) { b.checked = false; }); paint();
+  });
+  bar.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-pick-act]');
+    if (!button) return;
+    var action = button.getAttribute('data-pick-act'), n = picked().length;
+    var word = action === 'close' ? 'Close' : 'Mark as resolved';
+    if (!window.confirm(word + ' ' + n + ' ticket' + (n === 1 ? '' : 's') + '?')) return;
+    send(action);
+  });
+  assign.addEventListener('change', function () {
+    if (!assign.value) return;
+    var n = picked().length, label = assign.options[assign.selectedIndex].text;
+    if (!window.confirm('Assign ' + n + ' ticket' + (n === 1 ? '' : 's') + ' to ' + label + '?')) { assign.value = ''; return; }
+    send('assign');
+  });
+  paint();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,251 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Subscriptions · {{ BRAND.full_name }}{% endblock %}
+{% block heading %}Subscriptions{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">Who is on a plan, and whose plan is about to lapse</p>
+{% endblock %}
+
+{% block measure %}max-w-[88rem]{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ---------- Metrics ---------- #}
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "components/stat_card.html" with icon="i-check-circle" label="Live subscriptions" value=totals.live|intcomma tone="success" hint=totals.students|stringformat:"s"|add:" students covered" %}
+    {% include "components/stat_card.html" with icon="i-clock" label="Expiring in 7 days" value=totals.expiring|intcomma tone="warning" hint="worth a reminder" %}
+    {% include "components/stat_card.html" with icon="i-history" label="Lapsed" value=totals.lapsed|intcomma tone="danger" hint="expired or past their end date" %}
+    {% include "components/stat_card.html" with icon="i-coin" label="Tokens granted" value=totals.tokens|compact_number tone="brand" hint="through plans, all time" %}
+  </div>
+
+  {# ---------- Table ---------- #}
+  <div class="card overflow-hidden reveal">
+    <div class="border-b hairline bg-ink-50/50 p-4 dark:bg-white/[.02]">
+      <form method="get" class="flex flex-wrap items-center gap-2">
+    {% include "console/_scope_field.html" %}
+        <div class="search-shell min-w-[14rem] flex-1">
+          <svg aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="search" name="q" value="{{ search }}" class="input pl-9"
+                 placeholder="Search by student name or e-mail" aria-label="Search subscriptions">
+        </div>
+        <select name="status" class="select w-auto min-w-[11rem]" aria-label="Status">
+          <option value="">All subscriptions</option>
+          <option value="live" {% if status == 'live' %}selected{% endif %}>Live</option>
+          <option value="expiring" {% if status == 'expiring' %}selected{% endif %}>Expiring in 7 days</option>
+          <option value="lapsed" {% if status == 'lapsed' %}selected{% endif %}>Lapsed</option>
+          <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+        </select>
+        <select name="plan" class="select w-auto min-w-[10rem]" aria-label="Plan">
+          <option value="">All plans</option>
+          {% for plan in plans %}
+            <option value="{{ plan.pk }}" {% if plan_id == plan.pk|stringformat:"s" %}selected{% endif %}>{{ plan.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary btn-sm">Apply</button>
+        {% if search or status or plan_id %}
+          <a href="{% url 'console:subscriptions' %}" class="btn-ghost btn-sm">Clear</a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table min-w-[58rem]">
+        <thead>
+          <tr>
+            <th class="th">Student</th>
+            <th class="th">Plan</th>
+            <th class="th">Status</th>
+            <th class="th text-right">Tokens granted</th>
+            <th class="th">Started</th>
+            <th class="th">Ends</th>
+            <th class="th text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for subscription in page.object_list %}
+            <tr class="row group/row">
+              <td class="td">
+                <a href="{% url 'console:user_detail' subscription.user_id %}"
+                   class="font-semibold text-ink-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300">
+                  {{ subscription.user.display_name }}
+                </a>
+                <p class="text-[11px] text-ink-500 dark:text-ink-400">{{ subscription.user.email|default:subscription.user.username }}</p>
+              </td>
+              <td class="td">
+                <span class="font-medium">{{ subscription.plan.name }}</span>
+                {% if subscription.payment %}
+                  <p class="font-mono text-[10.5px] text-ink-500 dark:text-ink-400">{{ subscription.payment.reference }}</p>
+                {% endif %}
+              </td>
+              <td class="td">
+                {% if subscription.is_live %}
+                  <span class="badge-success">Live</span>
+                {% elif subscription.status == 'cancelled' %}
+                  <span class="badge-neutral">Cancelled</span>
+                {% else %}
+                  <span class="badge-danger">Expired</span>
+                {% endif %}
+              </td>
+              <td class="td text-right font-semibold tabular-nums">{{ subscription.tokens_granted|intcomma }}</td>
+              <td class="td text-xs text-ink-500 dark:text-ink-400">{{ subscription.starts_at|date:"d M Y" }}</td>
+              <td class="td">
+                <span class="text-xs text-ink-600 dark:text-ink-300">{{ subscription.ends_at|date:"d M Y" }}</span>
+                {% if subscription.is_live %}
+                  <p class="text-[10.5px] {% if subscription.days_remaining <= 7 %}font-semibold text-amber-600 dark:text-amber-400{% else %}text-ink-400{% endif %}">
+                    {{ subscription.days_remaining }} day{{ subscription.days_remaining|pluralize }} left
+                  </p>
+                {% endif %}
+              </td>
+              <td class="td text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  {% if console_can.support %}
+                  <a href="{% url 'console:conversations' %}?student={{ subscription.user_id }}"
+                     class="btn-icon h-8 w-8" aria-label="View this student's chats" title="View chats">
+                    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chat"/></svg>
+                  </a>
+                  {% endif %}
+                  {% if subscription.can_change_end %}
+                    <button type="button" class="btn-outline btn-sm" data-change-end
+                            data-action="{% url 'console:subscription_extend' subscription.pk %}"
+                            data-student="{{ subscription.user.display_name }}" data-plan="{{ subscription.plan.name }}"
+                            data-ends="{{ subscription.ends_at|date:'c' }}" data-starts="{{ subscription.starts_at|date:'c' }}">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-calendar"/></svg> End date
+                    </button>
+                  {% endif %}
+                  {% if subscription.is_live %}
+                    <form method="post" action="{% url 'console:subscription_cancel' subscription.pk %}"
+                          onsubmit="return confirm('Cancel this subscription? Tokens already credited stay with the student.');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn-outline btn-sm">Cancel</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="px-4 py-16 text-center">
+              <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl2 border border-brand-500/15 bg-brand-500/[.06] text-brand-500/70">
+                <svg class="h-6 w-6" aria-hidden="true"><use href="#i-card"/></svg>
+              </span>
+              <p class="mt-3.5 text-sm font-semibold text-ink-600 dark:text-ink-300">No subscriptions match those filters</p>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="px-4 pb-4">{% include "components/pagination.html" %}</div>
+  </div>
+</div>
+
+{# ---------- Change the end date ---------- #}
+{% comment %}
+  One dialog for every row: the row's button fills in who, which plan and the
+  current end date. Extending or shortening is audited, and the student is
+  told the new date in the app and on Telegram.
+{% endcomment %}
+<div id="endModal" class="fixed inset-0 z-[75] hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+  <div class="absolute inset-0 bg-ink-950/55 animate-fade-in" data-close-end></div>
+  <div class="dialog-panel relative w-full max-w-md animate-scale-in rounded-xl2 border hairline bg-white p-5 shadow-lift dark:bg-ink-900">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h2 class="section-title" id="endTitle">Change the end date</h2>
+        <p class="section-note mt-0.5"><span data-end-who></span> · <span data-end-plan></span></p>
+      </div>
+      <button type="button" class="btn-icon" data-close-end aria-label="Close">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <form method="post" id="endForm" class="mt-5 space-y-4" data-loading-form data-loading-label="Saving…">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Direction">
+        <label class="cursor-pointer">
+          <input type="radio" name="direction" value="extend" class="peer sr-only" checked>
+          <span class="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border hairline px-3 text-sm font-semibold transition
+                       peer-checked:border-emerald-500 peer-checked:bg-emerald-500/10 peer-checked:text-emerald-700 dark:peer-checked:text-emerald-300
+                       peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/70">Extend</span>
+        </label>
+        <label class="cursor-pointer">
+          <input type="radio" name="direction" value="shorten" class="peer sr-only">
+          <span class="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border hairline px-3 text-sm font-semibold transition
+                       peer-checked:border-rose-500 peer-checked:bg-rose-500/10 peer-checked:text-rose-700 dark:peer-checked:text-rose-300
+                       peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/70">Shorten</span>
+        </label>
+      </div>
+      <div>
+        <label class="label" for="endDays">Days</label>
+        <input type="number" name="days" id="endDays" min="1" max="365" value="30" required inputmode="numeric" class="input tabular-nums">
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          <button type="button" class="btn-outline btn-sm" data-end-days="7">7</button>
+          <button type="button" class="btn-outline btn-sm" data-end-days="14">14</button>
+          <button type="button" class="btn-outline btn-sm" data-end-days="30">30</button>
+          <button type="button" class="btn-outline btn-sm" data-end-days="90">90</button>
+        </div>
+      </div>
+      <dl class="grid grid-cols-2 gap-3 rounded-xl border hairline p-3 text-sm">
+        <div><dt class="stat-label">Ends now</dt><dd class="mt-0.5 font-semibold tabular-nums text-ink-900 dark:text-white" data-end-now></dd></div>
+        <div><dt class="stat-label">Will end</dt><dd class="mt-0.5 font-semibold tabular-nums text-brand-700 dark:text-brand-300" data-end-new></dd></div>
+      </dl>
+      <p class="hidden text-xs font-semibold text-rose-700 dark:text-rose-300" data-end-warn>That would end the plan before it started.</p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="btn-ghost" data-close-end>Cancel</button>
+        <button type="submit" class="btn-primary" data-submit>Save end date</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var modal = document.getElementById('endModal');
+  if (!modal) return;
+  var form = document.getElementById('endForm');
+  var days = document.getElementById('endDays');
+  var opener = null, ends = null, starts = null;
+  var fmt = new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+
+  function paint() {
+    if (!ends) return;
+    var n = Math.max(0, parseInt(days.value, 10) || 0);
+    var sign = form.querySelector('input[name="direction"]:checked').value === 'shorten' ? -1 : 1;
+    var next = new Date(ends.getTime() + sign * n * 86400000);
+    modal.querySelector('[data-end-new]').textContent = fmt.format(next);
+    var bad = starts && next <= starts;
+    modal.querySelector('[data-end-warn]').classList.toggle('hidden', !bad);
+    form.querySelector('[data-submit]').disabled = bad || !n;
+  }
+  function open(button) {
+    opener = button;
+    form.setAttribute('action', button.getAttribute('data-action'));
+    ends = new Date(button.getAttribute('data-ends'));
+    starts = new Date(button.getAttribute('data-starts'));
+    modal.querySelector('[data-end-who]').textContent = button.getAttribute('data-student');
+    modal.querySelector('[data-end-plan]').textContent = button.getAttribute('data-plan');
+    modal.querySelector('[data-end-now]').textContent = fmt.format(ends);
+    paint();
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function () { days.focus(); }, 40);
+  }
+  function close() {
+    if (modal.classList.contains('hidden')) return;
+    modal.classList.add('hidden'); modal.classList.remove('flex');
+    document.body.style.overflow = '';
+    if (opener) opener.focus();
+  }
+  document.querySelectorAll('[data-change-end]').forEach(function (b) { b.addEventListener('click', function () { open(b); }); });
+  modal.querySelectorAll('[data-close-end]').forEach(function (b) { b.addEventListener('click', close); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  days.addEventListener('input', paint);
+  form.querySelectorAll('input[name="direction"]').forEach(function (r) { r.addEventListener('change', paint); });
+  modal.querySelectorAll('[data-end-days]').forEach(function (b) {
+    b.addEventListener('click', function () { days.value = b.getAttribute('data-end-days'); paint(); });
+  });
+})();
+</script>
+{% endblock %}

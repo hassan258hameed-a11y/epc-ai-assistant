@@ -1,0 +1,169 @@
+{% load ai_extras %}
+{% comment %}
+  Pricing — one model at a time.
+
+  Tokens are a separate currency per model, so three price lists on one screen
+  is an invitation to top up the wrong balance. The switch makes the model an
+  explicit choice and everything below it belongs to that choice.
+
+  The whole thing is server-rendered: every group is in the document, and the
+  switch only changes which one is shown. That is what makes it work before the
+  script loads, keep working without it, and switch with no network round trip.
+{% endcomment %}
+<div class="panel" data-panel-name="pricing">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Top up</p>
+    <h2 class="panel-title">Pricing</h2>
+    <p class="panel-sub">
+      Tokens are bought per model and never expire. Pick the model you want to
+      use, then the size that suits how much you study.
+    </p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  {% if groups %}
+    <div class="price-switch" role="radiogroup" aria-label="Choose a model" data-price-switch>
+      <span class="price-switch-pill" aria-hidden="true" data-price-pill></span>
+      {% for group in groups %}
+        <label class="price-opt" style="--m-from:{{ group.tone.from }};--m-to:{{ group.tone.to }}">
+          <input type="radio" name="price-model" value="{{ group.key }}"
+                 data-price-tab="{{ group.key }}"
+                 {% if group.key == selected_model %}checked{% endif %}>
+          <span><i class="dot" aria-hidden="true"></i>{{ group.name }}</span>
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="price-groups">
+      {% for group in groups %}
+        <section class="price-group {% if group.key == selected_model %}is-current{% endif %}"
+                 id="plans-{{ group.key }}" data-price-panel="{{ group.key }}"
+                 {% comment %}
+                   Set only when the student was *sent* here for this model — by
+                   a low-balance warning naming it. The shell scrolls to it; the
+                   switch has already opened on it.
+                 {% endcomment %}
+                 {% if focus_model == group.key %}data-focus="1"{% endif %}
+                 {% if group.key != selected_model %}hidden{% endif %}>
+          <div class="price-head">
+            <h3>{{ group.name }}</h3>
+            {% if group.wallet %}
+              <span class="price-balance {% if group.wallet.is_empty %}is-empty{% elif group.wallet.is_low %}is-low{% endif %}">
+                {{ group.wallet.balance|intcomma }} left
+              </span>
+            {% endif %}
+            <p>{{ group.description }}</p>
+          </div>
+
+          <div class="plan-grid">
+            {% for plan in group.plans %}
+              <article class="plan {% if plan.is_featured %}is-featured{% endif %}">
+                {% if plan.is_featured %}<span class="plan-tag">Most popular</span>{% endif %}
+                <h4 class="plan-name">{{ plan.tokens|compact_number }} tokens</h4>
+                <p class="plan-price">${{ plan.price|floatformat:"-2" }} <small>{{ plan.currency }}</small></p>
+                <p class="plan-tokens">{{ plan.tokens|intcomma }} AI tokens</p>
+                <p class="plan-rate">${{ plan.price_per_million }} per million</p>
+
+                {% if plan.has_limits %}
+                  <dl class="plan-limits">
+                    <div class="plan-limits-head">
+                      Usage limits
+                      {% comment %}
+                        Said once, on the card, in words a student can act on.
+                        The detail lives behind the dot rather than in the
+                        layout, because most people only need the numbers.
+                      {% endcomment %}
+                      <span class="hint-dot" tabindex="0" role="note"
+                            aria-label="What usage limits mean">?
+                        <span>Usage limits keep access fair and reliable for
+                          everyone. Your tokens never expire — the limits only
+                          set how many you can spend in a day, a week and a
+                          month, and they reset automatically.</span>
+                      </span>
+                    </div>
+                    {% for row in plan.limit_rows %}
+                      <div class="plan-limit">
+                        <dt>{{ row.label }}</dt>
+                        <dd class="{% if not row.value %}is-none{% endif %}">
+                          {% if row.value %}{{ row.value|intcomma }}{% else %}No limit{% endif %}
+                        </dd>
+                      </div>
+                    {% endfor %}
+                  </dl>
+                {% endif %}
+
+                <ul class="plan-features">
+                  {% for feature in plan.feature_list %}
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg> <span>{{ feature }}</span></li>
+                  {% endfor %}
+                </ul>
+
+                {% comment %}
+                  A real link to the existing checkout, not an in-panel action:
+                  paying is a separate, auditable flow with its own page, its own
+                  reference number and its own back button.
+                {% endcomment %}
+                <div class="plan-foot">
+                  <a href="{% url 'payments:checkout' plan.slug %}"
+                     class="btn {% if plan.is_featured %}btn-primary{% endif %}">
+                    <span class="plan-sheen" aria-hidden="true"></span>
+                    <span>Buy {{ plan.tokens|compact_number|lower }} tokens</span>
+                  </a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+    {# The three ways to pay, chosen on the checkout page after a package. #}
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:18px;font-size:12px;color:var(--ink-3)">
+      <span style="display:inline-flex;align-items:center;gap:6px;margin-right:4px">
+        <svg aria-hidden="true" style="width:14px;height:14px;color:var(--accent)"><use href="#i-shield"/></svg>
+        Choose a package, then pay with
+      </span>
+      <span class="badge">ABA PayWay</span>
+      <span class="badge">ACLEDA KHQR · riel</span>
+      <span class="badge">Binance Pay · USDT</span>
+    </div>
+  {% else %}
+    <p class="empty">
+      <svg aria-hidden="true"><use href="#i-coin"/></svg>
+      No packages are on sale right now. Please contact your administrator.
+    </p>
+  {% endif %}
+
+  {% if recent_payments %}
+    <section class="panel-section">
+      <div class="sa-rule" style="margin-top:0"><b>Recent orders</b><i aria-hidden="true"></i></div>
+      <div class="card">
+        <div class="rows">
+          {% for payment in recent_payments %}
+            <div class="row sa-order">
+              <span class="sa-order-ic {% if payment.status == 'paid' %}is-ok{% elif payment.status == 'pending' %}is-warn{% elif payment.status == 'failed' %}is-danger{% endif %}">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 4.6h10.8v6.8H2.6zM2.6 7.4h10.8"/></svg>
+              </span>
+              <span class="row-main">
+                <span class="row-title">{{ payment.plan.name }}</span>
+                <span class="row-sub mono">{{ payment.reference }} · {{ payment.created_at|timeago }}</span>
+              </span>
+              <span class="badge {% if payment.status == 'paid' %}is-ok{% elif payment.status == 'pending' %}is-warn{% elif payment.status == 'failed' %}is-danger{% endif %}">
+                {{ payment.get_status_display }}
+              </span>
+              <span class="row-value">{{ payment.pay_display }}</span>
+              {% if payment.status == 'pending' %}
+                <a href="{% url 'payments:detail' payment.reference %}" class="btn btn-sm">Continue</a>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="card-foot">
+          <a href="{% url 'student:billing' %}" class="btn btn-sm" data-panel-link="billing">
+            All invoices
+          </a>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+</div>

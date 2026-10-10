@@ -1,0 +1,174 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Data exports · Console{% endblock %}
+{% block heading %}Data exports{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    Take the operational record out as CSV. Every download is recorded in the audit trail.
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% comment %}
+    One range applies to every card below, so an administrator sets it once and
+    then picks what they need. The row counts update with it, which is what
+    stops someone downloading a 200,000-row file to discover it was the wrong
+    period.
+  {% endcomment %}
+  <form method="get" class="card spotlight p-4 animate-fade-up sm:p-5">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <label for="id_from" class="label">From</label>
+        <input type="date" name="from" id="id_from" value="{{ date_from }}" class="input py-2 text-sm">
+      </div>
+      <div>
+        <label for="id_to" class="label">To</label>
+        <input type="date" name="to" id="id_to" value="{{ date_to }}" class="input py-2 text-sm">
+      </div>
+      <div class="flex items-end gap-2 sm:col-span-2">
+        <button type="submit" class="btn-primary btn-sm">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-filter"/></svg> Apply range
+        </button>
+        <a href="{% url 'console:exports' %}" class="btn-ghost btn-sm">Everything</a>
+      </div>
+    </div>
+
+    {% if invalid_range %}
+      <p class="mt-3 flex items-center gap-2 text-xs font-medium text-rose-600 dark:text-rose-400">
+        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-alert"/></svg>
+        The start of the range is after its end, so every count below is zero.
+      </p>
+    {% else %}
+      <p class="mt-3 text-xs text-ink-500 dark:text-ink-400">
+        {% if date_from or date_to %}
+          Counting rows dated
+          {% if date_from %}from <span class="font-medium text-ink-700 dark:text-ink-200">{{ date_from }}</span>{% endif %}
+          {% if date_to %}up to and including <span class="font-medium text-ink-700 dark:text-ink-200">{{ date_to }}</span>{% endif %}.
+        {% else %}
+          No range set — each export contains every row on record.
+        {% endif %}
+      </p>
+    {% endif %}
+  </form>
+
+  {% comment %}One card per dataset: what it holds, how big it is, and the button.{% endcomment %}
+  <div class="grid gap-4 md:grid-cols-2">
+    {% for dataset in datasets %}
+      {% comment %}
+        A dataset is listed only for a role that may download it — the audit
+        log is the owners' (AI/services/staff_permissions.py, KWARG_AREAS).
+      {% endcomment %}
+      {% url 'console:export_download' dataset.key as download_url %}
+      {% if console_reach|get_item:download_url %}
+      {% with count=counts|get_item:dataset.key %}
+        <section class="card flex flex-col p-5">
+          <div class="flex items-start gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/12 text-brand-600 dark:text-brand-300">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#{{ dataset.icon }}"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <h2 class="text-sm font-semibold text-ink-900 dark:text-white">{{ dataset.label }}</h2>
+              <p class="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">{{ dataset.description }}</p>
+            </div>
+          </div>
+
+          <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <dt class="text-[11px] uppercase tracking-wide text-ink-400">Rows</dt>
+              <dd class="mt-0.5 font-mono text-base font-semibold text-ink-900 dark:text-white">
+                {% if count is None %}—{% else %}{{ count|intcomma }}{% endif %}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-wide text-ink-400">Columns</dt>
+              <dd class="mt-0.5 font-mono text-base font-semibold text-ink-900 dark:text-white">
+                {{ dataset.headers|length }}
+              </dd>
+            </div>
+          </dl>
+
+          {% if dataset.sensitivity %}
+            <p class="mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+              <svg class="mt-px h-3 w-3 shrink-0" aria-hidden="true"><use href="#i-shield"/></svg>
+              {{ dataset.sensitivity }}
+            </p>
+          {% endif %}
+
+          <details class="group mt-3">
+            <summary class="cursor-pointer list-none text-[11px] font-medium text-ink-500 hover:text-brand-600 dark:text-ink-400 dark:hover:text-brand-300">
+              <span class="group-open:hidden">Show columns</span>
+              <span class="hidden group-open:inline">Hide columns</span>
+            </summary>
+            <p class="mt-2 font-mono text-[11px] leading-relaxed text-ink-500 dark:text-ink-400">
+              {{ dataset.headers|join:" · " }}
+            </p>
+          </details>
+
+          <div class="mt-auto pt-4">
+            {% if count %}
+              <a class="btn-primary btn-sm w-full justify-center"
+                 href="{% url 'console:export_download' dataset.key %}?from={{ date_from }}&to={{ date_to }}">
+                <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-download"/></svg>
+                Download CSV
+              </a>
+            {% else %}
+              <button type="button" class="btn-ghost btn-sm w-full cursor-not-allowed justify-center opacity-60" disabled>
+                Nothing in this range
+              </button>
+            {% endif %}
+          </div>
+        </section>
+      {% endwith %}
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% comment %}
+    Exports are a read of everyone's data at once. Showing the last few here,
+    rather than only in the audit log, keeps that visible to the person doing it.
+  {% endcomment %}
+  <section class="card overflow-hidden reveal">
+    <header class="border-b hairline px-5 py-3.5 sm:px-6">
+      <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Recent exports</h2>
+      <p class="text-[11px] text-ink-500 dark:text-ink-400">
+        Bulk personal data leaving the platform is recorded like any other consequential action.
+      </p>
+    </header>
+
+    {% if recent %}
+      <ul class="divide-y divide-ink-200/70 dark:divide-white/8">
+        {% for entry in recent %}
+          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-xs sm:px-6">
+            <span class="badge-neutral">{{ entry.target_label }}</span>
+            <span class="min-w-0 flex-1 truncate text-ink-600 dark:text-ink-300">{{ entry.description }}</span>
+            <span class="text-ink-500 dark:text-ink-400">
+              {% if entry.actor %}{{ entry.actor.display_name }}{% else %}system{% endif %}
+            </span>
+            <time class="text-[11px] text-ink-400">{{ entry.created_at|timeago }}</time>
+          </li>
+        {% endfor %}
+      </ul>
+      {% if console_can.staff %}
+      <div class="border-t hairline px-5 py-3 sm:px-6">
+        <a href="{% url 'console:audit_logs' %}?action=data_export"
+           class="text-xs font-medium text-brand-600 hover:underline dark:text-brand-300">
+          See every export in the audit log →
+        </a>
+      </div>
+      {% endif %}
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-download" title="Nothing exported yet" body="Downloads will be listed here, and in the audit log, once someone takes data out." %}
+    {% endif %}
+  </section>
+
+  <p class="px-1 text-[11px] leading-relaxed text-ink-400">
+    Files are written straight to the response as they are read from the database, so a large export
+    starts downloading immediately and does not load the whole table into memory. Columns are listed
+    explicitly in the code — nothing is serialised automatically, so a future field cannot appear in
+    one of these files without being added deliberately.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,2020 @@
+{% load static %}
+{% comment %}
+  ======================================================================
+  EPC AI Assistant — ADMIN CONSOLE design system
+  ======================================================================
+  Loaded ONLY by base/console.html, so it re-skins every admin page and
+  nothing else. The student app, the chat and the public site keep
+  base/design.html untouched.
+
+  The direction is "instrument panel": a cool porcelain ground, near-white
+  surfaces top-lit so they sit in front of it, one electric lapis blue for
+  anything you can press, one near-black for the surfaces that must out-rank
+  everything around them, and violet reserved for data. Corners are generous,
+  shadows are layered and cool, and every piece of motion is transform/opacity
+  only so the console stays at 60fps on a laptop with twenty tabs open.
+
+  The light theme is built, not defaulted: the ground carries a faint wash in
+  the console's own two hues and every raised surface is top-lit, because a
+  flat fill next to another flat fill reads as one plane however carefully the
+  neutrals were picked. None of it is applied in dark, where surfaces already
+  separate by lightness and a gradient would only muddy them.
+
+  Typeface: Inter across the whole console, as everywhere else — drawn
+  to feel designed, humanist enough to read all day, with real tabular
+  figures for tables. JetBrains Mono appears only inside <code> and on
+  machine references (payment ids, API keys), never as UI text.
+  ======================================================================
+{% endcomment %}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F0F2F6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0D10" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="{% static 'brand/favicon.svg' %}" type="image/svg+xml">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<noscript>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+</noscript>
+
+<script src="{% static 'vendor/tailwind.js' %}"></script>
+<script>
+  /* Restore the saved theme before first paint so there is no flash. The key
+     is shared with the student app on purpose: one preference, one product. */
+  (function () {
+    try {
+      var saved = localStorage.getItem('lumen-theme') || localStorage.getItem('epcai-theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'dark' || (!saved && prefersDark)) document.documentElement.classList.add('dark');
+    } catch (e) {}
+  })();
+
+  /* Tells components/charts.html to draw in the console's language —
+     smoothed areas, pill bars, a highlighted peak and a dark tooltip. The
+     student app never sets this and keeps the chart style it has today. */
+  window.EPC_CHART_THEME = 'console';
+
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        /* Full 0–100 opacity scale. Tailwind ships only a coarse default, and
+           a single off-scale value such as `bg-brand-500/12` aborts the whole
+           stylesheet — leaving every page unstyled. Completing the scale
+           removes that failure mode entirely. */
+        opacity: Object.fromEntries(
+          Array.from({ length: 101 }, (_, i) => [String(i), String(i / 100)])
+        ),
+        colors: {
+          /* Lapis — every pressable thing, every active state, the primary
+             data series. Bright enough to carry a card, deep enough to carry
+             white text at 600. */
+          brand: {
+            50:'#EFF6FF',100:'#DBEAFE',200:'#BFDBFE',300:'#93C5FD',400:'#60A5FA',
+            500:'#2563EB',600:'#1D4ED8',700:'#1E40AF',800:'#1E3A8A',900:'#172554',950:'#0F1B3D',
+          },
+          /* Violet — data, AI moments, the second series. Never a button. */
+          accent: {
+            50:'#FFF1F2',100:'#FFE4E6',200:'#FECDD3',300:'#FDA4AF',400:'#FB7185',
+            500:'#E11D48',600:'#BE123C',700:'#9F1239',800:'#881337',900:'#6B0F2A',950:'#4C0519',
+          },
+          /* Ink — cool neutrals. 50 is the page ground in light, 950 in dark;
+             900 is the near-black surface the reference design leans on.
+             500 is the faintest weight used for *text*, and it clears 4.5:1 on
+             the ground as well as on a card — the page is a shade deeper than
+             a card, so contrast has to be checked against the darker of the
+             two, not the flattering one. */
+          ink: {
+            50:'#F4F7FC',100:'#F1F4FB',200:'#E4E9F3',300:'#D3DAE8',400:'#9AA5BC',
+            500:'#5B6884',600:'#47536C',700:'#364054',800:'#1F2637',900:'#0E1526',950:'#070B14',
+          },
+          gold: { 400:'#FB7185', 500:'#E11D48' },
+        },
+        fontFamily: {
+          sans:    ['Instrument Sans','Helvetica Neue','Helvetica','system-ui','-apple-system','sans-serif'],
+          display: ['Instrument Sans','Helvetica Neue','Helvetica','system-ui','-apple-system','sans-serif'],
+          mono:    ['JetBrains Mono','SFMono-Regular','Consolas','Liberation Mono','monospace'],
+        },
+        /* Cool, layered shadows. One flat drop shadow is the fastest way to
+           make a light interface look cheap. */
+        boxShadow: {
+          card:  '0 1px 2px rgba(14,21,38,.04), 0 8px 20px -12px rgba(14,21,38,.14)',
+          lift:  '0 2px 6px rgba(14,21,38,.05), 0 24px 48px -22px rgba(14,21,38,.28)',
+          float: '0 10px 22px -12px rgba(14,21,38,.16), 0 40px 76px -36px rgba(14,21,38,.34)',
+          glow:  '0 0 0 1px rgba(37,99,235,.16), 0 20px 46px -20px rgba(37,99,235,.55)',
+          gold:  '0 0 0 1px rgba(225,29,72,.18), 0 18px 42px -20px rgba(225,29,72,.55)',
+          press: 'inset 0 2px 6px rgba(14,21,38,.16)',
+          inset: 'inset 0 1px 0 rgba(255,255,255,.12)',
+          pill:  '0 1px 2px rgba(14,21,38,.06), 0 4px 10px -6px rgba(14,21,38,.18)',
+        },
+        borderRadius: { xl2: '1.25rem', xl3: '1.5rem', xl4: '2rem' },
+        transitionTimingFunction: {
+          out: 'cubic-bezier(.22,1,.36,1)',
+          spring: 'cubic-bezier(.34,1.56,.64,1)',
+          swift: 'cubic-bezier(.4,0,.2,1)',
+        },
+        keyframes: {
+          'fade-up':    { '0%': { opacity: 0, transform: 'translateY(12px)' }, '100%': { opacity: 1, transform: 'none' } },
+          'fade-down':  { '0%': { opacity: 0, transform: 'translateY(-10px)' }, '100%': { opacity: 1, transform: 'none' } },
+          'fade-in':    { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
+          'scale-in':   { '0%': { opacity: 0, transform: 'scale(.96)' }, '100%': { opacity: 1, transform: 'none' } },
+          'slide-left': { '0%': { transform: 'translateX(-100%)' }, '100%': { transform: 'none' } },
+          'bounce-dot': { '0%,80%,100%': { transform: 'translateY(0)', opacity: .4 }, '40%': { transform: 'translateY(-5px)', opacity: 1 } },
+          shimmer:      { '100%': { transform: 'translateX(100%)' } },
+          'spin-slow':  { to: { transform: 'rotate(360deg)' } },
+          sheen:        { '0%': { transform: 'translateX(-130%) skewX(-18deg)' }, '100%': { transform: 'translateX(240%) skewX(-18deg)' } },
+          float:        { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-7px)' } },
+          'pulse-ring': { '0%': { transform: 'scale(.85)', opacity: .55 }, '70%,100%': { transform: 'scale(1.7)', opacity: 0 } },
+          'gradient-pan': { '0%,100%': { backgroundPosition: '0% 50%' }, '50%': { backgroundPosition: '100% 50%' } },
+          'count-in':   { '0%': { opacity: 0, transform: 'translateY(6px) scale(.98)' }, '100%': { opacity: 1, transform: 'none' } },
+          /* Console-specific motion */
+          'page-in':    { '0%': { opacity: 0, transform: 'translateY(10px) scale(.995)' }, '100%': { opacity: 1, transform: 'none' } },
+          'page-out':   { '0%': { opacity: 1, transform: 'none' }, '100%': { opacity: 0, transform: 'translateY(-6px) scale(.997)' } },
+          'rise':       { '0%': { opacity: 0, transform: 'translateY(18px)' }, '100%': { opacity: 1, transform: 'none' } },
+          'draw-bar':   { '0%': { transform: 'scaleY(0)' }, '100%': { transform: 'scaleY(1)' } },
+          'ping-soft':  { '0%': { transform: 'scale(1)', opacity: .5 }, '100%': { transform: 'scale(2.2)', opacity: 0 } },
+          'marquee-x':  { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-50%)' } },
+          'blink-caret':{ '0%,100%': { opacity: 1 }, '50%': { opacity: .25 } },
+        },
+        animation: {
+          'fade-up':    'fade-up .55s cubic-bezier(.22,1,.36,1) both',
+          'fade-down':  'fade-down .45s cubic-bezier(.22,1,.36,1) both',
+          'fade-in':    'fade-in .4s ease-out both',
+          'scale-in':   'scale-in .24s cubic-bezier(.22,1,.36,1) both',
+          'slide-left': 'slide-left .3s cubic-bezier(.22,1,.36,1) both',
+          'bounce-dot': 'bounce-dot 1.2s infinite ease-in-out',
+          shimmer:      'shimmer 1.6s infinite',
+          'spin-slow':  'spin-slow 14s linear infinite',
+          sheen:        'sheen .85s cubic-bezier(.22,1,.36,1)',
+          float:        'float 6s ease-in-out infinite',
+          'pulse-ring': 'pulse-ring 2.4s cubic-bezier(.22,1,.36,1) infinite',
+          'gradient-pan': 'gradient-pan 9s ease infinite',
+          'count-in':   'count-in .5s cubic-bezier(.22,1,.36,1) both',
+          'page-in':    'page-in .42s cubic-bezier(.22,1,.36,1) both',
+          'page-out':   'page-out .16s cubic-bezier(.4,0,1,1) both',
+          rise:         'rise .6s cubic-bezier(.22,1,.36,1) both',
+          'ping-soft':  'ping-soft 1.9s cubic-bezier(0,0,.2,1) 3 both',
+          'blink-caret':'blink-caret 1.4s ease-in-out infinite',
+        },
+      },
+    },
+  };
+</script>
+
+<style type="text/tailwindcss">
+  @layer base {
+    /* A utility that sets `display` outranks the browser's own rule for the
+       `hidden` attribute — same specificity, and the stylesheet comes later.
+       Without this, `<div hidden class="flex">` renders anyway, which turns a
+       closed dialog into one that is permanently open over the page. */
+    [hidden] { display: none !important; }
+
+    :root {
+      --ring: 37 99 235;
+      --ease-out: cubic-bezier(.22,1,.36,1);
+      --ease-swift: cubic-bezier(.4,0,.2,1);
+      /* The design's two curves, measured off it rather than guessed. The
+         first is on almost everything; the second overshoots slightly and is
+         reserved for things that appear in answer to a press. */
+      --ease-design: cubic-bezier(.2,.7,.2,1);
+      --ease-spring: cubic-bezier(.3,1.4,.4,1);
+      --shell: 17rem;   /* 272px, the design's rail */
+
+      /* Data palette — read by components/charts.html so the console charts
+         speak the same language as the console chrome. */
+      --chart-1: #2563EB;   /* blue — primary series */
+      --chart-2: #E11D48;   /* rose — the second series */
+      --chart-3: #10B981;   /* emerald */
+      --chart-4: #F59E0B;   /* amber */
+      --chart-5: #60A5FA;   /* light blue */
+      --chart-6: #06B6D4;   /* cyan */
+      --chart-idle: rgba(14,21,38,.08);
+      --chart-surface: #ffffff;
+    }
+    .dark {
+      --chart-idle: rgba(255,255,255,.09);
+      --chart-surface: #0E1526;
+    }
+
+    /* ================================================================
+       MOTION — ported from the Admin Console Light design
+       Durations and curves are the design's own, taken from the rendered
+       page rather than approximated.
+       ================================================================ */
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes pop { 0% { opacity: 0; transform: scale(.82); } 60% { transform: scale(1.04); } 100% { opacity: 1; transform: scale(1); } }
+    @keyframes ringOut { 0% { transform: scale(.6); opacity: .5; } 70%, 100% { transform: scale(2.6); opacity: 0; } }
+    @keyframes grad { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+    @keyframes sheenX { 0% { transform: translateX(-130%) skewX(-18deg); opacity: 1; } 96% { transform: translateX(320%) skewX(-18deg); opacity: 1; } 100% { transform: translateX(320%) skewX(-18deg); opacity: 0; } }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body {
+      @apply bg-ink-50 text-ink-900 font-sans antialiased dark:bg-ink-950 dark:text-ink-100;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: 'ss01','ss03','cv05';
+      letter-spacing: -0.006em;
+    }
+    /* A flat fill reads as unfinished at this size. Two very low-opacity
+       washes in the console's own two hues give the ground somewhere to come
+       from without anybody being able to point at a gradient. */
+    html:not(.dark) body {
+      background-image:
+        radial-gradient(1100px 620px at 82% -12%, rgba(37,99,235,.10), transparent 62%),
+        radial-gradient(760px 500px at 2% 8%, rgba(225,29,72,.07), transparent 60%);
+      background-attachment: fixed;
+    }
+
+    /* Two very large, very soft, very slow orbs behind everything. At this
+       blur nobody can point at them; take them away and the console looks
+       like it is printed on paper rather than lit from somewhere. They are
+       fixed and inert, so they cost one composited layer each and nothing
+       else — and they never intercept a click. */
+    html:not(.dark) body::before,
+    html:not(.dark) body::after {
+      content: ""; position: fixed; z-index: 0;
+      border-radius: 50%; pointer-events: none;
+    }
+    html:not(.dark) body::before {
+      left: -150px; top: -110px; width: 520px; height: 520px;
+      filter: blur(90px); opacity: .55;
+      background: radial-gradient(circle, rgba(37,99,235,.30), transparent 70%);
+    }
+    html:not(.dark) body::after {
+      right: -170px; top: 38%; width: 460px; height: 460px;
+      filter: blur(100px); opacity: .45;
+      background: radial-gradient(circle, rgba(225,29,72,.22), transparent 70%);
+    }
+    @keyframes orbA { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(26px, -22px); } }
+    @keyframes orbB { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-30px, 20px); } }
+
+    /* Everything the reader reads sits above the orbs. */
+    body > * { position: relative; z-index: 1; }
+
+    @media (prefers-reduced-motion: reduce) {
+      html:not([data-motion="full"]):not(.dark) body::before,
+      html:not([data-motion="full"]):not(.dark) body::after { animation: none; }
+    }
+    * { -webkit-tap-highlight-color: transparent; }
+    ::selection { @apply bg-brand-500/25 text-ink-900 dark:text-white; }
+    :focus-visible { @apply outline-none ring-2 ring-brand-500/70 ring-offset-2 ring-offset-ink-50 dark:ring-offset-ink-950; }
+
+    h1,h2,h3,h4 { @apply font-semibold; letter-spacing: -0.022em; }
+    /* Every number that will be compared against another number lines up. */
+    .mono, .font-mono, table td, table th, .stat-value, .tabular, .kpi-value { font-variant-numeric: tabular-nums; }
+
+    .scroll-slim { scrollbar-width: thin; scrollbar-color: rgb(203 208 218) transparent; }
+    .dark .scroll-slim { scrollbar-color: rgb(60 67 78) transparent; }
+    .scroll-slim::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scroll-slim::-webkit-scrollbar-track { background: transparent; }
+    .scroll-slim::-webkit-scrollbar-thumb { @apply rounded-full bg-ink-300/70 dark:bg-white/12; }
+    .scroll-slim::-webkit-scrollbar-thumb:hover { @apply bg-ink-400 dark:bg-white/20; }
+
+    /* ----------------------------------------------------------------
+       The collapsible rail. One custom property drives both the sidebar's
+       width and the main column's padding, so the two can never disagree,
+       and the transition is a single width animation on one element.
+       Every rule here is scoped to #consoleRail — the mobile drawer keeps
+       its labels whatever the desktop rail is doing.
+       ---------------------------------------------------------------- */
+    .shell-collapsed { --shell: 4.9rem; }
+    .shell-show-collapsed { display: none; }
+    .shell-collapsed .shell-hide-collapsed { display: none; }
+    .shell-collapsed .shell-show-collapsed { display: flex; }
+    .shell-collapsed #consoleRail .nav-label,
+    .shell-collapsed #consoleRail .nav-badge { display: none; }
+    .shell-collapsed #consoleRail .nav-link { @apply justify-center px-0; }
+    .shell-collapsed #consoleRail .nav-section {
+      @apply mx-auto mb-1 mt-4 h-px w-8 overflow-hidden bg-ink-200 p-0 text-transparent dark:bg-white/10;
+    }
+    .shell-collapsed #consoleRail .nav-link-active::before { @apply left-1; }
+
+    /* Quick-jump rows */
+    .jump-row { @apply transition-colors duration-150; }
+    .jump-row:hover { @apply bg-ink-100 dark:bg-white/8; }
+
+    /* Motion is a courtesy, never a requirement. */
+    /* The operating system's motion preference is honoured by default, and a
+       blanket rule is the right shape for it: it catches every transition in
+       the console, including ones written after this line.
+
+       It is a default rather than a verdict, though. `data-motion="full"` on
+       <html> is the reader saying they would like the motion after all, and
+       the console offers that switch beside the theme one. Without the
+       override the setting could only be changed in the operating system,
+       which is a long way to go to see a hover. */
+    /* What "reduced motion" should actually mean here.
+       ------------------------------------------------------------------
+       The blanket rule this replaces forced every duration in the console
+       to .01ms, which switched off hover feedback, focus rings settling,
+       colour changes and button presses along with everything else. The
+       interface stopped answering at all — and that is not what the setting
+       asks for. WCAG's concern is non-essential motion that moves a lot of
+       the screen: parallax, zoom, long travel, things that loop.
+
+       So: every animation stops — entrances, loops, ambient drift. Short
+       interaction transitions stay, because a 2px lift on hover is feedback,
+       not a vestibular trigger, and removing it makes the console feel
+       broken rather than calm.
+
+       `data-motion="full"` still overrides the whole thing for anyone who
+       wants the entrances back too. */
+    @media (prefers-reduced-motion: reduce) {
+      html:not([data-motion="full"]) { scroll-behavior: auto; }
+      html:not([data-motion="full"]) *,
+      html:not([data-motion="full"]) *::before,
+      html:not([data-motion="full"]) *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+      /* Entrances resolve to their finished state rather than being skipped
+         mid-flight, which would leave content at opacity 0. */
+      html:not([data-motion="full"]) .reveal { opacity: 1 !important; transform: none !important; }
+    }
+  }
+
+  @layer components {
+
+    /* ================================================================
+       SURFACES
+       ================================================================ */
+    .card {
+      @apply relative rounded-xl2 border border-ink-200/70 bg-white shadow-card
+             dark:border-white/8 dark:bg-ink-900;
+      transition: box-shadow .3s var(--ease-design), border-color .3s ease;
+    }
+    /* The light comes from above, as it does on every physical surface. Two
+       percent of white over the top of a card is enough for the eye to place
+       it in front of the page; any more and it reads as a gradient. */
+    html:not(.dark) .card,
+    html:not(.dark) .card-feature,
+    html:not(.dark) .panel {
+      background-image: linear-gradient(180deg, rgba(255,255,255,.9) 0%, rgba(244,246,250,.55) 100%);
+    }
+    html:not(.dark) .card:hover { @apply shadow-lift; }
+    /* The pointer-tracked highlight. `--mx/--my` are written by the console
+       script; with no JS the gradient simply never moves, which looks fine. */
+    .card-hover {
+      @apply will-change-transform hover:-translate-y-0.5 hover:shadow-lift
+             hover:border-brand-300/70 dark:hover:border-brand-500/35;
+      transition: transform .3s var(--ease-design), box-shadow .3s ease, border-color .3s ease;
+    }
+    .spotlight::after {
+      content: '';
+      @apply pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300;
+      background: radial-gradient(20rem 20rem at var(--mx,50%) var(--my,0%), rgba(37,99,235,.10), transparent 70%);
+    }
+    .dark .spotlight::after { background: radial-gradient(20rem 20rem at var(--mx,50%) var(--my,0%), rgba(37,99,235,.16), transparent 70%); }
+    .spotlight:hover::after { @apply opacity-100; }
+
+    .glass { @apply border border-white/60 bg-white/[.93] dark:border-white/8 dark:bg-ink-900/[.94]; }
+    /* A bar that floats over the page's own content while you scroll it. The
+       glass treatment is right for chrome that sits over a page you are still
+       reading, and wrong here: the form fields beneath were legible through
+       it, so the labels behind the bar competed with the button on it. */
+    .action-bar {
+      @apply border border-ink-200/80 bg-white/95 backdrop-blur-xl
+             dark:border-white/10 dark:bg-ink-900/95;
+    }
+    .panel { @apply rounded-xl2 border border-ink-200/70 bg-white/[.96] p-5 dark:border-white/8 dark:bg-ink-900/[.9]; }
+    .hairline { @apply border-ink-200/70 dark:border-white/8; }
+
+    .card-feature {
+      @apply relative overflow-hidden rounded-xl3 border border-ink-200/70 bg-white shadow-float
+             dark:border-white/8 dark:bg-ink-900;
+    }
+    /* The hairline of light along the top edge of a raised surface. */
+    .edge-light::before {
+      content: '';
+      @apply pointer-events-none absolute inset-x-0 top-0 z-10 h-px
+             bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/18;
+    }
+
+    /* The near-black surface. Used sparingly — one or two per page — for the
+       thing that must out-rank everything around it. */
+    .surface-ink {
+      @apply relative overflow-hidden rounded-xl2 border border-ink-900 bg-ink-900 text-white shadow-lift
+             dark:border-white/10 dark:bg-ink-900;
+    }
+    .surface-brand {
+      @apply relative overflow-hidden rounded-xl2 border border-brand-600/40 text-white shadow-glow;
+      background-image: linear-gradient(140deg, #6E9BFF 0%, #4076FC 48%, #2B57E9 100%);
+    }
+
+    /* ================================================================
+       BUTTONS
+       ================================================================ */
+    .btn {
+      @apply relative inline-flex select-none items-center justify-center gap-2 overflow-hidden rounded-xl
+             px-4 py-2.5 text-sm font-semibold tracking-[-.01em]
+             transition-[transform,box-shadow,background-color,border-color,color] duration-200 ease-out
+             active:scale-[.965] disabled:pointer-events-none disabled:opacity-50;
+    }
+    .btn-primary {
+      @apply btn text-white;
+      background-image: linear-gradient(140deg, #5A8BFF 0%, #3E6DFB 52%, #2B57E9 100%);
+      /* Three parts: a hairline of light along the top edge, a tight contact
+         shadow that keeps the button attached to the page, and a wider cast
+         shadow in the button's own hue. The middle one is what stops a
+         floating button looking like a sticker. */
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.28),
+        0 1px 2px rgba(35,57,157,.30),
+        0 8px 20px -10px rgba(43,87,233,.80);
+      transition: transform .2s var(--ease-out), box-shadow .28s var(--ease-out), filter .2s ease;
+    }
+    .btn-primary:hover {
+      @apply -translate-y-0.5;
+      filter: saturate(1.06);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.34),
+        0 2px 4px rgba(35,57,157,.26),
+        0 18px 36px -12px rgba(43,87,233,.92);
+    }
+    .btn-primary:active {
+      box-shadow:
+        inset 0 2px 5px rgba(20,32,90,.34),
+        0 1px 2px rgba(35,57,157,.24);
+    }
+    /* One small flourish, on the one control that should look pressable. */
+    .btn-primary::after {
+      content: '';
+      @apply pointer-events-none absolute inset-y-0 -left-1/3 w-1/3
+             bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0;
+    }
+    .btn-primary:hover::after { @apply animate-sheen opacity-100; }
+
+    /* Kept as a name so existing templates do not break, but it is the primary
+       button now. Two competing action colours on one screen means neither is
+       the action — and violet is the data colour, not a button. */
+    .btn-accent { @apply btn-primary; }
+    .btn-ink {
+      @apply btn bg-ink-900 text-white hover:-translate-y-0.5 hover:bg-ink-800
+             shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_1px_2px_rgba(14,21,38,.30),0_8px_20px_-10px_rgba(14,21,38,.55)]
+             hover:shadow-[inset_0_1px_0_rgba(255,255,255,.18),0_2px_4px_rgba(14,21,38,.26),0_18px_36px_-14px_rgba(14,21,38,.75)]
+             active:shadow-press
+             dark:bg-white dark:text-ink-900 dark:hover:bg-ink-100;
+    }
+    .btn-ghost {
+      @apply btn text-ink-600 hover:bg-ink-100 hover:text-ink-900
+             dark:text-ink-300 dark:hover:bg-white/8 dark:hover:text-white;
+    }
+    .btn-outline {
+      @apply btn border border-ink-200 bg-white text-ink-700 shadow-[0_1px_2px_rgba(14,21,38,.06)]
+             hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50/70 hover:text-brand-700 hover:shadow-pill
+             dark:border-white/12 dark:bg-white/[.03] dark:text-ink-200
+             dark:hover:border-brand-500/45 dark:hover:bg-white/8 dark:hover:text-white;
+    }
+    /* `btn-secondary` is used in nine places across three templates and was
+       never defined, so every one of them — Manage, Filter, Top up — rendered
+       as bare text with no border, no padding and no hit area. It is the
+       neutral bordered button, which is what `btn-outline` already is; an
+       alias fixes all nine at once and keeps both names working. */
+    .btn-secondary { @apply btn-outline; }
+
+    .btn-danger {
+      @apply btn bg-rose-600 text-white hover:-translate-y-0.5 hover:bg-rose-500
+             shadow-[inset_0_1px_0_rgba(255,255,255,.22),0_1px_2px_rgba(136,19,55,.30),0_8px_20px_-10px_rgba(225,29,72,.62)]
+             hover:shadow-[inset_0_1px_0_rgba(255,255,255,.28),0_2px_4px_rgba(136,19,55,.26),0_18px_36px_-12px_rgba(225,29,72,.75)];
+    }
+    .btn-sm { @apply gap-1.5 rounded-lg px-3 py-1.5 text-xs; }
+    .btn-lg { @apply rounded-2xl px-6 py-3.5 text-base; }
+    .btn-icon {
+      @apply inline-flex h-9 w-9 items-center justify-center rounded-xl text-ink-500
+             transition-[transform,background-color,color] duration-200 ease-out
+             hover:-translate-y-0.5 hover:bg-ink-100 hover:text-ink-900 active:scale-90
+             dark:text-ink-400 dark:hover:bg-white/8 dark:hover:text-white;
+    }
+    /* The square icon affordance in the corner of a KPI tile. */
+    .btn-chip {
+      @apply inline-flex h-8 w-8 items-center justify-center rounded-[.7rem] border border-white/25
+             bg-white/15 text-white backdrop-blur transition duration-300 ease-out
+             hover:rotate-6 hover:scale-105 hover:bg-white/25;
+    }
+    .btn.is-busy { @apply pointer-events-none opacity-70; }
+
+    /* ================================================================
+       FORMS
+       ================================================================ */
+    .label { @apply mb-1.5 block text-[13px] font-semibold text-ink-700 dark:text-ink-300; }
+    .input {
+      @apply w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900
+             shadow-[0_1px_2px_rgba(14,21,38,.04)]
+             transition-[border-color,box-shadow,background-color] duration-200 ease-out
+             placeholder:text-ink-400 hover:border-ink-300
+             focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-500/16
+             dark:border-white/10 dark:bg-white/[.04] dark:text-white dark:placeholder:text-ink-500
+             dark:hover:border-white/18 dark:focus:border-brand-500/60 dark:focus:ring-brand-500/22;
+    }
+    .input-error { @apply border-rose-400 focus:border-rose-400 focus:ring-rose-500/18; }
+    .select { @apply input appearance-none bg-[length:16px] bg-[right_0.75rem_center] bg-no-repeat pr-10; }
+    .checkbox {
+      @apply h-4 w-4 rounded-[.35rem] border-ink-300 text-brand-600 transition duration-200
+             hover:border-brand-400 focus:ring-brand-500/40 dark:border-white/20 dark:bg-white/8;
+    }
+    .field-error { @apply mt-1.5 flex items-start gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400; }
+    .help { @apply mt-1.5 text-xs leading-relaxed text-ink-500 dark:text-ink-400; }
+    /* Search field with a leading icon — used in every list toolbar. */
+    .search-shell { @apply relative; }
+    .search-shell > svg:first-child {
+      @apply pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400
+             transition-colors duration-200;
+    }
+    .search-shell:focus-within > svg:first-child { @apply text-brand-500; }
+
+    /* ================================================================
+       BADGES
+       ================================================================ */
+    .badge {
+      @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-none
+             tracking-[-.01em] ring-1 ring-inset transition duration-200;
+    }
+    .badge-success { @apply badge bg-emerald-500/10 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/22; }
+    .badge-warning { @apply badge bg-amber-500/12 text-amber-700 ring-amber-600/22 dark:bg-amber-400/12 dark:text-amber-300 dark:ring-amber-400/22; }
+    .badge-danger  { @apply badge bg-rose-500/10 text-rose-700 ring-rose-600/20 dark:bg-rose-400/12 dark:text-rose-300 dark:ring-rose-400/22; }
+    .badge-info    { @apply badge bg-sky-500/10 text-sky-700 ring-sky-600/20 dark:bg-sky-400/12 dark:text-sky-300 dark:ring-sky-400/22; }
+    .badge-brand   { @apply badge bg-brand-500/10 text-brand-700 ring-brand-600/20 dark:bg-brand-400/14 dark:text-brand-300 dark:ring-brand-400/25; }
+    .badge-gold    { @apply badge bg-accent-500/12 text-accent-700 ring-accent-600/25 dark:bg-accent-400/14 dark:text-accent-300 dark:ring-accent-400/25; }
+    .badge-neutral { @apply badge bg-ink-500/8 text-ink-600 ring-ink-500/15 dark:bg-white/8 dark:text-ink-300 dark:ring-white/10; }
+    /* A dot that pulses inside a badge — "live", "pending", "running". */
+    .badge-dot { @apply relative inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-current; }
+    .badge-dot::before { content: ''; @apply absolute inset-0 animate-ping-soft rounded-full bg-current; }
+
+    /* ================================================================
+       NAVIGATION
+       ================================================================ */
+    /* The design steps a row three pixels toward the reader on hover, on its
+       own curve, while the ground and the colour change at their own speeds.
+       Three separate durations rather than one, because they are three
+       different things happening. */
+    .nav-link {
+      @apply relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-[13.5px] font-medium
+             text-ink-600 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white;
+      transition: background .2s ease, color .2s ease, transform .24s var(--ease-design);
+    }
+    .nav-link:hover { transform: translateX(3px); }
+    /* The hover ground wipes in from the left rather than simply appearing. */
+    .nav-link::after {
+      content: '';
+      @apply pointer-events-none absolute inset-0 -z-10 origin-left scale-x-0 rounded-xl bg-ink-100
+             transition-transform duration-300 ease-out dark:bg-white/8;
+    }
+    .nav-link:hover::after { @apply scale-x-100; }
+    .nav-link > svg { @apply shrink-0 transition-transform duration-300 ease-out; }
+    .nav-link:hover > svg { @apply scale-110; }
+
+    .nav-link-active {
+      @apply bg-white font-semibold text-brand-700 shadow-pill
+             dark:bg-white/10 dark:text-white;
+    }
+    .nav-link-active::after { @apply hidden; }
+    /* The blue spine that marks where you are. */
+    .nav-link-active::before {
+      content: '';
+      @apply absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-500;
+    }
+    .nav-link-active > svg { @apply text-brand-600 dark:text-brand-300; }
+    .crumb-root {
+      @apply shrink-0 transition-colors duration-200 hover:text-ink-700 dark:hover:text-ink-200;
+    }
+
+    .nav-section {
+      @apply px-3 pb-1.5 pt-5 text-[10px] font-extrabold uppercase tracking-[.13em]
+             text-ink-500 dark:text-ink-400;
+    }
+
+    /* ================================================================
+       DATA
+       ================================================================ */
+    .table-wrap { @apply -mx-1 overflow-x-auto scroll-slim px-1; }
+    .table { @apply w-full min-w-[640px] border-collapse text-sm; }
+    .th {
+      @apply whitespace-nowrap px-4 py-3 text-left text-[10.5px] font-extrabold uppercase tracking-[.11em]
+             text-ink-500 dark:text-ink-400;
+    }
+    .td { @apply whitespace-nowrap px-4 py-3.5 align-middle text-[13.5px] text-ink-700 dark:text-ink-200; }
+    /* Rows lift a hair and grow a blue spine on hover — cheap, transform-only,
+       and it tells you exactly which row the pointer is on in a dense table. */
+    .row {
+      @apply relative border-t border-ink-200/60 transition-colors duration-200 ease-out
+             hover:bg-brand-500/[.045] dark:border-white/8 dark:hover:bg-white/[.045];
+    }
+    .row > td:first-child::before {
+      content: '';
+      @apply pointer-events-none absolute left-0 top-0 h-full w-[3px] origin-top scale-y-0 bg-brand-500
+             transition-transform duration-300 ease-out;
+    }
+    .row:hover > td:first-child::before { @apply scale-y-100; }
+    thead .th { @apply border-b border-ink-200/70 dark:border-white/8; }
+
+    /* ================================================================
+       STRUCTURE
+       ================================================================ */
+    .eyebrow {
+      @apply inline-flex items-center gap-2 rounded-full border border-brand-500/20 bg-brand-500/8
+             px-3 py-1 text-[10.5px] font-extrabold uppercase tracking-[.14em] text-brand-700
+             dark:border-brand-400/22 dark:bg-brand-400/10 dark:text-brand-300;
+    }
+    .display { @apply font-display font-bold leading-[1.08]; letter-spacing: -0.032em; }
+    .lede { @apply text-[15px] leading-relaxed text-ink-600 dark:text-ink-300 sm:text-base; }
+    .section-title { @apply text-[15px] font-bold text-ink-900 dark:text-white; }
+    .section-note { @apply text-[11.5px] leading-relaxed text-ink-500 dark:text-ink-400; }
+    /* A heading is ink. What tells the eye which block it wants is a small
+       coloured marker before the words — the same wayfinding the coloured
+       headings gave, without a page of headings in four colours. */
+    .title-brand, .title-accent, .title-success {
+      @apply relative flex items-center gap-2 text-[15px] font-bold text-ink-900 dark:text-white;
+    }
+    .title-brand::before, .title-accent::before, .title-success::before {
+      content: ''; @apply h-3.5 w-1 shrink-0 rounded-full;
+    }
+    .title-brand::before   { @apply bg-brand-500; }
+    .title-accent::before  { @apply bg-accent-500; }
+    .title-success::before { @apply bg-emerald-500; }
+    .title-danger { @apply text-[15px] font-bold text-rose-600 dark:text-rose-400; }
+    .title-warning{ @apply text-[15px] font-bold text-amber-600 dark:text-amber-400; }
+
+    /* ----------------------------------------------------------------
+       THE PAGE MASTHEAD
+       Rendered by the shell for every page, so a page announces itself the
+       same way wherever you are. The title is the <h1>; the rule beneath it
+       is what separates "here is the page" from "here is its content", and
+       it fades out to the right so it frames rather than boxes.
+       ---------------------------------------------------------------- */
+    /* The masthead is the dashboard's hero card, shared by every page: lit
+       from the right, reading on the flat end. It replaces a bare title over
+       a hairline, which looked like a different product from the page it sat
+       above. */
+    .page-head {
+      @apply relative mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4
+             overflow-hidden rounded-xl3 border border-ink-200/70 px-6 py-6 shadow-card
+             dark:border-white/8 sm:px-8 sm:py-7;
+      background: linear-gradient(120deg,
+        #FFFFFF 0%, #F7FAFF 30%,
+        rgba(96,165,250,.32) 66%, rgba(225,29,72,.20) 100%);
+      animation: fadeUp .55s var(--ease-design) both;
+    }
+    .dark .page-head {
+      background: linear-gradient(120deg,
+        #141B2C 0%, #131A2A 30%,
+        rgba(37,99,235,.24) 66%, rgba(225,29,72,.16) 100%);
+    }
+    /* The pieces arrive in reading order, a beat apart. */
+    .page-head .hero-date { @apply mb-2; animation: fadeUp .55s var(--ease-design) both; }
+    .page-head .page-title { animation: fadeUp .55s var(--ease-design) .06s both; }
+    .page-head .page-lede { animation: fadeUp .55s var(--ease-design) .12s both; }
+    .page-head-actions { animation: fadeUp .55s var(--ease-design) .18s both; }
+    .page-title {
+      @apply font-display text-[1.7rem] font-bold leading-[1.06] text-ink-900 dark:text-white sm:text-[2.15rem];
+      letter-spacing: -0.035em;
+    }
+    /* Pages write their subtitle as a small, truncated line, because that is
+       all the old sticky bar could hold. Given a whole column it can be read
+       at a readable size and wrap like a sentence. */
+    .page-lede { @apply mt-1.5 max-w-2xl; }
+    .page-lede p {
+      @apply text-[13.5px] font-medium leading-relaxed text-ink-500 dark:text-ink-400;
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+    }
+    .page-head-actions { @apply flex shrink-0 flex-wrap items-center gap-2.5; }
+    /* Those actions were sized to squeeze into the bar. Beside a masthead title
+       they are the page's primary controls and should look like it. */
+    .page-head-actions .btn-sm { @apply gap-2 rounded-xl px-4 py-2.5 text-[13px]; }
+    .page-head-actions .btn-sm svg { @apply h-4 w-4; }
+
+    /* ----------------------------------------------------------------
+       THE MODEL SELECTOR
+       The console's most important control: every number on a model-aware
+       page is denominated in the model this picks. It is a segmented track
+       rather than a dropdown because the four options are the product - an
+       administrator should see all of them, and see which one is selected,
+       without opening anything.
+       ---------------------------------------------------------------- */
+    .model-scope {
+      @apply -mt-1 mb-6 flex flex-wrap items-center gap-x-3 gap-y-2;
+      animation: fade-down .5s cubic-bezier(.22,1,.36,1) both;
+      animation-delay: 60ms;
+    }
+    .model-scope-label {
+      @apply text-[10.5px] font-extrabold uppercase tracking-[.13em] text-ink-500 dark:text-ink-400;
+    }
+    .model-scope-track {
+      @apply inline-flex max-w-full flex-wrap items-center gap-1 rounded-2xl border border-ink-200/80
+             bg-white/[.92] p-1 shadow-[0_1px_2px_rgba(14,21,38,.05)]
+             dark:border-white/10 dark:bg-white/[.04];
+    }
+    .model-scope-tab {
+      @apply relative inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[12.5px] font-semibold
+             text-ink-500 transition-[color,background-color,box-shadow,transform] duration-200 ease-out
+             hover:text-ink-900 dark:text-ink-400 dark:hover:text-white;
+    }
+    .model-scope-tab:hover { @apply bg-ink-100/70 dark:bg-white/8; }
+    /* The selected tab is the one surface that carries the brand, because it
+       is answering the question the whole page depends on. */
+    .model-scope-tab.is-on {
+      @apply bg-white text-brand-700 shadow-pill dark:bg-white/12 dark:text-white;
+    }
+    .model-scope-tab.is-on::after {
+      content: '';
+      @apply pointer-events-none absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-brand-500;
+    }
+    .model-scope-icon { @apply h-3.5 w-3.5 shrink-0; }
+    .model-scope-dot {
+      @apply h-1.5 w-1.5 shrink-0 rounded-full bg-ink-300 transition-colors duration-200 dark:bg-white/25;
+    }
+    .model-scope-tab.is-on .model-scope-dot { @apply bg-brand-500; }
+    /* A model that has been switched off still has history worth reading, so
+       it stays in the track - hollow, so you can see that is what it is. */
+    .model-scope-dot.is-off {
+      @apply bg-transparent ring-1 ring-inset ring-ink-300 dark:ring-white/30;
+    }
+    .model-scope-name { @apply whitespace-nowrap; }
+
+    /* When a model is selected, the tables lose the column that would repeat
+       that model's name on every single row. */
+    .scope-one .col-model { display: none; }
+
+    .hero {
+      @apply relative isolate overflow-hidden rounded-xl3 border border-ink-200/70 bg-white
+             px-6 py-6 shadow-card dark:border-white/8 dark:bg-ink-900 sm:px-8 sm:py-7;
+    }
+    .hero-aurora::before {
+      content: '';
+      @apply pointer-events-none absolute inset-0 -z-10 opacity-95;
+      background-image:
+        radial-gradient(34rem 16rem at 4% -30%, rgba(37,99,235,.11), transparent 62%),
+        radial-gradient(26rem 14rem at 99% -14%, rgba(225,29,72,.10), transparent 60%);
+    }
+
+    /* The animations switch reads as pressed when it is overriding the
+       system, so its state is visible without opening anything. */
+    #motionToggle.is-on { @apply bg-brand-500/12 text-brand-600 dark:text-brand-300; }
+
+    /* ---- entrances --------------------------------------------------
+       The design fades content up from 14px on one curve at three speeds:
+       .55s for a section, .45s for the things inside it, .38s for the small
+       repeated ones. Anything faster than this stops reading as arrival and
+       starts reading as a flicker. */
+    .animate-fade-up { animation: fadeUp .55s var(--ease-design) both; }
+    .animate-fade-in { animation: fadeIn .8s ease both; }
+    /* Anything that appears in answer to a press overshoots once and settles.
+       This is the design's second curve, and the only place it is used. */
+    .animate-pop { animation: pop .4s var(--ease-design) both; }
+
+    /* The live indicator, and the ring that leaves it. */
+    .live-dot { position: relative; }
+    .live-dot::after {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 50%; background: currentColor;
+      animation: ringOut 2.2s ease-out 4 both;
+    }
+
+    /* The greeting's gradient pans slowly across it, eighteen seconds end to
+       end — slow enough that it reads as light rather than as an animation. */
+    .hero-greet-console {
+      background: linear-gradient(100deg,
+        #0E1526 0%, #0E1526 26%, #2563EB 48%, #E11D48 66%, #0E1526 88%);
+      background-size: 220% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: fadeUp .55s var(--ease-design) both, grad 7s ease-in-out 1 both;
+    }
+    .dark .hero-greet-console {
+      background: linear-gradient(100deg,
+        #FFFFFF 0%, #FFFFFF 26%, #60A5FA 48%, #FB7185 66%, #FFFFFF 88%);
+      background-size: 220% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Bars grow into place and then respond to the window changing under
+       them, which is why height carries its own long transition as well as
+       an entrance. */
+    .live-spark i, .stat-spark i {
+      transition: height .7s var(--ease-design);
+    }
+
+    /* A single slow highlight travelling across the primary button. */
+    .btn-primary { position: relative; overflow: hidden; }
+    .btn-primary::after {
+      content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 34%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent);
+      animation: sheenX 4.5s var(--ease-swift) 2 both;
+      pointer-events: none;
+    }
+
+    /* ================================================================
+       AI TOKENS — the design's model cards
+       ================================================================ */
+
+    /* This page labels its headline figures in caps, as the design does.
+       The dashboard's are sentence case, so it is a modifier here rather than
+       a change to the tile everywhere. */
+    .kpi-caps .kpi-label {
+      @apply uppercase;
+      letter-spacing: .12em;
+      font-size: 10.5px;
+    }
+
+    /* ================================================================
+       TOKEN MANAGEMENT — the pool
+       ================================================================ */
+    .pool-hero {
+      @apply flex flex-col gap-6 rounded-xl3 border p-6 sm:p-7 lg:flex-row lg:items-center;
+      border-color: rgba(37,99,235,.16);
+      background: linear-gradient(120deg,
+        #FFFFFF 0%, #F7FAFF 34%,
+        rgba(96,165,250,.26) 72%, rgba(225,29,72,.16) 100%);
+    }
+    .dark .pool-hero {
+      background: linear-gradient(120deg,
+        #141B2C 0%, #131A2A 34%,
+        rgba(37,99,235,.22) 72%, rgba(225,29,72,.14) 100%);
+      border-color: rgba(255,255,255,.08);
+    }
+    .pool-hero-main { @apply min-w-0 flex-1; }
+
+    .pool-eyebrow {
+      @apply flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] font-extrabold uppercase
+             text-brand-700 dark:text-brand-300;
+      letter-spacing: .14em;
+    }
+    .pool-pill {
+      @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase;
+      letter-spacing: .1em;
+    }
+    .pool-pill.is-ok  { @apply bg-emerald-500/12 text-emerald-700 dark:text-emerald-300; }
+    .pool-pill.is-bad { @apply bg-rose-500/12 text-rose-700 dark:text-rose-300; }
+    .pool-pill-dot { @apply h-1.5 w-1.5 rounded-full bg-current; }
+    .pool-meta {
+      @apply text-[11.5px] font-medium normal-case tracking-normal text-ink-500 dark:text-ink-400;
+    }
+    .pool-meta b { @apply font-bold text-ink-800 dark:text-ink-100; }
+
+    .pool-figure { @apply mt-3 flex flex-wrap items-baseline gap-3; }
+    .pool-figure > span {
+      @apply font-display text-[clamp(2rem,4.4vw,3rem)] font-bold leading-none tabular-nums
+             text-ink-900 dark:text-white;
+      letter-spacing: -.04em;
+    }
+    .pool-figure i { @apply text-[13.5px] not-italic text-ink-500 dark:text-ink-400; }
+
+    /* One track, three shares. */
+    .pool-split {
+      @apply mt-4 flex h-2 w-full overflow-hidden rounded-full bg-ink-200/70 dark:bg-white/10;
+    }
+    .pool-split i { @apply block h-full; transition: width .9s var(--ease-design); }
+    .pool-split .is-added    { @apply bg-brand-500; }
+    .pool-split .is-returned { background: #8B5CF6; }
+    .pool-split .is-held     { @apply bg-accent-500; }
+
+    .pool-legend {
+      @apply mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px]
+             text-ink-500 dark:text-ink-400;
+    }
+    .pool-legend li { @apply inline-flex items-center gap-1.5; }
+    .pool-legend span { @apply h-2 w-2 shrink-0 rounded-full; }
+    .pool-legend .is-added    { @apply bg-brand-500; }
+    .pool-legend .is-returned { background: #8B5CF6; }
+    .pool-legend .is-held     { @apply bg-accent-500; }
+    .pool-legend b { @apply font-bold tabular-nums text-ink-800 dark:text-ink-100; }
+
+    .pool-add {
+      @apply w-full shrink-0 rounded-xl2 border border-white/70 p-5 backdrop-blur-sm
+             dark:border-white/10 dark:bg-white/[.04] lg:w-[22rem];
+      background: rgba(255,255,255,.86);
+    }
+    .pool-add-label {
+      @apply mb-2.5 text-[10.5px] font-extrabold uppercase text-ink-500 dark:text-ink-400;
+      letter-spacing: .14em;
+    }
+    .pool-add-note { @apply mt-2.5 text-[11.5px] leading-relaxed text-ink-500 dark:text-ink-400; }
+    .pool-presets { @apply mt-3 flex flex-wrap gap-1.5; }
+
+    /* ---- model budget cards ------------------------------------------ */
+    .budget-card { @apply flex flex-col p-4 sm:p-5; }
+    .budget-open {
+      @apply grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ink-200
+             text-ink-400 dark:border-white/12;
+      transition: transform .22s var(--ease-design), color .22s ease, border-color .22s ease;
+    }
+    .budget-open:hover { color: var(--ink); border-color: var(--ink); transform: translateX(2px); }
+    .budget-open svg { @apply h-4 w-4; }
+
+    .budget-panel {
+      @apply mt-4 rounded-xl2 border hairline bg-ink-50 p-3.5 dark:bg-white/[.03];
+    }
+    .budget-meter {
+      @apply my-2 block h-1.5 w-full overflow-hidden rounded-full bg-ink-200/80 dark:bg-white/10;
+    }
+    .budget-meter i { @apply block h-full rounded-full; transition: width .85s var(--ease-design); }
+
+    /* ---- student balances -------------------------------------------- */
+    /* The gradient is set inline per student, derived from their username so
+       it is the same on every page. This only carries the shape. */
+    .student-mark {
+      @apply grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px]
+             font-bold uppercase text-white;
+    }
+    /* A track that is always drawn, so a row of cells lines up whether or not
+       anything has been spent in each. */
+    .cell-meter {
+      @apply my-1 block h-[3px] w-full max-w-[7.5rem] overflow-hidden rounded-full
+             bg-ink-200/80 dark:bg-white/10;
+    }
+    .cell-meter i {
+      @apply block h-full rounded-full;
+      transition: width .85s var(--ease-design);
+    }
+
+    /* ---- pool movements ----------------------------------------------- */
+    .pool-row {
+      @apply flex flex-wrap items-center gap-3 py-2.5 text-[13px];
+      transition: background .2s ease;
+    }
+    .pool-row:hover { @apply rounded-lg bg-ink-100/60 dark:bg-white/[.03]; }
+    .pool-arrow {
+      @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl;
+    }
+    .pool-arrow svg { @apply h-4 w-4; }
+    .pool-arrow.is-up   { @apply bg-emerald-500/12 text-emerald-600 dark:text-emerald-400; }
+    .pool-arrow.is-down { @apply bg-rose-500/10 text-rose-600 dark:text-rose-400; }
+    .pool-amount { @apply shrink-0 font-bold tabular-nums; }
+    .pool-amount.is-up   { @apply text-emerald-600 dark:text-emerald-400; }
+    .pool-amount.is-down { @apply text-rose-600 dark:text-rose-400; }
+    /* The model, tinted with its own colour — the same one its card wears. */
+    .pool-model {
+      @apply shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold;
+    }
+    .pool-what { @apply min-w-0 flex-1 truncate text-ink-700 dark:text-ink-200; }
+    .pool-when { @apply shrink-0 tabular-nums text-[11.5px] text-ink-500 dark:text-ink-400; }
+
+    /* The provider strip. Tinted rather than white because it governs every
+       card below it, and a white panel among white cards reads as one of
+       them. */
+    .providers-strip {
+      @apply flex flex-wrap items-center gap-4 rounded-xl2 border p-4 sm:p-5;
+      border-color: rgba(37,99,235,.20);
+      background: linear-gradient(100deg, rgba(37,99,235,.10), rgba(37,99,235,.02));
+    }
+    .providers-label {
+      @apply text-[11px] font-extrabold uppercase text-brand-700 dark:text-brand-300;
+      letter-spacing: .14em;
+    }
+
+    /* A switch, drawn as one. The old control said "ON" in small type beside
+       a dot, which reads as a label rather than something you can operate. */
+    .provider-toggle {
+      @apply inline-flex items-center gap-2.5 rounded-xl border border-ink-200 bg-white
+             px-3 py-2 text-[13px] font-bold text-ink-700
+             dark:border-white/12 dark:bg-white/[.04] dark:text-ink-200;
+      transition: background .22s ease, border-color .22s ease,
+                  transform .22s var(--ease-design), box-shadow .22s ease;
+    }
+    .provider-toggle:hover { @apply -translate-y-0.5 border-brand-300; box-shadow: var(--tw-shadow, 0 8px 18px -10px rgba(37,99,235,.5)); }
+    .provider-dot { @apply h-2 w-2 shrink-0 rounded-full bg-rose-500; transition: background .22s ease; }
+    .provider-toggle.is-on .provider-dot { @apply bg-emerald-500; }
+    .provider-switch {
+      @apply relative block h-[22px] w-[38px] shrink-0 rounded-full bg-ink-300 dark:bg-white/15;
+      transition: background .22s ease;
+    }
+    .provider-toggle.is-on .provider-switch { @apply bg-brand-500; }
+    .provider-switch i {
+      @apply absolute left-[3px] top-[3px] block h-4 w-4 rounded-full bg-white;
+      transition: transform .22s var(--ease-design);
+    }
+    .provider-toggle.is-on .provider-switch i { transform: translateX(16px); }
+
+    /* The model's colour, carried by three things on its card. */
+    .model-tile {
+      @apply grid h-[42px] w-[42px] shrink-0 place-items-center rounded-[13px] text-white;
+      background: linear-gradient(135deg, var(--from), var(--to));
+      box-shadow: 0 6px 14px -8px var(--to);
+      transition: transform .3s var(--ease-design), box-shadow .3s ease;
+    }
+    .card:hover .model-tile { transform: translateY(-2px) scale(1.04); }
+    .model-tile svg { @apply h-[19px] w-[19px]; }
+
+    .model-provider {
+      @apply text-[10.5px] font-extrabold uppercase;
+      letter-spacing: .12em;
+    }
+
+    .btn-topup {
+      @apply inline-flex h-[38px] shrink-0 items-center rounded-[11px] px-[15px]
+             text-[12.5px] font-semibold text-white;
+      /* The model's own ink, darkened: its lighter gradient stops carried
+         white text at 2.5:1. Mixed with black it clears 4.5:1 for every
+         model's colour while still reading as that model's button. */
+      background: var(--to);
+      background: linear-gradient(135deg,
+        color-mix(in srgb, var(--glow, var(--to)) 86%, #000),
+        color-mix(in srgb, var(--glow, var(--to)) 68%, #000));
+      box-shadow: 0 6px 16px -8px var(--glow);
+      transition: transform .22s var(--ease-design), box-shadow .22s ease, filter .22s ease;
+    }
+    .btn-topup:hover { transform: translateY(-2px); filter: saturate(1.08); box-shadow: 0 14px 26px -10px var(--glow); }
+    .btn-topup:active { transform: translateY(0) scale(.97); }
+
+    .model-distribute {
+      @apply inline-flex items-center gap-1.5 text-[12.5px] font-bold;
+      color: var(--ink);
+      transition: gap .22s var(--ease-design), opacity .2s ease;
+    }
+    .model-distribute:hover { @apply opacity-80; gap: .5rem; }
+    .model-distribute svg { @apply h-3.5 w-3.5; }
+
+    /* ---- signups ------------------------------------------------------ */
+    .signup-total {
+      @apply font-display text-[2rem] font-bold tabular-nums leading-none text-ink-900
+             dark:text-white;
+      letter-spacing: -.035em;
+    }
+
+    /* ---- platform vitals --------------------------------------------- */
+    .vitals-body { @apply mt-5 flex flex-wrap items-center gap-6; }
+    .vitals-dial { @apply relative shrink-0; width: 168px; height: 168px; }
+    .vitals-dial svg { @apply block h-full w-full; }
+    .vitals-track { fill: none; stroke: #EFF3FA; stroke-width: 10; }
+    .dark .vitals-track { stroke: rgba(255,255,255,.07); }
+    /* Round caps so a small share still reads as a stroke rather than a chip,
+       and the design's own three durations: the arc sweeps out over .9s while
+       isolation fades in a quarter of that. */
+    .vitals-arc {
+      fill: none; stroke-width: 10; stroke-linecap: round;
+      transition: stroke-dasharray .9s var(--ease-design),
+                  opacity .28s ease, stroke-width .28s ease;
+    }
+    /* While one metric is isolated the others recede rather than disappear —
+       the comparison is the point, so they have to stay legible. */
+    #vitals.is-isolating .vitals-arc { opacity: .18; }
+    #vitals.is-isolating .vitals-arc.is-on { opacity: 1; stroke-width: 12; }
+
+    .vitals-centre {
+      @apply pointer-events-none absolute inset-0 grid place-items-center;
+    }
+    .vitals-centre b {
+      @apply font-display text-[30px] font-bold tabular-nums text-ink-900 dark:text-white;
+      letter-spacing: -.03em;
+    }
+    .vitals-caption { @apply mt-3 text-center text-[12.5px] text-ink-500 dark:text-ink-400 sm:text-left; }
+
+    .vitals-legend { @apply min-w-0 flex-1 space-y-1; }
+    .vitals-row {
+      @apply flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left;
+      transition: background .2s ease, transform .24s var(--ease-design);
+    }
+    .vitals-row:hover {
+      @apply bg-ink-100/70 dark:bg-white/5;
+      transform: translateX(3px);
+    }
+    .vitals-dot { @apply h-2.5 w-2.5 shrink-0 rounded-full; }
+    .vitals-name { @apply min-w-0 flex-1 truncate text-[13.5px] text-ink-700 dark:text-ink-200; }
+    .vitals-pct { @apply shrink-0 text-[13.5px] font-bold tabular-nums text-ink-900 dark:text-white; }
+
+    /* ---- chart window control ---------------------------------------- */
+    .range-switch {
+      @apply inline-flex shrink-0 items-center gap-0.5 rounded-full border border-ink-200
+             bg-ink-100/70 p-0.5 dark:border-white/10 dark:bg-white/[.04];
+    }
+    .range-opt {
+      @apply rounded-full px-3 py-1.5 text-[12px] font-bold text-ink-500 transition
+             hover:text-ink-800 dark:text-ink-400 dark:hover:text-white;
+      transition-timing-function: cubic-bezier(.2,.7,.2,1);
+    }
+    .range-opt.is-on {
+      @apply bg-brand-500 text-white;
+      box-shadow: 0 6px 16px -8px rgba(37,99,235,.7);
+    }
+    .range-opt.is-on:hover { @apply text-white; }
+
+    .live-pill {
+      @apply inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1
+             text-[10.5px] font-bold uppercase text-emerald-700 dark:text-emerald-300;
+      letter-spacing: .12em;
+      border-color: rgba(16,185,129,.28);
+      background: rgba(16,185,129,.10);
+    }
+
+    /* ---- the pending-payments banner --------------------------------- */
+    .alarm-banner {
+      @apply flex flex-wrap items-center gap-3 rounded-xl2 border p-4;
+      border-color: rgba(225,29,72,.26);
+      background: linear-gradient(100deg, rgba(225,29,72,.13), rgba(225,29,72,.03));
+    }
+    .alarm-mark {
+      @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl text-rose-600
+             dark:text-rose-300;
+      background: rgba(225,29,72,.12);
+    }
+    .alarm-mark svg { @apply h-[18px] w-[18px]; }
+    .alarm-x {
+      @apply grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400
+             transition hover:bg-rose-500/10 hover:text-rose-600
+             dark:hover:text-rose-300;
+    }
+    .alarm-x svg { @apply h-4 w-4; }
+
+    /* ---- stat tile movement ----------------------------------------- */
+    .delta-pill {
+      @apply inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px]
+             font-bold tabular-nums;
+    }
+    .delta-up   { @apply bg-emerald-500/12 text-emerald-700 dark:text-emerald-300; }
+    .delta-down { @apply bg-rose-500/12 text-rose-700 dark:text-rose-300; }
+    .delta-flat { @apply bg-ink-500/10 text-ink-600 dark:text-ink-300; }
+
+    .stat-spark {
+      @apply pointer-events-none absolute bottom-4 right-4 flex h-7 w-24 items-end gap-[2px]
+             opacity-70;
+    }
+    .stat-spark i {
+      @apply block flex-1 rounded-[1.5px] bg-brand-500/45;
+      min-width: 2px; transform-origin: bottom;
+      animation: sparkGrow .5s cubic-bezier(.2,.7,.2,1) both;
+    }
+    .stat-spark i:last-child { @apply bg-brand-500/85; }
+    @media (prefers-reduced-motion: reduce) {
+      html:not([data-motion="full"]) .stat-spark i { animation: none; }
+    }
+
+    /* ================================================================
+       CONSOLE MASTHEAD — the design's own composition
+       ================================================================ */
+
+    /* The card is lit from the right: white on the left where the words are,
+       warming through the accent blue and finishing in a trace of the alarm
+       colour. Reading stays on the flat end; the colour lives where the dial
+       does. */
+    .hero-console {
+      @apply relative isolate overflow-hidden rounded-xl3 border border-ink-200/70
+             px-6 py-6 shadow-card dark:border-white/8 sm:px-8 sm:py-7;
+      background: linear-gradient(120deg,
+        #FFFFFF 0%, #F7FAFF 30%,
+        rgba(96,165,250,.32) 66%, rgba(225,29,72,.20) 100%);
+    }
+    .dark .hero-console {
+      background: linear-gradient(120deg,
+        #141B2C 0%, #131A2A 30%,
+        rgba(37,99,235,.24) 66%, rgba(225,29,72,.16) 100%);
+    }
+    .hero-console-body { @apply flex flex-wrap items-stretch gap-6; }
+
+    .hero-date {
+      @apply text-[10.5px] font-bold uppercase text-brand-600 dark:text-brand-300;
+      letter-spacing: .16em;
+    }
+    .hero-greet-console {
+      @apply mt-2 font-display text-[1.7rem] font-bold leading-[1.06] text-ink-900
+             dark:text-white sm:text-[2.15rem];
+      letter-spacing: -.035em;
+    }
+
+    /* The briefing panel. Translucent rather than white so the card's own
+       gradient still shows through it — a solid panel here cuts the hero in
+       two. */
+    .brief-card {
+      @apply mt-4 rounded-xl2 border border-white/70 p-4
+             dark:border-white/10 dark:bg-white/[.04];
+      background: rgba(255,255,255,.86);
+    }
+    .brief-head {
+      @apply flex items-center gap-2 text-[10.5px] font-bold uppercase text-ink-500
+             dark:text-ink-400;
+      letter-spacing: .14em;
+    }
+    .brief-mark {
+      @apply grid h-6 w-6 shrink-0 place-items-center rounded-lg text-white;
+      background: linear-gradient(135deg, #60A5FA, #2563EB);
+      box-shadow: 0 8px 20px -8px rgba(37,99,235,.55);
+    }
+    .brief-mark svg { @apply h-3.5 w-3.5; }
+    .brief-text {
+      @apply mt-2.5 text-[15px] leading-[1.58] text-ink-800 dark:text-ink-200;
+    }
+    .brief-asks { @apply mt-3 flex flex-wrap gap-2; }
+    .brief-ask {
+      @apply rounded-full border border-ink-200 bg-white/80 px-3 py-1.5 text-[12.5px]
+             font-medium text-ink-600 transition
+             hover:-translate-y-0.5 hover:border-brand-300 hover:text-brand-700
+             dark:border-white/12 dark:bg-white/[.04] dark:text-ink-300;
+      transition-timing-function: cubic-bezier(.2,.7,.2,1);
+    }
+
+    /* The one button that reports a problem wears the alarm colour, quietly:
+       tinted, not filled, so it never competes with the primary action. */
+    .btn-alarm {
+      @apply btn border text-rose-700 dark:text-rose-300;
+      border-color: rgba(225,29,72,.26);
+      background: linear-gradient(100deg, rgba(225,29,72,.13), rgba(225,29,72,.03));
+    }
+    .btn-alarm:hover {
+      @apply -translate-y-0.5;
+      border-color: rgba(225,29,72,.45);
+      box-shadow: 0 12px 26px -14px rgba(225,29,72,.55);
+    }
+
+    /* ---- live requests -------------------------------------------- */
+    .live-panel {
+      @apply flex flex-1 items-center gap-5 rounded-xl2 border border-white/70 p-5
+             dark:border-white/10 dark:bg-white/[.04];
+      background: rgba(255,255,255,.86);
+      /* Never wider than the card it sits in: a fixed 19rem pushed the
+         dashboard's masthead off a 360px phone. */
+      min-width: min(19rem, 100%);
+    }
+    /* A conic sweep masked into a ring. `--sweep` is set from the view, so the
+       arc *is* the measurement rather than an illustration next to it. */
+    .live-dial {
+      @apply relative grid h-[104px] w-[104px] shrink-0 place-items-center rounded-full;
+      background: conic-gradient(from -90deg,
+        #2563EB 0%, #E11D48 var(--sweep, 0%), rgba(14,21,38,.07) var(--sweep, 0%) 100%);
+    }
+    .dark .live-dial {
+      background: conic-gradient(from -90deg,
+        #60A5FA 0%, #FB7185 var(--sweep, 0%), rgba(255,255,255,.09) var(--sweep, 0%) 100%);
+    }
+    .live-dial-face {
+      @apply grid h-[86px] w-[86px] place-items-center rounded-full bg-white text-center
+             dark:bg-ink-900;
+    }
+    .live-dial-face b {
+      @apply block font-display text-[26px] font-bold leading-none text-ink-900 dark:text-white;
+    }
+    .live-dial-face i {
+      @apply mt-1 block text-[9.5px] font-bold uppercase not-italic text-ink-500 dark:text-ink-400;
+      letter-spacing: .14em;
+    }
+    .live-body { @apply min-w-0 flex-1; }
+    .live-title {
+      @apply flex items-center gap-2 text-[10.5px] font-bold uppercase text-ink-500
+             dark:text-ink-400;
+      letter-spacing: .14em;
+    }
+    .live-dot {
+      @apply h-1.5 w-1.5 rounded-full bg-emerald-500;
+      box-shadow: 0 0 0 3px rgba(16,185,129,.18);
+    }
+    /* Fourteen days at a glance. Bars, not a line, because each day is a
+       separate count rather than a reading of something continuous. */
+    .live-spark {
+      @apply mt-3 flex h-9 items-end gap-[3px];
+    }
+    .live-spark i {
+      @apply block flex-1 rounded-[2px] bg-brand-500/85;
+      min-width: 3px;
+      animation: sparkGrow .5s cubic-bezier(.2,.7,.2,1) both;
+    }
+    .live-spark i:last-child { @apply bg-accent-500; }
+    @keyframes sparkGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+    .live-spark i { transform-origin: bottom; }
+    .live-foot { @apply mt-2.5 text-[11.5px] text-ink-500 dark:text-ink-400; }
+
+    @media (prefers-reduced-motion: reduce) {
+      html:not([data-motion="full"]) .live-spark i { animation: none; }
+    }
+
+    /* ================================================================
+       KPI TILES — the signature of the console
+       ================================================================ */
+    .kpi {
+      @apply relative isolate flex min-h-[6.6rem] flex-col justify-between overflow-hidden rounded-xl2 p-4
+             transition-[transform,box-shadow] duration-300 ease-out will-change-transform
+             hover:-translate-y-0.5 sm:p-5;
+    }
+    .kpi::before {
+      content: '';
+      @apply pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent;
+    }
+    /* The soft orb that drifts to the pointer. Composited, so it is free. */
+    .kpi::after {
+      content: '';
+      @apply pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full opacity-0
+             transition-opacity duration-500 ease-out;
+      background: radial-gradient(closest-side, rgba(255,255,255,.32), transparent);
+    }
+    .kpi:hover::after { @apply opacity-100; }
+
+    /* One surface for every metric. The variant no longer repaints the card —
+       it colours the icon chip, which is enough to tell four tiles apart while
+       leaving the numbers themselves comparable at a glance. Four different
+       card fills in one row made the row look decorative; this makes it
+       readable. */
+    .kpi-plain, .kpi-brand, .kpi-ink, .kpi-violet {
+      @apply kpi border border-ink-200/70 bg-white text-ink-900 shadow-card
+             hover:border-brand-300/70 hover:shadow-lift
+             dark:border-white/8 dark:bg-ink-900 dark:text-white;
+    }
+    html:not(.dark) .kpi-plain,
+    html:not(.dark) .kpi-brand,
+    html:not(.dark) .kpi-ink,
+    html:not(.dark) .kpi-violet {
+      background-image: linear-gradient(180deg, rgba(255,255,255,.9) 0%, rgba(244,246,250,.5) 100%);
+    }
+    /* A hairline of the tile's own colour along the top edge: enough to group
+       and identify, far too little to shout. */
+    .kpi-brand::before  { @apply bg-gradient-to-r from-transparent via-brand-500/70 to-transparent; }
+    .kpi-violet::before { @apply bg-gradient-to-r from-transparent via-accent-500/70 to-transparent; }
+    .kpi-ink::before    { @apply bg-gradient-to-r from-transparent via-ink-400/70 to-transparent; }
+    .kpi::after { background: radial-gradient(closest-side, rgba(37,99,235,.14), transparent); }
+    .kpi-label { @apply text-[11.5px] font-semibold tracking-[-.005em] text-ink-500 dark:text-ink-400; }
+    .kpi-value { @apply mt-2 text-[1.85rem] font-extrabold leading-none tracking-[-.035em] sm:text-[2.05rem]; }
+    .kpi-foot { @apply mt-1.5 text-[11px] font-medium text-ink-500 dark:text-ink-400; }
+    .kpi-delta {
+      @apply inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none;
+    }
+
+    /* A number that should be read before anything around it. */
+    .stat {
+      @apply rounded-xl2 border border-ink-200/70 bg-white p-4 transition-[transform,box-shadow,border-color]
+             duration-300 ease-out hover:-translate-y-0.5 hover:border-brand-300/60 hover:shadow-lift
+             dark:border-white/8 dark:bg-ink-900;
+    }
+    .stat-label { @apply text-[10.5px] font-extrabold uppercase tracking-[.11em] text-ink-500 dark:text-ink-400; }
+    .stat-value { @apply mt-1.5 text-2xl font-extrabold tracking-[-.03em] text-ink-900 dark:text-white; }
+    .stat-foot { @apply mt-1 text-[11px] text-ink-500 dark:text-ink-400; }
+
+    .icon-tile {
+      @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600
+             transition-transform duration-300 ease-out dark:bg-brand-500/16 dark:text-brand-300;
+    }
+    .icon-tile-gold { @apply icon-tile bg-accent-500/12 text-accent-600 dark:bg-accent-400/14 dark:text-accent-300; }
+    /* The metric tiles' chips. Each carries the colour its card used to be. */
+    .chip-brand  { @apply icon-tile; }
+    .chip-violet { @apply icon-tile bg-accent-500/12 text-accent-600 dark:bg-accent-400/14 dark:text-accent-300; }
+    .chip-ink    { @apply icon-tile bg-ink-500/10 text-ink-600 dark:bg-white/8 dark:text-ink-200; }
+    .kpi:hover .icon-tile { @apply scale-105 -rotate-3; }
+    .card-hover:hover .icon-tile { @apply scale-110 -rotate-3; }
+
+    /* ================================================================
+       TABS / FILTER PILLS / SEGMENTED CONTROLS
+       ================================================================ */
+    .tabs {
+      @apply inline-flex items-center gap-1 rounded-xl border border-ink-200/70 bg-ink-100/70 p-1
+             dark:border-white/8 dark:bg-white/[.04];
+    }
+    .tab {
+      @apply relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold
+             text-ink-500 transition-[color,background-color,box-shadow] duration-200 ease-out
+             hover:text-ink-900 dark:text-ink-400 dark:hover:text-white;
+    }
+    .tab-active { @apply bg-white text-ink-900 shadow-pill dark:bg-white/12 dark:text-white; }
+    .chip {
+      @apply inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-3 py-1.5
+             text-[12px] font-semibold text-ink-600 transition-[transform,color,border-color,background-color]
+             duration-200 ease-out hover:-translate-y-0.5 hover:border-brand-300 hover:text-brand-700
+             dark:border-white/10 dark:bg-white/[.04] dark:text-ink-300
+             dark:hover:border-brand-500/40 dark:hover:text-white;
+    }
+    .chip-active {
+      @apply border-brand-500/40 bg-brand-500/10 text-brand-700
+             dark:border-brand-400/40 dark:bg-brand-400/14 dark:text-brand-200;
+    }
+
+    /* ================================================================
+       MISC
+       ================================================================ */
+    .divider { @apply h-px w-full bg-gradient-to-r from-transparent via-ink-200 to-transparent dark:via-white/10; }
+    .kbd {
+      @apply inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-md border border-ink-200
+             bg-ink-100 px-1.5 font-sans text-[10px] font-bold text-ink-500
+             dark:border-white/10 dark:bg-white/8 dark:text-ink-300;
+    }
+    .skeleton { @apply relative overflow-hidden rounded-lg bg-ink-200/60 dark:bg-white/8; }
+    .skeleton::after {
+      content: '';
+      @apply absolute inset-0 -translate-x-full animate-shimmer
+             bg-gradient-to-r from-transparent via-white/55 to-transparent dark:via-white/10;
+    }
+    .gradient-text {
+      @apply bg-gradient-to-r from-brand-700 via-brand-500 to-accent-500 bg-clip-text text-transparent
+             dark:from-brand-200 dark:via-brand-300 dark:to-accent-300;
+    }
+    .mesh {
+      background-image:
+        radial-gradient(60rem 30rem at 12% -10%, rgba(37,99,235,.14), transparent 60%),
+        radial-gradient(45rem 26rem at 92% 6%, rgba(225,29,72,.14), transparent 58%),
+        radial-gradient(40rem 24rem at 50% 108%, rgba(37,99,235,.10), transparent 60%);
+    }
+    .grid-lines {
+      background-image:
+        linear-gradient(to right, rgba(14,21,38,.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(14,21,38,.04) 1px, transparent 1px);
+      background-size: 44px 44px;
+    }
+    .dark .grid-lines {
+      background-image:
+        linear-gradient(to right, rgba(255,255,255,.045) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,.045) 1px, transparent 1px);
+    }
+    .stack > * + * { margin-top: 1rem; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* "Back to …" — the chevron steps left as you approach it. */
+    .back-link {
+      @apply inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-500
+             transition-colors duration-200 hover:text-brand-600
+             dark:text-ink-400 dark:hover:text-brand-300;
+    }
+    .back-link > svg { @apply transition-transform duration-300 ease-out; }
+    .back-link:hover > svg { @apply -translate-x-1; }
+
+    /* A link that reveals its underline from the left. */
+    .link {
+      @apply relative font-semibold text-brand-600 transition-colors duration-200
+             hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200;
+    }
+    .link::after {
+      content: '';
+      @apply absolute -bottom-0.5 left-0 h-px w-full origin-right scale-x-0 bg-current
+             transition-transform duration-300 ease-out;
+    }
+    .link:hover::after { @apply origin-left scale-x-100; }
+
+    /* Entrance on scroll. Elements opt in with `.reveal`; the script adds
+       `.is-in` when they arrive. Without JavaScript they are simply visible.
+
+       An animation, not a transition — as it is in the design. Written as a
+       transition it keeps applying afterwards: `.reveal.is-in` outranks
+       `.card-hover` on specificity, so every hover on a revealed card
+       inherited the entrance's duration instead of the design's .3s and felt
+       slower for the rest of the page's life. */
+    .reveal { opacity: 0; }
+    .reveal.is-in { animation: fadeUp .45s var(--ease-design) both; }
+    /* Rows arrive from a shorter distance and a little faster: a table of
+       twenty of them travelling fourteen pixels each reads as a wave. */
+    tr.reveal.is-in { animation: rowIn .38s var(--ease-design) both; }
+    @keyframes rowIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* Page transition. `main` fades up on arrival; the shell adds
+       `.is-leaving` for 160ms when an internal link is followed. */
+    .page-shell { @apply animate-page-in; }
+    /* Once in, the entry animation is dropped: its held final frame is a
+       transform, and a transformed <main> would become the frame of every
+       position:fixed dialog inside it — pinning them to the page, not the
+       screen, so on a long page they opened out of sight. */
+    .page-shell.is-settled { animation: none; }
+    .page-shell.is-leaving { @apply animate-page-out; }
+
+    /* The thin progress bar that runs across the top during navigation. */
+    .route-bar {
+      @apply pointer-events-none fixed inset-x-0 top-0 z-[100] h-[2px] origin-left scale-x-0 opacity-0;
+      background-image: linear-gradient(90deg, #4076FC, #8B5CF6, #4076FC);
+      transition: transform .35s var(--ease-swift), opacity .3s ease;
+    }
+    .route-bar.is-on { @apply opacity-100; transform: scaleX(.75); }
+  }
+
+    /* ----------------------------------------------------------------
+       Reduced motion, last word for the ported motion.
+
+       The blanket rule near the top already forces every duration to
+       .01ms, which handles transitions. Looping animations need switching
+       off outright, and that has to sit below the rules that start them.
+       ---------------------------------------------------------------- */
+    @media (prefers-reduced-motion: reduce) {
+      html:not([data-motion="full"]) .live-dot::after,
+      html:not([data-motion="full"]) .btn-primary::after,
+      html:not([data-motion="full"]) .hero-greet-console { animation: none; }
+      /* The greeting is painted through a gradient, so stopping the pan is
+         not enough — without this the text stays transparent. */
+      html:not([data-motion="full"]) .hero-greet-console { -webkit-text-fill-color: #0E1526; }
+      html:not([data-motion="full"]).dark .hero-greet-console { -webkit-text-fill-color: #FFFFFF; }
+      html:not([data-motion="full"]) .btn-primary::after { display: none; }
+    }
+
+    /* Phones: a page's own top-bar buttons keep their icon and count but drop
+       their words, and the bar tightens — otherwise "Refresh", "Export" and
+       "3 awaiting you" push the whole console sideways at 360px. */
+    /* Smoothness: no backdrop blur anywhere in the console. A blurred
+       surface has to be recomputed every frame anything beneath it moves or
+       scrolls, and the console had a dozen of them — the sidebar, the header
+       and every card — which held scrolling to about 20 fps. Surfaces that
+       needed the blur to look solid now have a firmer fill instead. */
+    *, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+    /* Tell the browser which theme is showing, so the lists <select> drops
+       down, date pickers and scrollbars match it. Without this the dark
+       console showed white option text on a white list. */
+    html { color-scheme: light; }
+    html.dark { color-scheme: dark; }
+    html.dark select option, html.dark select optgroup { background-color: #111827; color: #F3F4F6; }
+
+    .console-topbar .topbar-short { display: none; }
+    @media (max-width: 480px) {
+      .console-topbar { gap: 6px; padding-left: 12px; padding-right: 12px; }
+      .console-topbar .topbar-label { display: none; }
+      .console-topbar .topbar-short { display: inline; }
+      /* A page's own top-bar items must never be drawn over the breadcrumb. */
+      .console-topbar > .min-w-0 { overflow: hidden; }
+      .console-topbar .pm-refresh, .console-topbar .cm-refresh, .console-topbar .cm-export { padding-left: 9px; padding-right: 9px; gap: 0; }
+    }
+
+    /* ================================================================
+       READABILITY, DIALOGS AND TOUCH — rules every page inherits.
+       Written outside any @layer on purpose: Tailwind emits unlayered CSS
+       after its utilities, so each rule here outranks the plain utility it
+       corrects while still losing to hover:, dark: and group- variants.
+       ================================================================ */
+
+    /* The sticky header is ~4rem tall; without this an in-page link lands
+       with its target hidden underneath it. */
+    html { scroll-padding-top: 5.5rem; }
+
+    /* The quick-jump palette's highlighted row, in both themes. */
+    .jump-row.is-cursor { background: rgba(37,99,235,.10); color: #1E40AF; }
+    .dark .jump-row.is-cursor { background: rgba(96,165,250,.14); color: #BFDBFE; }
+
+    /* The bell's "needs your attention" menu. */
+    .attention-menu {
+      position: absolute; right: 0; top: calc(100% + .5rem); z-index: 45;
+      width: min(19rem, calc(100vw - 1.5rem));
+      max-height: calc(100dvh - 5.5rem); overflow-y: auto;
+      padding: .375rem; border-radius: 1rem;
+      border: 1px solid rgba(211,218,232,.9); background: #fff;
+      box-shadow: 0 10px 22px -12px rgba(14,21,38,.16), 0 40px 76px -36px rgba(14,21,38,.34);
+    }
+    .dark .attention-menu { background: #0E1526; border-color: rgba(255,255,255,.10); }
+    @media (max-width: 520px) {
+      .attention-menu { position: fixed; left: .75rem; right: .75rem; top: 4.25rem; width: auto; }
+    }
+    .attention-row {
+      display: flex; align-items: center; gap: .65rem; min-height: 44px;
+      padding: .45rem .75rem; border-radius: .75rem;
+      font-size: 13.5px; font-weight: 600; color: #1F2637;
+      transition: background-color .15s ease;
+    }
+    .attention-row:hover, .attention-row:focus-visible { background: #F1F4FB; }
+    .dark .attention-row { color: #E4E9F3; }
+    .dark .attention-row:hover, .dark .attention-row:focus-visible { background: rgba(255,255,255,.06); }
+    .attention-row > svg { width: 16px; height: 16px; flex: 0 0 auto; color: #5B6884; }
+    .dark .attention-row > svg { color: #9AA5BC; }
+
+    /* Tablets in landscape (1024–1279px): the rail is shown, collapsed to its
+       icons, so the page keeps its width and navigation is one tap away. The
+       full rail — and its collapse switch — start at 1280px. Every page is
+       also still reachable, with its label, from the menu button's drawer. */
+    @media (min-width: 1024px) and (max-width: 1279.98px) {
+      :root { --shell: 4.9rem; }
+      #consoleRail .shell-hide-collapsed { display: none; }
+      #consoleRail .shell-show-collapsed { display: flex; }
+      #consoleRail .nav-label, #consoleRail .nav-badge { display: none; }
+      #consoleRail .nav-link { justify-content: center; padding-left: 0; padding-right: 0; }
+      #consoleRail .nav-section {
+        margin: 1rem auto .25rem; height: 1px; width: 2rem; overflow: hidden; padding: 0;
+        color: transparent; background: #E4E9F3;
+      }
+      .dark #consoleRail .nav-section { background: rgba(255,255,255,.10); }
+      #consoleRail .nav-link-active::before { left: .25rem; }
+    }
+
+    /* ink-400 is a border and icon weight; as text it measured 2.5:1 on a
+       card. Light theme only — in dark it is already the readable weight. */
+    :where(html:not(.dark)) .text-ink-400 { color: #5F6B86; }
+    /* And in dark, the design's faintest text weight (ink-500) sat at 3.3:1
+       on the card surface. */
+    html.dark .dark\:text-ink-500 { color: #8491A8; }
+    /* Secondary text written without a dark variant stayed ink-500 in dark. */
+    :where(html.dark) .text-ink-500:where(:not([class*="dark:text-"])) { color: #9AA5BC; }
+    /* A placeholder is still something to read. */
+    :where(html:not(.dark)) .input::placeholder { color: #7A869E; }
+
+    /* Every console dialog: it may never be taller than the screen it is on.
+       A landscape phone is ~390px tall, so a form longer than that scrolls
+       inside the dialog instead of running off both edges. */
+    .dialog-panel {
+      max-height: calc(100vh - 2rem);
+      max-height: calc(100dvh - 2rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* "Full text" that only lived in a title tooltip, which a finger cannot
+       open: tapping the cell expands it in place. */
+    .tap-expand { cursor: pointer; }
+    .tap-expand.is-expanded {
+      white-space: normal !important; overflow: visible !important;
+      text-overflow: clip !important; overflow-wrap: anywhere; max-width: none !important;
+    }
+
+    /* The model scope and range controls scroll sideways on a phone rather
+       than wrapping into a wall of chips. */
+    @media (max-width: 639px) {
+      .model-scope-track { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+      .model-scope-track::-webkit-scrollbar { display: none; }
+      .model-scope-tab { flex: 0 0 auto; }
+    }
+
+    /* Touch screens: every control a finger aims at is at least 40px, without
+       changing anything on a mouse-driven desktop. */
+    @media (pointer: coarse) {
+      .btn-sm { min-height: 40px; }
+      .btn-icon { min-width: 40px; min-height: 40px; }
+      .model-scope-tab, .tab, .chip, .range-opt { min-height: 40px; }
+      .crumb-root { display: inline-flex; align-items: center; min-height: 40px; padding: 0 .35rem; margin-left: -.35rem; }
+      .back-link { min-height: 40px; }
+      .link { display: inline-flex; align-items: center; min-height: 40px; }
+      nav[aria-label="Pagination"] a, nav[aria-label="Pagination"] [aria-current="page"] { min-width: 40px; min-height: 40px; }
+      .checkbox, .bulk-check, .pick-check { width: 22px; height: 22px; }
+      .nav-link { min-height: 44px; }
+      /* 16px stops iOS zooming the page when a field is focused. */
+      .input, .select { min-height: 44px; font-size: 16px; }
+      /* Stand-alone links: row actions ("Open →", "View all", "Full ledger")
+         and the flex/block links that open a record from a list. Links inside
+         a sentence are left alone. */
+      main a.flex:not([class*="btn"]), main a.inline-flex:not([class*="btn"]),
+      main a.ml-auto, main .model-distribute, main a.text-xs:not([class*="btn"]),
+      main a[class*="text-[1"]:not([class*="btn"]) {
+        min-height: 40px; display: inline-flex; align-items: center;
+      }
+      main a.flex:not([class*="btn"]) { display: flex; }
+      /* The KPI tiles @apply `flex`, and Tailwind's @apply carries the rule
+         above along with it, so on a touch screen a tile that is a link had
+         its contents centred while a tile that is not stayed left-aligned. */
+      main a.kpi-plain:not([class*="btn"]), main a.kpi-brand:not([class*="btn"]),
+      main a.kpi-ink:not([class*="btn"]), main a.kpi-violet:not([class*="btn"]) { display: flex; align-items: stretch; }
+      main .td a.block, main .td a.truncate, main .tk-td a.truncate, main .tk-td a.block,
+      main li a.truncate:not(.block) { padding-top: .6rem; padding-bottom: .6rem; }
+      main summary:not([class*="badge"]) { min-height: 40px; }
+      main summary[class*="badge"] { padding-top: .75rem; padding-bottom: .75rem; }
+      main li a.truncate { display: inline-block; max-width: 100%; }
+    }
+
+    /* Per-model colours are written inline as the model's dark "ink", which
+       carries small type on white but not on the dark card. In dark the
+       lighter end of the model's own gradient is used instead. */
+    .dark .model-provider, .dark .tone-ink { color: var(--tone-light, #93C5FD) !important; }
+    .dark .model-distribute { color: var(--tone-light, #93C5FD); }
+    .dark .pool-model { color: var(--tone-light, #93C5FD) !important; }
+
+</style>
+
+<script>
+/* ======================================================================
+   Console interaction layer
+   ----------------------------------------------------------------------
+   Five small behaviours, all transform/opacity only, all inert under
+   `prefers-reduced-motion`, and every one of them optional: with this
+   script removed the console still renders and still works.
+
+     1. reveal-on-scroll (+ stagger for grids and table rows)
+     2. pointer spotlight on cards and KPI tiles
+     3. count-up on headline numbers
+     4. route progress bar + leave transition for internal navigation
+     5. busy state on submit buttons
+     6. the breadcrumb's current-page label, mirrored from the masthead
+   ====================================================================== */
+(function () {
+  'use strict';
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var ready = function (fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  };
+
+  /* ---------------------------------------------------------------- 1 */
+  function showAll() {
+    document.querySelectorAll('.reveal').forEach(function (node) { node.classList.add('is-in'); });
+  }
+
+  ready(function () {
+    /* Tables opt into the stagger automatically. Only tables with something to
+       stagger, and only up to a length where a sequence still reads as one
+       gesture rather than a queue — beyond that it is just a slow page. */
+    document.querySelectorAll('main table tbody').forEach(function (body) {
+      var rows = body.children.length;
+      if (rows > 1 && rows <= 40 && !body.hasAttribute('data-stagger')) {
+        body.setAttribute('data-stagger', '26');
+      }
+    });
+
+    document.querySelectorAll('[data-stagger]').forEach(function (group) {
+      var step = parseInt(group.dataset.stagger, 10) || 60;
+      Array.prototype.forEach.call(group.children, function (child, index) {
+        child.classList.add('reveal');
+        /* Entrances are animations now, so the delay has to be an animation
+           delay - a transition delay on an element that never transitions is
+           a no-op, and for a while every row and tile arrived at once. */
+        var delay = Math.min(index * step, 420) + 'ms';
+        child.style.animationDelay = delay;
+        child.style.transitionDelay = delay;
+      });
+    });
+
+    if (reduce.matches || !('IntersectionObserver' in window)) { showAll(); return; }
+
+    var watcher = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-in');
+        watcher.unobserve(entry.target);          // one entrance each
+      });
+    }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+    document.querySelectorAll('.reveal').forEach(function (node) { watcher.observe(node); });
+  });
+
+  // A late stylesheet or a slow font must never leave content invisible.
+  window.addEventListener('load', function () { setTimeout(showAll, 1200); });
+
+  /* ---------------------------------------------------------------- 2 */
+  /* One delegated pointermove for the whole document, rAF-throttled, so the
+     spotlight costs nothing however many cards are on the page. */
+  if (!reduce.matches && window.matchMedia('(hover: hover)').matches) {
+    var pending = null;
+    document.addEventListener('pointermove', function (event) {
+      var host = event.target.closest ? event.target.closest('.spotlight, .kpi') : null;
+      if (!host) return;
+      if (pending) return;
+      pending = requestAnimationFrame(function () {
+        pending = null;
+        var box = host.getBoundingClientRect();
+        host.style.setProperty('--mx', ((event.clientX - box.left) / box.width * 100).toFixed(1) + '%');
+        host.style.setProperty('--my', ((event.clientY - box.top) / box.height * 100).toFixed(1) + '%');
+      });
+    }, { passive: true });
+  }
+
+  /* ---------------------------------------------------------------- 3 */
+  /* Count-up. Only the numeric span of the label is animated, so "$1,240.50"
+     and "12.4K" both survive with their prefix, separators and suffix. */
+  function countUp(node) {
+    var raw = (node.textContent || '').trim();
+    var match = raw.match(/^([^\d-]*)(-?[\d,]+(?:\.\d+)?)(.*)$/);
+    if (!match) return;
+    var prefix = match[1], body = match[2], suffix = match[3];
+    var grouped = body.indexOf(',') !== -1;
+    var decimals = (body.split('.')[1] || '').length;
+    var target = parseFloat(body.replace(/,/g, ''));
+    if (!isFinite(target) || Math.abs(target) > 1e12) return;
+
+    return { node: node, raw: raw, prefix: prefix, suffix: suffix, grouped: grouped,
+             decimals: decimals, target: target, start: 0 };
+  }
+
+  /* Every running counter shares one animation frame, and the frame only
+     writes — widths are measured once, together, before any of them starts.
+     One loop per number, each measuring itself, made scrolling into a row of
+     figures stutter. */
+  var counters = [], counting = false;
+  function tickCounters(now) {
+    for (var i = counters.length - 1; i >= 0; i--) {
+      var c = counters[i];
+      if (!c.start) c.start = now;
+      var p = Math.min(1, (now - c.start) / 900);
+      if (p >= 1) { c.node.textContent = c.raw; counters.splice(i, 1); continue; }   // land on the truth
+      var eased = 1 - Math.pow(1 - p, 4);                    // quart-out
+      var text = c.decimals ? (c.target * eased).toFixed(c.decimals) : String(Math.round(c.target * eased));
+      if (c.grouped) {
+        var parts = text.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        text = parts.join('.');
+      }
+      c.node.textContent = c.prefix + text + c.suffix;
+    }
+    if (counters.length) requestAnimationFrame(tickCounters); else counting = false;
+  }
+  function startCounters(nodes) {
+    var jobs = nodes.map(countUp).filter(Boolean);
+    // Read every width first, then write: one layout, not one per number.
+    var widths = jobs.map(function (job) { return Math.ceil(job.node.getBoundingClientRect().width); });
+    jobs.forEach(function (job, i) { job.node.style.minWidth = widths[i] + 'px'; counters.push(job); });
+    if (counters.length && !counting) { counting = true; requestAnimationFrame(tickCounters); }
+  }
+
+  ready(function () {
+    if (reduce.matches || !('IntersectionObserver' in window)) return;
+    var numbers = document.querySelectorAll('[data-countup]');
+    if (!numbers.length) return;
+    var watcher = new IntersectionObserver(function (entries) {
+      var arriving = [];
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        watcher.unobserve(entry.target);
+        arriving.push(entry.target);
+      });
+      if (arriving.length) startCounters(arriving);
+    }, { threshold: 0.5 });
+    numbers.forEach(function (node) { watcher.observe(node); });
+  });
+
+  /* ---------------------------------------------------------------- 4 */
+  /* Navigation feedback. The bar is cosmetic and the leave animation never
+     delays the request — the browser navigates exactly as it always did. */
+  ready(function () {
+    var bar = document.createElement('div');
+    bar.className = 'route-bar';
+    document.body.appendChild(bar);
+
+    var running = false;
+    function startBar() {
+      if (running) return;
+      running = true;
+      bar.classList.add('is-on');
+    }
+
+    var shell = document.querySelector('.page-shell');
+    if (shell) {
+      var settle = function () { if (!shell.classList.contains('is-leaving')) shell.classList.add('is-settled'); };
+      shell.addEventListener('animationend', function (e) { if (e.target === shell) settle(); });
+      // No animation at all never fires animationend — and neither does one
+      // that already finished before this ran: under reduced motion the entry
+      // lasts .01ms, and on a heavy page .42s can be over by the time the DOM
+      // is ready. Missing it left <main> holding a transform, which made it
+      // the frame of every fixed dialog inside it, so dialogs opened off
+      // screen. Ask the animations themselves, and never wait past a second.
+      var running = shell.getAnimations ? shell.getAnimations() : [];
+      if (getComputedStyle(shell).animationName === 'none' || !running.length) settle();
+      else Promise.all(running.map(function (a) { return a.finished; })).then(settle, settle);
+      setTimeout(settle, 1000);
+    }
+    document.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      var link = event.target.closest ? event.target.closest('a[href]') : null;
+      if (!link) return;
+      if (link.target && link.target !== '_self') return;
+      if (link.hasAttribute('download') || link.dataset.noTransition !== undefined) return;
+      var href = link.getAttribute('href') || '';
+      if (!href || href[0] === '#' || /^(mailto:|tel:|javascript:)/i.test(href)) return;
+      if (link.origin && link.origin !== window.location.origin) return;
+      if (link.href === window.location.href) return;
+      startBar();
+      if (shell && !reduce.matches) shell.classList.add('is-leaving');
+    }, true);
+
+    document.addEventListener('submit', function (event) {
+      if (event.target && event.target.method && event.target.method.toLowerCase() === 'get') startBar();
+    }, true);
+
+    // Coming back through the bfcache must not leave the page faded out.
+    window.addEventListener('pageshow', function () {
+      bar.classList.remove('is-on');
+      running = false;
+      if (shell) shell.classList.remove('is-leaving');
+    });
+  });
+
+  /* ---------------------------------------------------------------- 6 */
+  /* The bar says "Console" and the masthead says which page. Copying the one
+     into the other keeps the bar useful once the masthead has scrolled away,
+     without the heading existing twice in the markup for a screen reader to
+     read out twice. A page with no masthead - the dashboard - loses the
+     chevron along with the label, rather than trailing off into nothing. */
+  ready(function () {
+    var current = document.querySelector('[data-crumb-current]');
+    if (!current) return;
+    var title = document.querySelector('[data-page-title]');
+    var label = (title && title.textContent || '').trim();
+    if (!label) { current.remove(); return; }
+    var slot = current.querySelector('[data-crumb-text]');
+    if (slot) slot.textContent = label;
+    current.classList.remove('hidden');
+    current.classList.add('flex');
+  });
+
+  /* ---------------------------------------------------------------- 5 */
+  /* A submit button that has been pressed stops looking pressable. Native
+     validation still runs first, and the button is never disabled — that
+     would drop its name/value from the payload. */
+  ready(function () {
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!form || form.dataset.noBusy !== undefined) return;
+      var button = form.querySelector('button[type="submit"], button:not([type])');
+      if (button) setTimeout(function () { button.classList.add('is-busy'); }, 0);
+    }, true);
+
+    /* Forms marked data-loading-form: once the request is on its way, its
+       submit buttons are disabled (so it cannot be sent twice) and the main
+       one says what is happening — its data-loading-label, or "Working…".
+       Listened for in the bubbling phase so a confirm() that cancels the
+       submit is respected, and applied a tick later so the pressed button's
+       own name and value still travel with the form. */
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!form || !form.matches || !form.matches('form[data-loading-form]')) return;
+      if (event.defaultPrevented) return;
+      if (form.dataset.loading === '1') { event.preventDefault(); return; }
+      form.dataset.loading = '1';
+      var buttons = Array.prototype.slice.call(
+        form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]'));
+      if (form.id) {
+        buttons = buttons.concat(Array.prototype.slice.call(
+          document.querySelectorAll('[form="' + form.id + '"][type="submit"]')));
+      }
+      var main = (event.submitter && buttons.indexOf(event.submitter) !== -1 && event.submitter)
+        || form.querySelector('[data-submit]')
+        || (form.id && document.querySelector('[form="' + form.id + '"][data-submit]'))
+        || buttons[0];
+      var text = (main && main.getAttribute('data-loading-label'))
+        || form.getAttribute('data-loading-label') || 'Working…';
+      setTimeout(function () {
+        buttons.forEach(function (b) { b.dataset.wasDisabled = b.disabled ? '1' : ''; b.disabled = true; });
+        if (!main || main.tagName !== 'BUTTON') return;
+        main.dataset.restore = main.innerHTML;
+        main.setAttribute('aria-busy', 'true');
+        var slot = main.querySelector('[data-loading-slot]') || main.querySelector('span:last-child');
+        if (slot) { slot.textContent = text; return; }
+        Array.prototype.slice.call(main.childNodes).forEach(function (node) {
+          if (node.nodeType === 3) main.removeChild(node);
+        });
+        main.appendChild(document.createTextNode((main.children.length ? ' ' : '') + text));
+      }, 0);
+    });
+    /* Back to the page through the history cache: ready to use again. */
+    window.addEventListener('pageshow', function (event) {
+      if (!event.persisted) return;
+      document.querySelectorAll('form[data-loading-form][data-loading="1"]').forEach(function (form) {
+        form.dataset.loading = '';
+        form.querySelectorAll('button, input[type="submit"]').forEach(function (b) {
+          if (b.dataset.restore !== undefined) { b.innerHTML = b.dataset.restore; delete b.dataset.restore; }
+          b.removeAttribute('aria-busy');
+          if (b.dataset.wasDisabled !== '1') b.disabled = false;
+          b.classList.remove('is-busy');
+        });
+      });
+    });
+
+    /* Tap to read the whole of a truncated cell — the tooltip it replaces
+       only ever worked with a mouse. */
+    document.addEventListener('click', function (event) {
+      var cell = event.target.closest ? event.target.closest('.tap-expand') : null;
+      if (!cell || event.target.closest('a, button')) return;
+      var open = cell.classList.toggle('is-expanded');
+      cell.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      var cell = event.target;
+      if (!cell.classList || !cell.classList.contains('tap-expand')) return;
+      event.preventDefault();
+      cell.click();
+    });
+
+    /* Platform vitals. Hovering or focusing a metric dims the other two and
+       lifts that figure into the middle of the dial. Pointer and keyboard
+       both, because a legend row is a button and reachable by tab. */
+    (function () {
+      var card = document.getElementById('vitals');
+      if (!card) return;
+      var value = document.getElementById('vitalsValue');
+      var caption = document.getElementById('vitalsCaption');
+      var arcs = card.querySelectorAll('.vitals-arc');
+      var rows = card.querySelectorAll('.vitals-row');
+      var restValue = value ? value.textContent : '';
+      var restCaption = caption ? caption.textContent : '';
+
+      function isolate(index) {
+        card.classList.add('is-isolating');
+        arcs.forEach(function (arc) {
+          arc.classList.toggle('is-on', arc.dataset.vital === String(index));
+        });
+        var row = rows[index];
+        if (!row) return;
+        if (value) value.textContent = row.dataset.percent;
+        if (caption) caption.textContent = row.dataset.label + ' this month';
+      }
+      function release() {
+        card.classList.remove('is-isolating');
+        arcs.forEach(function (arc) { arc.classList.remove('is-on'); });
+        if (value) value.textContent = restValue;
+        if (caption) caption.textContent = restCaption;
+      }
+      rows.forEach(function (row, index) {
+        row.addEventListener('mouseenter', function () { isolate(index); });
+        row.addEventListener('focus', function () { isolate(index); });
+        row.addEventListener('mouseleave', release);
+        row.addEventListener('blur', release);
+      });
+    })();
+
+    /* Dismissable panels. The close button hides the panel for this view only
+       — nothing is stored and nothing is marked read, because closing a
+       notice about unconfirmed payments must not be mistaken for confirming
+       them. Reload and it is back, for as long as it is still true. */
+    document.addEventListener('click', function (event) {
+      var close = event.target.closest('[data-dismiss]');
+      if (!close) return;
+      var panel = document.getElementById(close.dataset.dismiss);
+      if (!panel) return;
+      panel.style.transition = 'opacity .2s ease, transform .28s cubic-bezier(.2,.7,.2,1)';
+      panel.style.opacity = '0';
+      panel.style.transform = 'translateY(-6px)';
+      setTimeout(function () { panel.hidden = true; }, 220);
+    });
+  });
+})();
+</script>

@@ -1,0 +1,548 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+Payments - the Claude Design page of that name, on the real ledger.
+
+The hero shows confirmed revenue and how it splits by method next to the
+three providers' status; four tiles restate the queue; the list filters on
+the server (status, method, search, and the console's model scope) and each
+row opens into its record with the actions that apply to it: confirm and
+decline for a pending payment, refund for a paid one. Every action posts to
+the same backend the detail page uses, and comes back here with a toast.
+{% endcomment %}
+
+{% block title %}Payments · Console{% endblock %}
+
+{% block head %}
+<style>
+  @keyframes pmFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes pmRise { from { opacity: 0; transform: translateY(22px) scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes pmPop { 0% { opacity: 0; transform: scale(.9); } 60% { transform: scale(1.03); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes pmRing { 0% { transform: scale(.6); opacity: .5; } 70% { transform: scale(2.6); opacity: 0; } 100% { transform: scale(2.6); opacity: 0; } }
+  @keyframes pmSpin { to { transform: rotate(360deg); } }
+  @keyframes pmSheen { 0% { transform: translateX(-130%) skewX(-18deg); opacity: 1; } 96% { transform: translateX(360%) skewX(-18deg); opacity: 1; } 100% { transform: translateX(360%) skewX(-18deg); opacity: 0; } }
+  @keyframes pmToastIn { from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.96); } to { opacity: 1; transform: translateX(-50%); } }
+
+  .pm { --ink: #0B1222; --mute: #5B6884; --line: #E1E7F2; --hair: #F1F5FA; --card: #E7ECF6; --blue: #2563EB; --blue-ink: #1D4ED8; --body: #26314A; }
+  .pm, .pm input, .pm select, .pm button, .pm a { font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif; color: var(--ink); }
+  .pm .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .pm button { cursor: pointer; }
+  .pm svg { display: block; }
+  .pm .num { font-variant-numeric: tabular-nums; }
+
+  /* ---- topbar ------------------------------------------------------- */
+  .pm-await { display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 99px; color: #7A5A08; background: #FEF3E2; border: 1px solid #F7E0BC; flex: 0 0 auto; animation: pmPop .4s cubic-bezier(.3,1.2,.4,1) both; font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif; }
+  .pm-ring { position: relative; display: grid; place-items: center; width: 6px; height: 6px; flex: 0 0 auto; }
+  .pm-ring b, .pm-ring em { display: block; width: 6px; height: 6px; border-radius: 50%; background: #D97706; }
+  .pm-ring em { position: absolute; animation: pmRing 2.2s ease-out 4 both; }
+  .pm-ring.lg, .pm-ring.lg b, .pm-ring.lg em { width: 7px; height: 7px; } .pm-ring.lg em { animation-duration: 2.4s; }
+  .pm-ring.is-live b, .pm-ring.is-live em { background: #10B981; }
+  .pm-refresh { height: 34px; padding: 0 12px; flex: 0 0 auto; border: 1px solid #E1E7F2; border-radius: 10px; background: #fff; display: flex; align-items: center; gap: 7px; color: #5B6884; font-size: 12.5px; font-weight: 600; transition: border-color .22s, color .22s, transform .22s; cursor: pointer; font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif; }
+  .pm-refresh:hover { border-color: #2563EB; color: #1D4ED8; transform: translateY(-1px); }
+  .pm-refresh svg { width: 14px; height: 14px; display: block; }
+  .pm-refresh.is-busy svg { animation: pmSpin .8s linear infinite; }
+
+  /* ---- masthead ------------------------------------------------------ */
+  .pm-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: clamp(12px, 1.4vw, 18px); animation: pmFadeUp .5s cubic-bezier(.2,.7,.2,1) both; }
+  .pm-date { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; color: var(--blue-ink); }
+  .pm-h1 { margin: 7px 0 0; font-size: clamp(26px, 2.9vw, 34px); font-weight: 600; letter-spacing: -.035em; line-height: 1.06; color: var(--ink); }
+  .pm-lede { margin: 7px 0 0; font-size: 14px; color: var(--mute); line-height: 1.5; max-width: 56ch; }
+  .pm-eyebrow { font-size: 9.5px; font-weight: 700; letter-spacing: .13em; color: var(--mute); }
+  .pm-select { height: 40px; padding: 0 13px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 13px; font-weight: 600; outline: none; cursor: pointer; transition: border-color .22s, box-shadow .22s; }
+  .pm-select:focus, .pm-search:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(37,99,235,.14); }
+
+  /* ---- hero ---------------------------------------------------------- */
+  .pm-hero { display: flex; flex-wrap: wrap; gap: clamp(14px, 1.6vw, 22px); border-radius: 24px; padding: clamp(18px, 2vw, 26px); border: 1px solid #E4E9F3; background: linear-gradient(118deg, #FFFFFF 0%, #F8FBFF 32%, rgba(96,165,250,.24) 72%, rgba(225,29,72,.14) 100%); box-shadow: 0 24px 48px -34px rgba(20,35,70,.42); animation: pmRise .55s cubic-bezier(.2,.7,.2,1) .05s both; position: relative; overflow: hidden; }
+  .pm-hero-sheen { position: absolute; top: 0; left: 0; width: 110px; height: 2px; background: linear-gradient(90deg, transparent, rgba(37,99,235,.8), transparent); animation: pmSheen 6s cubic-bezier(.4,0,.2,1) 2 both; pointer-events: none; }
+  .pm-hero-main { flex: 1 1 clamp(280px, calc(56% - 22px), 740px); min-width: 0; display: flex; flex-direction: column; gap: 15px; }
+  .pm-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; color: var(--blue-ink); }
+  .pm-big-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
+  .pm-big { font-size: clamp(38px, 4.4vw, 54px); font-weight: 600; letter-spacing: -.045em; line-height: .92; }
+  .pm-big-sub { font-size: 13.5px; color: var(--mute); font-weight: 500; }
+  .pm-bars { display: flex; height: 12px; gap: 3px; border-radius: 99px; overflow: hidden; }
+  .pm-bar { border-radius: 99px; min-width: 5px; cursor: default; transition: width .95s cubic-bezier(.2,.7,.2,1), opacity .26s, transform .26s; background: linear-gradient(90deg, var(--m-c2), var(--m-color)); width: 0; opacity: 1; }
+  .pm-bars.has-hot .pm-bar { opacity: .35; } .pm-bars.has-hot .pm-bar.is-hot { opacity: 1; transform: translateY(-2px); }
+  .pm-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+  .pm-legend > div { display: flex; align-items: center; gap: 8px; cursor: default; transition: transform .22s; }
+  .pm-legend > div:hover { transform: translateY(-2px); }
+  .pm-legend i { width: 8px; height: 8px; border-radius: 3px; background: linear-gradient(90deg, var(--m-c2), var(--m-color)); display: block; }
+  .pm-legend span { font-size: 12px; color: var(--mute); } .pm-legend b { font-size: 12.5px; font-weight: 600; }
+  .pm-empty-split { font-size: 12px; color: var(--mute); margin-top: 12px; }
+  .pm-hero-side { flex: 1 1 clamp(240px, calc(44% - 22px), 400px); min-width: 0; display: flex; flex-direction: column; gap: 9px; padding: 16px; border-radius: 20px; background: rgba(255,255,255,.86); border: 1px solid #E5EAF4; backdrop-filter: blur(8px); }
+  .pm-side-title { font-size: 10.5px; font-weight: 700; letter-spacing: .13em; color: var(--mute); }
+  .pm-prov { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 13px; background: #fff; border: 1px solid var(--card); animation: pmFadeUp .45s cubic-bezier(.2,.7,.2,1) both; transition: transform .24s, border-color .24s, box-shadow .24s; }
+  .pm-prov:hover { transform: translateX(3px); border-color: var(--m-line); box-shadow: 0 12px 22px -18px rgba(20,35,70,.7); }
+  .pm-prov-ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; background: var(--m-soft); color: var(--m-color); }
+  .pm-prov-ic svg { width: 15px; height: 15px; }
+  .pm-prov b { display: block; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-prov small { display: block; font-size: 10.5px; color: var(--mute); margin-top: 1px; }
+  .pm-side-note { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: var(--mute); line-height: 1.5; margin-top: 2px; }
+  .pm-side-note svg { flex: 0 0 auto; margin-top: 1px; }
+
+  /* ---- kpis ---------------------------------------------------------- */
+  .pm-kpis { display: flex; flex-wrap: wrap; gap: clamp(10px, 1vw, 14px); }
+  .pm-kpi { flex: 1 1 clamp(200px, calc(25% - 12px), 420px); min-width: 0; border-radius: 18px; padding: 16px; border: 1px solid var(--card); background: #fff; box-shadow: 0 1px 2px rgba(20,35,70,.05); animation: pmRise .5s cubic-bezier(.2,.7,.2,1) both; transition: transform .3s cubic-bezier(.2,.7,.2,1), box-shadow .3s, border-color .3s; }
+  .pm-kpi:hover { transform: translateY(-4px); box-shadow: 0 22px 40px -26px rgba(20,35,70,.45); border-color: rgba(37,99,235,.32); }
+  .pm-kpi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .pm-kpi-top b { font-size: 9.5px; font-weight: 700; letter-spacing: .12em; color: var(--mute); }
+  .pm-kpi-ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; }
+  .pm-kpi strong { display: block; font-size: clamp(24px, 2.1vw, 29px); font-weight: 600; letter-spacing: -.038em; line-height: 1; margin-top: 13px; transition: color .3s; }
+  .pm-kpi strong.warm { color: #7A5A08; } .pm-kpi strong.good { color: #0A7F5C; } .pm-kpi strong.bad { color: #9F1239; }
+  .pm-kpi small { display: block; font-size: 12px; color: var(--mute); margin-top: 8px; }
+
+  /* ---- list ---------------------------------------------------------- */
+  .pm-list { border-radius: 22px; border: 1px solid var(--card); background: #fff; box-shadow: 0 1px 2px rgba(20,35,70,.05); overflow: hidden; animation: pmRise .55s cubic-bezier(.2,.7,.2,1) .26s both; }
+  .pm-filters { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; padding: clamp(14px, 1.2vw, 18px) clamp(16px, 1.4vw, 22px); border-bottom: 1px solid var(--hair); }
+  .pm-search-wrap { position: relative; flex: 1 1 210px; min-width: 150px; }
+  .pm-search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; width: 15px; height: 15px; }
+  .pm-search { width: 100%; height: 40px; padding: 0 13px 0 34px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 13px; outline: none; transition: border-color .22s, box-shadow .22s; }
+  .pm-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; border-radius: 12px; background: #F2F5FB; border: 1px solid var(--card); flex: 0 0 auto; }
+  .pm-seg-pill { position: absolute; top: 3px; bottom: 3px; border-radius: 9px; transition: left .38s cubic-bezier(.5,1.3,.4,1), width .38s; background: linear-gradient(135deg, #3B82F6, #1D4ED8); box-shadow: 0 6px 14px -8px rgba(37,99,235,.8); width: calc((100% - 6px) / 3); left: calc(3px + var(--i, 0) * (100% - 6px) / 3); }
+  .pm-seg.is-none .pm-seg-pill { opacity: 0; }
+  .pm-seg a { position: relative; z-index: 1; min-width: 0; border: 0; background: transparent; border-radius: 9px; padding: 7px 14px; font-size: 12px; font-weight: 600; white-space: nowrap; transition: color .26s; color: var(--mute); text-align: center; text-decoration: none; }
+  .pm-seg a.is-on { color: #fff; }
+  .pm-method { height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 12.5px; outline: none; cursor: pointer; flex: 0 0 auto; transition: border-color .22s, box-shadow .22s; }
+  .pm-method:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(37,99,235,.14); }
+  .pm-more { height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 12.5px; outline: none; cursor: pointer; flex: 0 0 auto; transition: border-color .22s, box-shadow .22s; }
+  .pm-more.is-on { border-color: var(--blue); color: var(--blue-ink); font-weight: 600; }
+  .pm-dates { display: flex; align-items: center; gap: 8px; flex: 1 1 360px; min-width: 0; }
+  .pm-dates label { display: flex; align-items: center; gap: 6px; flex: 1 1 0; min-width: 0; font-size: 11.5px; font-weight: 600; color: var(--mute); }
+  .pm-date-in { width: 100%; min-width: 9.5rem; height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 12.5px; outline: none; }
+  .pm-more:focus, .pm-date-in:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(37,99,235,.14); }
+  /* On a phone the two dates stack, so each picker is wide enough to read. */
+  @media (max-width: 520px) {
+    .pm-dates { flex: 1 1 100%; flex-direction: column; align-items: stretch; }
+    .pm-dates label { display: grid; grid-template-columns: 2.5rem 1fr; gap: 8px; white-space: nowrap; }
+  }
+  .pm-apply { height: 40px; padding: 0 14px; border: 0; border-radius: 12px; font-size: 12.5px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #3B82F6, #1D4ED8); flex: 0 0 auto; }
+  .pm-clear { height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 12.5px; font-weight: 600; color: var(--mute); flex: 0 0 auto; display: flex; align-items: center; text-decoration: none; animation: pmPop .3s cubic-bezier(.3,1.2,.4,1) both; transition: border-color .22s, color .22s, transform .22s; }
+  .pm-clear:hover { border-color: #E11D48; color: #9F1239; transform: translateY(-2px); }
+  .pm-rows { display: flex; flex-direction: column; }
+  .pm-row { border-top: 1px solid var(--hair); animation: pmFadeUp .45s cubic-bezier(.2,.7,.2,1) both; }
+  .pm-row-main { display: flex; align-items: center; gap: clamp(10px, 1.3vw, 18px); flex-wrap: wrap; padding: 14px clamp(16px, 1.4vw, 22px); cursor: pointer; transition: background .24s; background: transparent; }
+  .pm-row-main:hover { background: #F7FAFE; }
+  .pm-row.is-open .pm-row-main { background: #F5F9FF; }
+  .pm-ident { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1 1 210px; }
+  .pm-mark { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto; transition: transform .28s cubic-bezier(.3,1.3,.4,1), box-shadow .28s; background: linear-gradient(135deg, var(--m-c2), var(--m-color)); box-shadow: 0 6px 14px -8px var(--m-color); transform: none; color: #fff; }
+  .pm-mark svg { width: 17px; height: 17px; }
+  .pm-row.is-open .pm-mark { box-shadow: 0 12px 24px -10px var(--m-color); transform: scale(1.06) rotate(-3deg); }
+  .pm-student { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-ref { font-size: 10.5px; color: var(--mute); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-plan { flex: 1 1 110px; min-width: 0; }
+  .pm-plan b { display: block; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-plan small { display: block; font-size: 11px; color: var(--mute); margin-top: 2px; }
+  .pm-amt { flex: 0 0 auto; min-width: 78px; text-align: right; }
+  .pm-amt b { display: block; font-size: 15px; font-weight: 600; letter-spacing: -.024em; }
+  .pm-amt small { display: block; font-size: 11px; color: var(--mute); margin-top: 2px; }
+  .pm-end { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+  .pm-st-col { min-width: 96px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .pm-st { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; padding: 3px 9px; border-radius: 99px; transition: background .3s, color .3s, border-color .3s; border: 1px solid; }
+  .pm-st i { width: 6px; height: 6px; border-radius: 50%; display: block; transition: background .3s; }
+  .pm-st.pending { color: #7A5A08; background: #FEF3E2; border-color: #F7E0BC; } .pm-st.pending i { background: #D97706; }
+  .pm-st.paid { color: #0A7F5C; background: #E8F8F1; border-color: #C9EDDE; } .pm-st.paid i { background: #10B981; }
+  .pm-st.declined { color: #9F1239; background: rgba(225,29,72,.1); border-color: rgba(225,29,72,.26); } .pm-st.declined i { background: #E11D48; }
+  .pm-when { font-size: 10.5px; color: var(--mute); }
+  .pm-chev { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; transition: background .26s, color .26s, transform .3s cubic-bezier(.4,0,.2,1); background: #F1F4FB; color: var(--mute); transform: none; }
+  .pm-chev svg { width: 14px; height: 14px; }
+  .pm-row.is-open .pm-chev { background: var(--m-color); color: #fff; transform: rotate(180deg); }
+  .pm-detail { padding: 2px clamp(16px, 1.4vw, 22px) 18px; background: #FAFCFF; animation: pmFadeUp .3s cubic-bezier(.2,.7,.2,1) both; }
+  .pm-detail[hidden] { display: none; }
+  .pm-dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .pm-dcard { border-radius: 14px; padding: 12px 13px; background: #fff; border: 1px solid var(--card); transition: transform .26s cubic-bezier(.2,.7,.2,1), box-shadow .26s, border-color .26s; }
+  .pm-dcard:hover { transform: translateY(-3px); box-shadow: 0 16px 30px -22px rgba(20,35,70,.5); border-color: rgba(37,99,235,.3); }
+  .pm-dcard b { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .1em; color: var(--mute); }
+  .pm-dcard strong { display: block; font-size: 14px; font-weight: 600; letter-spacing: -.018em; margin-top: 5px; overflow-wrap: anywhere; }
+  .pm-dcard strong a { color: var(--blue-ink); }
+  .pm-act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 13px; padding: 13px 14px; border-radius: 14px; background: #FFFBF2; border: 1px solid #F7E0BC; }
+  .pm-act-ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; background: #FDF0D8; }
+  .pm-act p { flex: 1 1 200px; min-width: 0; font-size: 12.5px; line-height: 1.5; color: #4A3A17; margin: 0; }
+  .pm-act p strong { font-weight: 700; color: #7A5A08; }
+  .pm-act-btns { display: flex; gap: 8px; flex-wrap: wrap; flex: 0 0 auto; }
+  .pm-decline { height: 36px; padding: 0 14px; border: 1px solid rgba(225,29,72,.3); border-radius: 11px; background: #fff; font-size: 12.5px; font-weight: 600; color: #9F1239; transition: transform .22s, border-color .22s, box-shadow .22s; }
+  .pm-decline:hover { transform: translateY(-2px); border-color: #E11D48; box-shadow: 0 12px 22px -16px rgba(225,29,72,.9); }
+  .pm .pm-confirm { height: 36px; padding: 0 16px; border: 0; border-radius: 11px; background: linear-gradient(135deg, #34D399, #059669); color: #fff; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 7px; box-shadow: 0 12px 24px -12px rgba(5,150,105,.9); transition: transform .22s, filter .22s, box-shadow .22s; }
+  .pm .pm-confirm:hover { transform: translateY(-2px); filter: saturate(1.1); }
+  .pm-confirm svg { width: 14px; height: 14px; }
+  .pm-settled { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 13px; padding: 13px 14px; border-radius: 14px; }
+  .pm-settled.paid { background: #F2FBF7; border: 1px solid #C9EDDE; } .pm-settled.declined { background: #FEF5F7; border: 1px solid rgba(225,29,72,.22); }
+  .pm-settled-ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; background: #fff; }
+  .pm-settled p { flex: 1 1 200px; min-width: 0; font-size: 12.5px; line-height: 1.5; color: var(--body); margin: 0; }
+  .pm-ghost { height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: 11px; background: #fff; font-size: 12.5px; font-weight: 600; color: var(--mute); flex: 0 0 auto; display: flex; align-items: center; text-decoration: none; transition: transform .22s, border-color .22s, color .22s; }
+  .pm-ghost:hover { transform: translateY(-2px); border-color: var(--blue); color: var(--blue-ink); }
+  .pm-none { padding: 38px 22px; text-align: center; border-top: 1px solid var(--hair); }
+  .pm-none b { display: block; font-size: 13.5px; font-weight: 600; } .pm-none p { font-size: 12px; color: var(--mute); margin: 3px 0 0; }
+  .pm-list-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 13px clamp(16px, 1.4vw, 22px); border-top: 1px solid var(--hair); background: #FAFCFF; }
+  .pm-list-foot > div { font-size: 12px; color: var(--mute); }
+  .pm-list-foot > a.pm-policy { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 5px; min-height: 40px; color: var(--blue-ink); transition: color .18s; }
+  .pm-list-foot > a.pm-policy:hover { color: var(--blue); }
+  .pm-list-foot .pm-pager { flex: 1 1 100%; min-width: 0; }
+  .pm-list-foot .pm-pager nav { margin-top: 0; }
+  .pm-list-foot .pm-pager nav a { color: var(--mute); }
+  .pm-list-foot .pm-pager nav [aria-current="page"] { color: #fff; }
+  .pm-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 2px 6px 10px; font-size: 11.5px; color: var(--mute); }
+
+  .pm-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 11px; padding: 12px 16px; border-radius: 14px; background: #0B1222; color: #fff; box-shadow: 0 24px 48px -20px rgba(11,18,34,.65); animation: pmToastIn .34s cubic-bezier(.3,1.2,.4,1) both; max-width: min(460px, 90vw); }
+  .pm-toast i { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto; }
+  .pm-toast.ok i { background: rgba(16,185,129,.2); color: #34D399; } .pm-toast.bad i { background: rgba(225,29,72,.22); color: #FB7185; } .pm-toast.warn i { background: rgba(217,119,6,.22); color: #FBBF24; }
+  .pm-toast span { font-size: 13px; font-weight: 500; line-height: 1.4; }
+  .pm-toast[hidden] { display: none; }
+
+  /* ---- touch --------------------------------------------------------- */
+  @media (pointer: coarse) {
+    .pm-seg a { min-height: 40px; display: flex; align-items: center; justify-content: center; }
+    .pm .pm-ghost, .pm .pm-decline, .pm .pm-confirm, .pm-refresh { min-height: 44px; }
+    .pm a.pm-side-note { min-height: 40px; align-items: center; }
+    .pm-search, .pm-method, .pm-more, .pm-date-in, .pm-select { font-size: 16px; min-height: 44px; }
+  }
+
+  /* ---- dark ----------------------------------------------------------- */
+  .dark .pm { --ink: #F2F4F8; --mute: #A8B0BD; --line: #262B34; --hair: #1F242C; --card: #262B34; --body: #D6DAE3; --blue: #60A5FA; --blue-ink: #93C5FD; }
+  .dark .pm-kpi strong.warm { color: #FBBF24; } .dark .pm-kpi strong.good { color: #34D399; } .dark .pm-kpi strong.bad { color: #FB7185; }
+  .dark .pm .pm-decline { color: #FB7185; border-color: rgba(251,113,133,.35); }
+  .dark .pm .pm-clear:hover { color: #FB7185; }
+  .dark .pm .pm-act p strong { color: #FBBF24; }
+  .dark .pm .pm-act-ic { background: rgba(217,119,6,.18); }
+  .dark .pm .pm-kpi-ic { background: rgba(255,255,255,.06) !important; }
+  .dark .pm .pm-more, .dark .pm .pm-date-in { background: #14171E; color: var(--ink); }
+  .dark .pm-refresh { border-color: #262B34; color: #A8B0BD; }
+  .dark .pm-refresh:hover { border-color: #60A5FA; color: #93C5FD; }
+  .dark .pm .pm-side-note { color: #A8B0BD; }
+  .dark .pm .pm-kpi, .dark .pm .pm-list, .dark .pm .pm-search, .dark .pm .pm-method, .dark .pm .pm-select, .dark .pm .pm-clear, .dark .pm .pm-dcard, .dark .pm .pm-prov, .dark .pm .pm-ghost, .dark .pm .pm-decline, .dark .pm .pm-list-foot .pager a, .dark .pm .pm-list-foot .pager span, .dark .pm-refresh { background: #14171E; }
+  .dark .pm .pm-hero { background: linear-gradient(118deg, #141B2C 0%, #131A2A 32%, rgba(37,99,235,.22) 72%, rgba(225,29,72,.14) 100%); border-color: rgba(255,255,255,.08); }
+  .dark .pm .pm-hero-side { background: rgba(20,23,30,.86); border-color: #262B34; }
+  .dark .pm .pm-seg { background: #1A1E26; } .dark .pm .pm-chev { background: #1F242C; }
+  .dark .pm .pm-row-main:hover { background: rgba(255,255,255,.04); } .dark .pm .pm-row.is-open .pm-row-main, .dark .pm .pm-detail, .dark .pm .pm-list-foot { background: #11141B; }
+  .dark .pm .pm-act { background: #201A0E; border-color: rgba(247,224,188,.25); } .dark .pm .pm-act p { color: #E8DCC2; }
+  .dark .pm .pm-settled.paid { background: #0F1F19; } .dark .pm .pm-settled.declined { background: #221217; } .dark .pm .pm-settled-ic { background: #14171E; }
+  /* Status pills: the same meaning in dark mode, tinted on dark rather than pastel on white. */
+  .dark .pm-await, .dark .pm-st.pending { color: #FBBF24; background: rgba(217,119,6,.14); border-color: rgba(251,191,36,.28); }
+  .dark .pm-st.paid { color: #34D399; background: rgba(16,185,129,.12); border-color: rgba(52,211,153,.26); }
+  .dark .pm-st.declined { color: #FB7185; background: rgba(225,29,72,.14); border-color: rgba(251,113,133,.28); }
+</style>
+{% endblock %}
+
+{% block topbar %}
+{% if totals.pending %}
+  <span class="pm-await"><span class="pm-ring"><b></b><em></em></span><span class="topbar-label">{{ totals.pending }} awaiting you</span><span class="topbar-short">{{ totals.pending }} waiting</span></span>
+{% endif %}
+<button type="button" class="pm-refresh" id="pmRefresh" title="Refresh">
+  <svg aria-hidden="true"><use href="#i-refresh"/></svg><span id="pmRefreshLabel" class="topbar-label">Refresh</span>
+</button>
+{% endblock %}
+
+{% block page_head %}
+<header class="pm pm-head">
+  <div style="min-width:0">
+    {% now "l, j F Y" as today_line %}<div class="pm-date">{{ today_line|upper }}</div>
+    <h1 class="pm-h1" data-page-title>Payments</h1>
+    <p class="pm-lede">Confirm what landed, release the tokens, and keep refunds tidy.</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span class="pm-eyebrow">PLAN MODEL</span>
+    <select class="pm-select" id="pmModel" aria-label="Plan model">
+      {% for option in model_scope_options %}
+        <option value="{% qs request model=option.key page='' %}" {% if option.is_active %}selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="pm" id="pm" style="display:flex;flex-direction:column;gap:clamp(12px,1.4vw,18px)">
+
+  {# ---------- hero ---------- #}
+  <section class="pm-hero">
+    <span class="pm-hero-sheen"></span>
+    <div class="pm-hero-main">
+      <div>
+        <div class="pm-kicker">CONFIRMED REVENUE</div>
+        <div class="pm-big-row">
+          <div class="pm-big num" data-money="{{ totals.revenue }}">{{ totals.revenue|money }}</div>
+          <span class="pm-big-sub">from {{ totals.count }} confirmed order{{ totals.count|pluralize }}</span>
+        </div>
+      </div>
+      <div>
+        {% if method_split %}
+          <div class="pm-bars" id="pmBars">
+            {% for row in method_split %}
+              <div class="pm-bar" data-method="{{ row.key }}" data-width="{{ row.share }}" style="--m-c2:{{ row.tone.c2 }};--m-color:{{ row.tone.color }}" title="{{ row.label }}"></div>
+            {% endfor %}
+          </div>
+          <div class="pm-legend" id="pmLegend">
+            {% for row in method_split %}
+              <div data-method="{{ row.key }}" style="--m-c2:{{ row.tone.c2 }};--m-color:{{ row.tone.color }}"><i></i><span>{{ row.label }}</span><b class="num" data-money="{{ row.total }}">{{ row.total|money }}</b></div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="pm-bars"><div class="pm-bar" style="--m-c2:#D3DAE8;--m-color:#B8C2D6;width:100%"></div></div>
+          <div class="pm-empty-split">No confirmed payment yet &mdash; the split by method appears with the first one.</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="pm-hero-side">
+      <div class="pm-side-title">PROVIDER STATUS</div>
+      {% for provider in providers %}
+        <div class="pm-prov" style="--m-soft:{{ provider.tone.soft }};--m-color:{{ provider.tone.color }};--m-line:{{ provider.tone.line }};animation-delay:{{ provider.delay }}">
+          <span class="pm-prov-ic"><svg aria-hidden="true"><use href="#{{ provider.tone.icon }}"/></svg></span>
+          <div style="min-width:0;flex:1 1 auto"><b>{{ provider.label }}</b><small>{% if provider.is_configured %}{% if provider.is_sandbox %}Sandbox · automatic{% else %}Live · automatic{% endif %}{% else %}Manual confirmation{% endif %}</small></div>
+          <span class="pm-ring lg{% if provider.is_configured %} is-live{% endif %}" title="{% if provider.is_configured %}Configured{% else %}Not configured{% endif %}"><b></b><em></em></span>
+        </div>
+      {% endfor %}
+      <div class="pm-side-note">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#0A7F5C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2 13 4.4v3.4c0 3-2.1 5.4-5 6-2.9-.6-5-3-5-6V4.4z"/></svg>
+        Every confirmation is verified on the backend, never trusted from the browser.
+      </div>
+      <a href="{% url 'console:gateways' %}" class="pm-side-note" style="text-decoration:none;font-weight:600">Gateway setup, callback URLs &amp; connection test &rarr;</a>
+    </div>
+  </section>
+
+  {# ---------- kpis ---------- #}
+  <section class="pm-kpis">
+    <div class="pm-kpi" style="animation-delay:.06s">
+      <div class="pm-kpi-top"><b>CONFIRMED REVENUE</b><span class="pm-kpi-ic" style="background:#EAF1FE;color:#2563EB"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.6h10.8v6.8H2.6zM2.6 7.4h10.8"/></svg></span></div>
+      <strong class="num" data-money="{{ totals.revenue }}">{{ totals.revenue|money }}</strong>
+      <small>{{ totals.count }} payment{{ totals.count|pluralize }} released</small>
+    </div>
+    <div class="pm-kpi" style="animation-delay:.12s">
+      <div class="pm-kpi-top"><b>AWAITING REVIEW</b><span class="pm-kpi-ic" style="background:#FEF3E2;color:#B07908"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 3.4v3h-3M8 5.2V8l2 1.4"/></svg></span></div>
+      <strong class="num {% if totals.pending %}warm{% else %}good{% endif %}" data-int="{{ totals.pending }}">{{ totals.pending }}</strong>
+      <small>{% if totals.pending %}need your confirmation{% else %}all clear &mdash; nothing waiting{% endif %}</small>
+    </div>
+    <div class="pm-kpi" style="animation-delay:.18s">
+      <div class="pm-kpi-top"><b>MATCHING ORDERS</b><span class="pm-kpi-ic" style="background:#EEF0FE;color:#4F46E5"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 2.6h7.2v10.8H4.4zM6.6 5.8h2.8M6.6 8.2h2.8"/></svg></span></div>
+      <strong class="num" data-int="{{ page.paginator.count }}">{{ page.paginator.count }}</strong>
+      <small>{% if dirty %}under the current filters{% else %}across every method{% endif %}</small>
+    </div>
+    <div class="pm-kpi" style="animation-delay:.24s">
+      <div class="pm-kpi-top"><b>DECLINED</b><span class="pm-kpi-ic" style="background:rgba(225,29,72,.1);color:#E11D48"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2a5.8 5.8 0 1 0 0 11.6 5.8 5.8 0 0 0 0-11.6M5.4 5.4l5.2 5.2"/></svg></span></div>
+      <strong class="num{% if totals.declined %} bad{% endif %}" data-int="{{ totals.declined }}">{{ totals.declined }}</strong>
+      <small>{% if totals.declined %}refunded, cancelled or rejected{% else %}no rejections yet{% endif %}</small>
+    </div>
+  </section>
+
+  {# ---------- list ---------- #}
+  <section class="pm-list">
+    <form method="get" class="pm-filters" id="pmFilters">
+      {% include "console/_scope_field.html" %}
+      {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+      {% comment %}Dates and search submit together with Apply; status comes from the buttons and the menu.{% endcomment %}
+      <div class="pm-search-wrap">
+        <svg viewBox="0 0 16 16" fill="none" stroke="#5B6884" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 13.4 13.4"/></svg>
+        <input type="search" name="q" class="pm-search" value="{{ search }}" placeholder="Reference, student or plan" aria-label="Search payments">
+      </div>
+      <div class="pm-seg{% if status and status != 'pending' and status != 'paid' %} is-none{% endif %}" style="--i:{% if status == 'pending' %}1{% elif status == 'paid' %}2{% else %}0{% endif %}">
+        <div class="pm-seg-pill"></div>
+        <a href="{% qs request status='' page='' %}" class="{% if not status %}is-on{% endif %}">All</a>
+        <a href="{% qs request status='pending' page='' %}" class="{% if status == 'pending' %}is-on{% endif %}">Pending</a>
+        <a href="{% qs request status='paid' page='' %}" class="{% if status == 'paid' %}is-on{% endif %}">Paid</a>
+      </div>
+      {% comment %}
+        Closed orders: the three buttons cover the everyday states; this names
+        the rest — failed, cancelled, refunded, expired — or all four at once.
+      {% endcomment %}
+      <select class="pm-more{% if status and status != 'pending' and status != 'paid' %} is-on{% endif %}" aria-label="Closed orders" data-status-menu>
+        <option value="">Closed orders…</option>
+        {% for value, label in more_statuses %}<option value="{% qs request status=value page='' %}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <select name="method" class="pm-method" aria-label="Payment method" data-autosubmit>
+        <option value="">All methods</option>
+        {% for value, label in methods %}<option value="{{ value }}" {% if method == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <div class="pm-dates">
+        <label>From <input type="date" name="from" value="{{ date_from }}" class="pm-date-in" aria-label="Placed on or after"></label>
+        <label>To <input type="date" name="to" value="{{ date_to }}" class="pm-date-in" aria-label="Placed on or before"></label>
+      </div>
+      <button type="submit" class="pm-apply">Apply</button>
+      {% if dirty %}<a href="{% qs request status='' method='' q='' from='' to='' page='' %}" class="pm-clear">Clear</a>{% endif %}
+    </form>
+
+    <div class="pm-rows" id="pmRows">
+      {% for payment in page.object_list %}
+        <div class="pm-row" style="--m-c2:{{ payment.tone.c2 }};--m-color:{{ payment.tone.color }};animation-delay:{{ payment.delay }}" data-ref="{{ payment.reference }}">
+          <div class="pm-row-main" role="button" tabindex="0" aria-expanded="false">
+            <div class="pm-ident">
+              <span class="pm-mark"><svg aria-hidden="true"><use href="#{{ payment.tone.icon }}"/></svg></span>
+              <div style="min-width:0">
+                <div class="pm-student">{{ payment.user.display_name }}</div>
+                <div class="pm-ref mono">{{ payment.reference }}</div>
+              </div>
+            </div>
+            <div class="pm-plan"><b>{{ payment.plan.name }}</b><small>{{ payment.get_method_display }}</small></div>
+            <div class="pm-amt"><b class="num">{{ payment.amount|money }}</b><small>{% if payment.charge_currency and payment.charge_currency != payment.currency %}{{ payment.pay_display }} · {% endif %}{{ payment.tokens_to_grant|compact_number }} tokens</small></div>
+            <div class="pm-end">
+              <div class="pm-st-col">
+                <span class="pm-st {{ payment.state }}"><i></i>{% if payment.state == 'declined' %}{{ payment.get_status_display|upper }}{% else %}{{ payment.state|upper }}{% endif %}</span>
+                <span class="pm-when">{{ payment.created_at|date:"d M, H:i" }}</span>
+              </div>
+              <span class="pm-chev"><svg aria-hidden="true"><use href="#i-chevron-down"/></svg></span>
+            </div>
+          </div>
+          <div class="pm-detail" hidden>
+            <div class="pm-dgrid">
+              <div class="pm-dcard"><b>REFERENCE</b><strong class="mono">{{ payment.reference }}</strong></div>
+              <div class="pm-dcard"><b>PLAN</b><strong>{{ payment.plan.name }}</strong></div>
+              <div class="pm-dcard"><b>MODEL POOL</b><strong>{{ payment.plan.ai_model.name|default:"—" }}</strong></div>
+              <div class="pm-dcard"><b>TOKENS ON RELEASE</b><strong class="num">{{ payment.tokens_to_grant|compact_number }}</strong></div>
+              {% if payment.proof %}<div class="pm-dcard"><b>PROOF</b><strong><a href="{{ payment.proof.url }}" target="_blank" rel="noopener">Open upload</a></strong></div>{% endif %}
+              {% if payment.provider_txn_id %}<div class="pm-dcard"><b>PROVIDER TXN</b><strong class="mono">{{ payment.provider_txn_id }}</strong></div>{% endif %}
+            </div>
+            {% if payment.state == 'pending' %}
+              <div class="pm-act">
+                <span class="pm-act-ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#B07908" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M8 5.2V8l2 1.4"/></svg></span>
+                <p>Check the transfer landed in {{ payment.get_method_display }}, then release <strong>{{ payment.tokens_to_grant|compact_number }} tokens</strong> to {{ payment.user.display_name }}.</p>
+                <div class="pm-act-btns">
+                  <form method="post" action="{% url 'console:payment_action' payment.reference %}" data-confirm="Decline {{ payment.reference }}? Nothing will be released.">
+                    {% csrf_token %}<input type="hidden" name="action" value="reject"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="pm-decline">Decline</button>
+                  </form>
+                  <form method="post" action="{% url 'console:payment_action' payment.reference %}">
+                    {% csrf_token %}<input type="hidden" name="action" value="confirm"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="pm-confirm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 8.4 6.6 11.4l5.8-6.8"/></svg>Confirm &amp; release</button>
+                  </form>
+                </div>
+              </div>
+            {% elif payment.state == 'paid' %}
+              <div class="pm-settled paid">
+                <span class="pm-settled-ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#0A7F5C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8.4 6.6 11.4l5.8-6.8"/></svg></span>
+                <p>{{ payment.tokens_to_grant|compact_number }} tokens were released to {{ payment.user.display_name }} and the plan is active.</p>
+                <a href="{% url 'console:payment_detail' payment.reference %}" class="pm-ghost">Full record</a>
+                <form method="post" action="{% url 'console:payment_action' payment.reference %}" data-confirm="Refund {{ payment.reference }}? The tokens will be taken back.">
+                  {% csrf_token %}<input type="hidden" name="action" value="refund"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button type="submit" class="pm-ghost">Refund</button>
+                </form>
+              </div>
+            {% else %}
+              <div class="pm-settled declined">
+                <span class="pm-settled-ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#E11D48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 4.4l7.2 7.2M11.6 4.4l-7.2 7.2"/></svg></span>
+                <p>{{ payment.get_status_display }} &mdash; nothing {% if payment.status == 'refunded' %}is held by{% else %}was released to{% endif %} {{ payment.user.display_name }}.</p>
+                <a href="{% url 'console:payment_detail' payment.reference %}" class="pm-ghost">Full record</a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% empty %}
+        <div class="pm-none"><b>No payment matches those filters</b><p>Clear the search, or switch the status back to All.</p></div>
+      {% endfor %}
+    </div>
+    <div class="pm-list-foot">
+      {% if page.paginator.num_pages > 1 %}
+        <div class="pm-pager">{% include "components/pagination.html" %}</div>
+      {% else %}
+        <div>{% if page.paginator.count %}Showing {{ page.object_list|length }} of {{ page.paginator.count }} order{{ page.paginator.count|pluralize }}{% if dirty %} &middot; filtered{% endif %}{% else %}No orders shown{% endif %}</div>
+      {% endif %}
+      {% if console_can.settings %}<a href="{% url 'console:settings' %}" class="pm-policy">Refund policy <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11 11 5M6.2 5H11v4.8"/></svg></a>{% endif %}
+    </div>
+  </section>
+
+  <div class="pm-foot">
+    <span>EPC Platform &middot; Payments</span>
+    <span>{% if totals.pending %}{{ totals.pending }} payment{{ totals.pending|pluralize }} still awaiting confirmation{% else %}Every payment has been reviewed{% endif %}</span>
+  </div>
+
+  <div class="pm-toast ok" id="pmToast" hidden role="status" aria-live="polite">
+    <i><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path id="pmToastIcon" d="M3.6 8.4 6.6 11.4l5.8-6.8"/></svg></i>
+    <span id="pmToastText"></span>
+  </div>
+  {% if toast %}<span id="pmToastSeed" hidden data-kind="{{ toast.kind }}">{{ toast.text }}</span>{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---- figures count up over 900ms, like the design */
+  function money(v) { return '$' + v.toFixed(2); }
+  function countUp(el, target, fmt, finalText) {
+    if (document.hidden || !target) { el.textContent = finalText; return; }
+    var t0 = performance.now(), d = 900;
+    function step(now) {
+      var p = Math.min(1, (now - t0) / d), t = 1 - Math.pow(1 - p, 3);
+      el.textContent = p < 1 ? fmt(target * t) : finalText;
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-money]'), function (el) {
+    countUp(el, parseFloat(el.getAttribute('data-money')) || 0, money, el.textContent);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-int]'), function (el) {
+    countUp(el, parseInt(el.getAttribute('data-int'), 10) || 0, function (v) { return String(Math.round(v)); }, el.textContent);
+  });
+  requestAnimationFrame(function () { requestAnimationFrame(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-width]'), function (bar) { bar.style.width = bar.getAttribute('data-width') + '%'; });
+  }); });
+
+  /* ---- method bars light up from the legend, and the other way round */
+  var bars = $('pmBars'), legend = $('pmLegend');
+  if (bars && legend) {
+    function hot(key) {
+      bars.classList.toggle('has-hot', !!key);
+      Array.prototype.forEach.call(bars.children, function (b) { b.classList.toggle('is-hot', b.getAttribute('data-method') === key); });
+    }
+    [bars, legend].forEach(function (box) {
+      box.addEventListener('mouseover', function (e) { var t = e.target.closest('[data-method]'); if (t) hot(t.getAttribute('data-method')); });
+      box.addEventListener('mouseleave', function () { hot(null); });
+    });
+  }
+
+  /* ---- rows open into the record and its actions */
+  var rows = $('pmRows');
+  rows.addEventListener('click', function (e) {
+    if (e.target.closest('a, button, form')) return;
+    var main = e.target.closest('.pm-row-main'); if (!main) return;
+    toggle(main.parentNode);
+  });
+  rows.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('pm-row-main')) { e.preventDefault(); toggle(e.target.parentNode); }
+  });
+  function toggle(row) {
+    var open = row.classList.contains('is-open');
+    Array.prototype.forEach.call(rows.querySelectorAll('.pm-row.is-open'), function (r) {
+      r.classList.remove('is-open'); r.querySelector('.pm-detail').hidden = true; r.querySelector('.pm-row-main').setAttribute('aria-expanded', 'false');
+    });
+    if (!open) {
+      row.classList.add('is-open'); row.querySelector('.pm-detail').hidden = false; row.querySelector('.pm-row-main').setAttribute('aria-expanded', 'true');
+    }
+  }
+  // Coming back from an action, reopen the row it was about.
+  var back = sessionStorage.getItem('pm-open');
+  if (back) { sessionStorage.removeItem('pm-open'); var r = rows.querySelector('.pm-row[data-ref="' + back + '"]'); if (r) toggle(r); }
+  rows.addEventListener('submit', function (e) {
+    var form = e.target, msg = form.getAttribute('data-confirm');
+    if (msg && !window.confirm(msg)) { e.preventDefault(); return; }
+    var row = form.closest('.pm-row'); if (row) sessionStorage.setItem('pm-open', row.getAttribute('data-ref'));
+    Array.prototype.forEach.call(form.querySelectorAll('button'), function (b) { b.disabled = true; });
+  });
+
+  /* ---- filters: the server does the filtering, the controls just submit */
+  var filters = $('pmFilters');
+  Array.prototype.forEach.call(filters.querySelectorAll('[data-autosubmit]'), function (el) { el.addEventListener('change', function () { filters.submit(); }); });
+  $('pmModel').addEventListener('change', function () { window.location.href = this.value || window.location.pathname; });
+  var more = document.querySelector('[data-status-menu]');
+  if (more) more.addEventListener('change', function () { if (this.value) window.location.href = this.value; });
+
+  /* ---- refresh */
+  var refresh = $('pmRefresh');
+  refresh.addEventListener('click', function () {
+    if (refresh.classList.contains('is-busy')) return;
+    refresh.classList.add('is-busy'); $('pmRefreshLabel').textContent = 'Syncing';
+    setTimeout(function () { window.location.reload(); }, 600);
+  });
+
+  /* ---- toast, with the kind's icon */
+  var ICONS = { ok: 'M3.6 8.4 6.6 11.4l5.8-6.8', bad: 'M4.4 4.4l7.2 7.2M11.6 4.4l-7.2 7.2', warn: 'M8 4.4v4.4M8 11.2v.4' };
+  var toastT = null;
+  function toast(msg, kind) {
+    var box = $('pmToast'); kind = ICONS[kind] ? kind : 'ok';
+    box.className = 'pm-toast ' + kind; $('pmToastIcon').setAttribute('d', ICONS[kind]); $('pmToastText').textContent = msg; box.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(function () { box.hidden = true; }, 3600);
+  }
+  var seed = $('pmToastSeed'); if (seed) toast(seed.textContent, seed.getAttribute('data-kind'));
+})();
+</script>
+{% endblock %}

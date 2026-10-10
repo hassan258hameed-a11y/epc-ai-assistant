@@ -1,0 +1,17 @@
+{% comment %}
+  Django's message queue, rendered inside a panel.
+
+  Every panel includes this at the top: a panel is often the result of a POST,
+  and the outcome of that POST has to be visible where the person is looking —
+  not on a page they were sent to instead.
+{% endcomment %}
+{% if messages %}
+  {% for message in messages %}
+    <div class="flash {% if message.level_tag == 'success' %}is-ok{% elif message.level_tag == 'error' %}is-bad{% elif message.level_tag == 'warning' %}is-warn{% endif %}" role="status">
+      <svg aria-hidden="true">
+        <use href="#{% if message.level_tag == 'success' %}i-check-circle{% elif message.level_tag == 'error' %}i-alert{% else %}i-info{% endif %}"/>
+      </svg>
+      <span>{{ message }}</span>
+    </div>
+  {% endfor %}
+{% endif %}

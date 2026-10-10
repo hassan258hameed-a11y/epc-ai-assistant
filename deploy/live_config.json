@@ -1,0 +1,2176 @@
+[
+ {
+  "model": "AI.aiprovider",
+  "pk": 1,
+  "fields": {
+   "slug": "openai",
+   "name": "OpenAI",
+   "description": "GPT models, called over the Chat Completions API.",
+   "is_active": true,
+   "website": "https://platform.openai.com",
+   "sort_order": 10,
+   "created_at": "2026-09-03T22:28:23.367Z",
+   "updated_at": "2026-09-03T22:28:23.367Z"
+  }
+ },
+ {
+  "model": "AI.aiprovider",
+  "pk": 2,
+  "fields": {
+   "slug": "anthropic",
+   "name": "Anthropic",
+   "description": "Claude models, called over the Messages API.",
+   "is_active": true,
+   "website": "https://platform.claude.com",
+   "sort_order": 20,
+   "created_at": "2026-09-03T22:28:23.457Z",
+   "updated_at": "2026-09-08T23:31:03.205Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 4,
+  "fields": {
+   "key": "gpt-5-mini",
+   "name": "GPT-5 Mini",
+   "provider": "openai",
+   "provider_ref": 1,
+   "description": "Fast and capable. The everyday model, and the best value here.",
+   "api_key_setting": "",
+   "is_active": true,
+   "is_default": true,
+   "supports_vision": true,
+   "best_for": "Everyday questions, homework help, quick explanations",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": true,
+   "token_type": "gpt_5_mini",
+   "thinking_mode": "off",
+   "max_output_tokens": 2048,
+   "temperature": "0.70",
+   "input_cost_per_1m": "0.2500",
+   "output_cost_per_1m": "2.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 1,
+   "created_at": "2026-08-29T10:35:28.342Z",
+   "updated_at": "2026-09-05T17:46:16.684Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 7,
+  "fields": {
+   "key": "gpt-4o",
+   "name": "GPT-4o",
+   "provider": "openai",
+   "provider_ref": 1,
+   "description": "Multimodal. Reads images as well as text, and answers quickly.",
+   "api_key_setting": "OPENAI_GPT4O_API_KEY",
+   "is_active": true,
+   "is_default": false,
+   "supports_vision": true,
+   "best_for": "Photos of homework, diagrams and quick answers",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": false,
+   "token_type": "gpt_4o",
+   "thinking_mode": "off",
+   "max_output_tokens": 4096,
+   "temperature": "0.70",
+   "input_cost_per_1m": "2.5000",
+   "output_cost_per_1m": "10.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 5,
+   "created_at": "2026-09-06T13:38:25.427Z",
+   "updated_at": "2026-09-06T21:38:55.297Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 6,
+  "fields": {
+   "key": "claude-haiku-4-5",
+   "name": "Claude 4.5",
+   "provider": "anthropic",
+   "provider_ref": 2,
+   "description": "Quick and careful. Strong reasoning for everyday study work.",
+   "api_key_setting": "",
+   "is_active": true,
+   "is_default": false,
+   "supports_vision": true,
+   "best_for": "Clear step-by-step explanations and writing feedback",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": true,
+   "token_type": "claude_haiku_4_5",
+   "thinking_mode": "off",
+   "max_output_tokens": 1536,
+   "temperature": "0.70",
+   "input_cost_per_1m": "1.0000",
+   "output_cost_per_1m": "5.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 10,
+   "created_at": "2026-09-03T22:28:23.458Z",
+   "updated_at": "2026-09-05T17:46:16.686Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 5,
+  "fields": {
+   "key": "claude-sonnet-5",
+   "name": "Claude 4.5 High",
+   "provider": "anthropic",
+   "provider_ref": 2,
+   "description": "The most capable model here. For hard problems and long work.",
+   "api_key_setting": "",
+   "is_active": true,
+   "is_default": false,
+   "supports_vision": true,
+   "best_for": "Hard problems, long essays and careful reasoning",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": true,
+   "token_type": "claude_sonnet_5",
+   "thinking_mode": "off",
+   "max_output_tokens": 2048,
+   "temperature": "0.70",
+   "input_cost_per_1m": "3.0000",
+   "output_cost_per_1m": "15.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 20,
+   "created_at": "2026-09-03T22:28:23.458Z",
+   "updated_at": "2026-09-05T17:46:16.688Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 10,
+  "fields": {
+   "key": "gpt-5.6-sol",
+   "name": "GPT-5 Sol",
+   "provider": "openai",
+   "provider_ref": 1,
+   "description": "Strong reasoning for coding and multi-step problems. Reads images.",
+   "api_key_setting": "",
+   "is_active": true,
+   "is_default": false,
+   "supports_vision": true,
+   "best_for": "Coding, maths and multi-step problems",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": false,
+   "token_type": "gpt_5_6_sol",
+   "thinking_mode": "off",
+   "max_output_tokens": 4096,
+   "temperature": "0.70",
+   "input_cost_per_1m": "4.0000",
+   "output_cost_per_1m": "20.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 25,
+   "created_at": "2026-09-24T20:30:28.756Z",
+   "updated_at": "2026-09-24T20:30:28.756Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 8,
+  "fields": {
+   "key": "claude-fable-5-1",
+   "name": "Fable 5.1",
+   "provider": "anthropic",
+   "provider_ref": 2,
+   "description": "Anthropic's Fable generation. Reads images and answers quickly.",
+   "api_key_setting": "",
+   "is_active": true,
+   "is_default": false,
+   "supports_vision": true,
+   "best_for": "Fast, friendly answers and reading images",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": false,
+   "token_type": "claude_fable_5_1",
+   "thinking_mode": "off",
+   "max_output_tokens": 2048,
+   "temperature": "0.70",
+   "input_cost_per_1m": "0.0000",
+   "output_cost_per_1m": "0.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 30,
+   "created_at": "2026-09-08T09:27:56.449Z",
+   "updated_at": "2026-09-08T09:27:56.449Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 9,
+  "fields": {
+   "key": "claude-opus-5",
+   "name": "Opus 5",
+   "provider": "anthropic",
+   "provider_ref": 2,
+   "description": "Anthropic's most capable model. Best for hard reasoning and long work.",
+   "api_key_setting": "",
+   "is_active": true,
+   "is_default": false,
+   "supports_vision": true,
+   "best_for": "The hardest reasoning and long research work",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": false,
+   "token_type": "claude_opus_5",
+   "thinking_mode": "off",
+   "max_output_tokens": 4096,
+   "temperature": "0.70",
+   "input_cost_per_1m": "0.0000",
+   "output_cost_per_1m": "0.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 40,
+   "created_at": "2026-09-08T09:27:56.461Z",
+   "updated_at": "2026-09-08T09:27:56.461Z"
+  }
+ },
+ {
+  "model": "AI.aimodel",
+  "pk": 11,
+  "fields": {
+   "key": "gpt-6-astra",
+   "name": "GPT-6 Astra",
+   "provider": "openai",
+   "provider_ref": 1,
+   "description": "OpenAI's most capable model. For the hardest problems and long work.",
+   "api_key_setting": "",
+   "is_active": true,
+   "is_default": false,
+   "supports_vision": true,
+   "best_for": "The hardest problems and long, detailed work",
+   "service_status": "operational",
+   "status_note": "",
+   "status_changed_at": null,
+   "auto_grant": false,
+   "token_type": "gpt_6_astra",
+   "thinking_mode": "off",
+   "max_output_tokens": 4096,
+   "temperature": "0.70",
+   "input_cost_per_1m": "10.0000",
+   "output_cost_per_1m": "50.0000",
+   "token_allocation": 0,
+   "tokens_consumed": 0,
+   "input_tokens_total": 0,
+   "output_tokens_total": 0,
+   "request_count": 0,
+   "failure_count": 0,
+   "last_used_at": null,
+   "warning_thresholds": "",
+   "default_daily_limit": 9000,
+   "default_weekly_limit": 35000,
+   "default_monthly_limit": 100000,
+   "sort_order": 50,
+   "created_at": "2026-09-24T20:30:28.771Z",
+   "updated_at": "2026-09-24T20:30:28.771Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 1,
+  "fields": {
+   "ai_model": 4,
+   "balance": 10233604,
+   "total_added": 10233604,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 0,
+   "output_allocation": 0,
+   "updated_at": "2026-09-06T19:39:55.890Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 2,
+  "fields": {
+   "ai_model": 5,
+   "balance": 1098171,
+   "total_added": 1098171,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 0,
+   "output_allocation": 0,
+   "updated_at": "2026-09-06T15:08:27.496Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 3,
+  "fields": {
+   "ai_model": 6,
+   "balance": 979168,
+   "total_added": 979168,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 0,
+   "output_allocation": 0,
+   "updated_at": "2026-10-01T10:29:50.907Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 4,
+  "fields": {
+   "ai_model": 7,
+   "balance": 3990000,
+   "total_added": 3990000,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 1500000,
+   "output_allocation": 1500000,
+   "updated_at": "2026-09-11T14:08:47.884Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 5,
+  "fields": {
+   "ai_model": 8,
+   "balance": 2959810,
+   "total_added": 2959810,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 1500000,
+   "output_allocation": 1500000,
+   "updated_at": "2026-09-08T19:46:46.994Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 6,
+  "fields": {
+   "ai_model": 9,
+   "balance": 2954812,
+   "total_added": 2954812,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 1500000,
+   "output_allocation": 1500000,
+   "updated_at": "2026-09-11T14:09:54.710Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 7,
+  "fields": {
+   "ai_model": 10,
+   "balance": 3000000,
+   "total_added": 3000000,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 1500000,
+   "output_allocation": 1500000,
+   "updated_at": "2026-09-24T20:30:28.756Z"
+  }
+ },
+ {
+  "model": "AI.modeltokenpool",
+  "pk": 8,
+  "fields": {
+   "ai_model": 11,
+   "balance": 3000000,
+   "total_added": 3000000,
+   "total_distributed": 0,
+   "total_reclaimed": 0,
+   "input_allocation": 1500000,
+   "output_allocation": 1500000,
+   "updated_at": "2026-09-24T20:30:28.771Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 4,
+  "fields": {
+   "name": "GPT-5 Mini \u2014 Starter",
+   "slug": "gpt-5-mini-starter",
+   "description": "Fast, capable and the best value \u2014 the everyday model.",
+   "tokens": 600000,
+   "ai_model": 4,
+   "price": "3.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Enough for a few weeks of study\nTokens never expire\nFull chat, voice and file support",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 0,
+   "created_at": "2026-09-04T22:01:44.544Z",
+   "updated_at": "2026-09-04T22:01:44.544Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 14,
+  "fields": {
+   "name": "GPT-5 Mini \u2014 Standard",
+   "slug": "gpt-5-mini-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 4,
+   "price": "2.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 1,
+   "created_at": "2026-09-05T17:46:16.704Z",
+   "updated_at": "2026-09-05T17:46:16.704Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 1,
+  "fields": {
+   "name": "Starter",
+   "slug": "starter",
+   "description": "Enough for daily homework help.",
+   "tokens": 500000,
+   "ai_model": 4,
+   "price": "3.00",
+   "currency": "USD",
+   "duration_days": 30,
+   "features": "500,000 tokens\nAll subjects\nImage questions\n30 days access",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 1,
+   "created_at": "2026-08-27T18:23:50.286Z",
+   "updated_at": "2026-09-06T21:39:34.725Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 5,
+  "fields": {
+   "name": "GPT-5 Mini \u2014 Standard",
+   "slug": "gpt-5-mini-standard",
+   "description": "Fast, capable and the best value \u2014 the everyday model.",
+   "tokens": 1200000,
+   "ai_model": 4,
+   "price": "5.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Our most popular size\nTokens never expire\nFull chat, voice and file support\nPriority during busy periods",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 1,
+   "created_at": "2026-09-04T22:01:44.544Z",
+   "updated_at": "2026-09-04T22:01:44.544Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 15,
+  "fields": {
+   "name": "GPT-5 Mini \u2014 Pro",
+   "slug": "gpt-5-mini-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 4,
+   "price": "2.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 2,
+   "created_at": "2026-09-05T17:46:16.705Z",
+   "updated_at": "2026-09-05T17:46:16.705Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 2,
+  "fields": {
+   "name": "Student",
+   "slug": "student",
+   "description": "Our most popular plan for a full term.",
+   "tokens": 2000000,
+   "ai_model": 4,
+   "price": "10.00",
+   "currency": "USD",
+   "duration_days": 60,
+   "features": "2,000,000 tokens\nAll subjects\nImage questions\nPriority support\n60 days access",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 2,
+   "created_at": "2026-08-27T18:23:50.289Z",
+   "updated_at": "2026-08-27T18:23:50.289Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 6,
+  "fields": {
+   "name": "GPT-5 Mini \u2014 Pro",
+   "slug": "gpt-5-mini-pro",
+   "description": "Fast, capable and the best value \u2014 the everyday model.",
+   "tokens": 3000000,
+   "ai_model": 4,
+   "price": "10.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Best value per token\nTokens never expire\nFull chat, voice and file support\nPriority during busy periods\nImage generation included",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 2,
+   "created_at": "2026-09-04T22:01:44.544Z",
+   "updated_at": "2026-09-04T22:01:44.544Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 16,
+  "fields": {
+   "name": "Claude 4.5 \u2014 Starter",
+   "slug": "claude-haiku-4-5-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 6,
+   "price": "2.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\nFull chat, voice and file support\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20000,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 3,
+   "created_at": "2026-09-05T17:46:16.707Z",
+   "updated_at": "2026-09-05T17:46:16.707Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 3,
+  "fields": {
+   "name": "Scholar",
+   "slug": "scholar",
+   "description": "For heavy research and coding work.",
+   "tokens": 6000000,
+   "ai_model": 4,
+   "price": "25.00",
+   "currency": "USD",
+   "duration_days": 120,
+   "features": "6,000,000 tokens\nAll subjects\nImage questions\nPriority support\n120 days access",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 3,
+   "created_at": "2026-08-27T18:23:50.289Z",
+   "updated_at": "2026-08-27T18:23:50.289Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 17,
+  "fields": {
+   "name": "Claude 4.5 \u2014 Standard",
+   "slug": "claude-haiku-4-5-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 6,
+   "price": "3.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 4,
+   "created_at": "2026-09-05T17:46:16.708Z",
+   "updated_at": "2026-09-05T17:46:16.708Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 13,
+  "fields": {
+   "name": "GPT-5 Mini \u2014 Starter",
+   "slug": "gpt-5-mini-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 4,
+   "price": "4.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\r\nFull chat, voice and file support\r\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20004,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 5,
+   "created_at": "2026-09-05T17:46:16.701Z",
+   "updated_at": "2026-09-11T14:14:54.105Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 18,
+  "fields": {
+   "name": "Claude 4.5 \u2014 Pro",
+   "slug": "claude-haiku-4-5-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 6,
+   "price": "4.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 5,
+   "created_at": "2026-09-05T17:46:16.708Z",
+   "updated_at": "2026-09-05T17:46:16.708Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 19,
+  "fields": {
+   "name": "Claude 4.5 High \u2014 Starter",
+   "slug": "claude-sonnet-5-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 5,
+   "price": "4.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\nFull chat, voice and file support\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20000,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 6,
+   "created_at": "2026-09-05T17:46:16.710Z",
+   "updated_at": "2026-09-05T17:46:16.710Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 20,
+  "fields": {
+   "name": "Claude 4.5 High \u2014 Standard",
+   "slug": "claude-sonnet-5-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 5,
+   "price": "6.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 7,
+   "created_at": "2026-09-05T17:46:16.711Z",
+   "updated_at": "2026-09-05T17:46:16.711Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 21,
+  "fields": {
+   "name": "Claude 4.5 High \u2014 Pro",
+   "slug": "claude-sonnet-5-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 5,
+   "price": "9.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 8,
+   "created_at": "2026-09-05T17:46:16.712Z",
+   "updated_at": "2026-09-05T17:46:16.712Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 7,
+  "fields": {
+   "name": "Claude Haiku 4.5 \u2014 Starter",
+   "slug": "claude-haiku-4-5-starter",
+   "description": "Quick and careful. Strong at reasoning for its size.",
+   "tokens": 200000,
+   "ai_model": 6,
+   "price": "3.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Enough for a few weeks of study\nTokens never expire\nFull chat, voice and file support",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 10,
+   "created_at": "2026-09-04T22:01:44.562Z",
+   "updated_at": "2026-09-04T22:01:44.562Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 8,
+  "fields": {
+   "name": "Claude Haiku 4.5 \u2014 Standard",
+   "slug": "claude-haiku-4-5-standard",
+   "description": "Quick and careful. Strong at reasoning for its size.",
+   "tokens": 400000,
+   "ai_model": 6,
+   "price": "5.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Our most popular size\nTokens never expire\nFull chat, voice and file support\nPriority during busy periods",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 11,
+   "created_at": "2026-09-04T22:01:44.562Z",
+   "updated_at": "2026-09-04T22:01:44.562Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 9,
+  "fields": {
+   "name": "Claude Haiku 4.5 \u2014 Pro",
+   "slug": "claude-haiku-4-5-pro",
+   "description": "Quick and careful. Strong at reasoning for its size.",
+   "tokens": 1000000,
+   "ai_model": 6,
+   "price": "10.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Best value per token\nTokens never expire\nFull chat, voice and file support\nPriority during busy periods\nImage generation included",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 12,
+   "created_at": "2026-09-04T22:01:44.562Z",
+   "updated_at": "2026-09-04T22:01:44.562Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 10,
+  "fields": {
+   "name": "Claude Sonnet 5 \u2014 Starter",
+   "slug": "claude-sonnet-5-starter",
+   "description": "The most capable model here. For hard problems and long work.",
+   "tokens": 70000,
+   "ai_model": 5,
+   "price": "3.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Enough for a few weeks of study\nTokens never expire\nFull chat, voice and file support",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 20,
+   "created_at": "2026-09-04T22:01:44.580Z",
+   "updated_at": "2026-09-04T22:01:44.580Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 11,
+  "fields": {
+   "name": "Claude Sonnet 5 \u2014 Standard",
+   "slug": "claude-sonnet-5-standard",
+   "description": "The most capable model here. For hard problems and long work.",
+   "tokens": 140000,
+   "ai_model": 5,
+   "price": "5.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Our most popular size\nTokens never expire\nFull chat, voice and file support\nPriority during busy periods",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 21,
+   "created_at": "2026-09-04T22:01:44.581Z",
+   "updated_at": "2026-09-04T22:01:44.581Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 12,
+  "fields": {
+   "name": "Claude Sonnet 5 \u2014 Pro",
+   "slug": "claude-sonnet-5-pro",
+   "description": "The most capable model here. For hard problems and long work.",
+   "tokens": 350000,
+   "ai_model": 5,
+   "price": "10.00",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "Best value per token\nTokens never expire\nFull chat, voice and file support\nPriority during busy periods\nImage generation included",
+   "daily_limit": 0,
+   "weekly_limit": 0,
+   "monthly_limit": 0,
+   "is_active": false,
+   "is_featured": false,
+   "display_order": 22,
+   "created_at": "2026-09-04T22:01:44.583Z",
+   "updated_at": "2026-09-04T22:01:44.583Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 22,
+  "fields": {
+   "name": "GPT-4o \u2014 Starter",
+   "slug": "gpt-4o-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 7,
+   "price": "3.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20000,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 100,
+   "created_at": "2026-09-06T13:38:25.433Z",
+   "updated_at": "2026-09-06T13:38:25.433Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 23,
+  "fields": {
+   "name": "GPT-4o \u2014 Standard",
+   "slug": "gpt-4o-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 7,
+   "price": "4.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 101,
+   "created_at": "2026-09-06T13:38:25.435Z",
+   "updated_at": "2026-09-06T13:38:25.435Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 24,
+  "fields": {
+   "name": "GPT-4o \u2014 Pro",
+   "slug": "gpt-4o-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 7,
+   "price": "7.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 102,
+   "created_at": "2026-09-06T13:38:25.436Z",
+   "updated_at": "2026-09-06T13:38:25.436Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 25,
+  "fields": {
+   "name": "Fable 5.1 \u2014 Starter",
+   "slug": "claude-fable-5-1-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 8,
+   "price": "4.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20000,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 200,
+   "created_at": "2026-09-08T09:27:56.458Z",
+   "updated_at": "2026-09-08T09:27:56.458Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 26,
+  "fields": {
+   "name": "Fable 5.1 \u2014 Standard",
+   "slug": "claude-fable-5-1-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 8,
+   "price": "7.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 201,
+   "created_at": "2026-09-08T09:27:56.459Z",
+   "updated_at": "2026-09-08T09:27:56.459Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 27,
+  "fields": {
+   "name": "Fable 5.1 \u2014 Pro",
+   "slug": "claude-fable-5-1-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 8,
+   "price": "11.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 202,
+   "created_at": "2026-09-08T09:27:56.460Z",
+   "updated_at": "2026-09-08T09:27:56.460Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 28,
+  "fields": {
+   "name": "Opus 5 \u2014 Starter",
+   "slug": "claude-opus-5-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 9,
+   "price": "5.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20000,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 203,
+   "created_at": "2026-09-08T09:27:56.463Z",
+   "updated_at": "2026-09-08T09:27:56.463Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 29,
+  "fields": {
+   "name": "Opus 5 \u2014 Standard",
+   "slug": "claude-opus-5-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 9,
+   "price": "8.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 204,
+   "created_at": "2026-09-08T09:27:56.464Z",
+   "updated_at": "2026-09-08T09:27:56.464Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 30,
+  "fields": {
+   "name": "Opus 5 \u2014 Pro",
+   "slug": "claude-opus-5-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 9,
+   "price": "13.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 205,
+   "created_at": "2026-09-08T09:27:56.464Z",
+   "updated_at": "2026-09-08T09:27:56.464Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 31,
+  "fields": {
+   "name": "GPT-5 Sol \u2014 Starter",
+   "slug": "gpt-5-6-sol-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 10,
+   "price": "4.79",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20000,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 300,
+   "created_at": "2026-09-24T20:30:28.756Z",
+   "updated_at": "2026-09-24T20:30:28.756Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 32,
+  "fields": {
+   "name": "GPT-5 Sol \u2014 Standard",
+   "slug": "gpt-5-6-sol-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 10,
+   "price": "6.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 301,
+   "created_at": "2026-09-24T20:30:28.769Z",
+   "updated_at": "2026-09-24T20:30:28.769Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 33,
+  "fields": {
+   "name": "GPT-5 Sol \u2014 Pro",
+   "slug": "gpt-5-6-sol-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 10,
+   "price": "10.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 302,
+   "created_at": "2026-09-24T20:30:28.770Z",
+   "updated_at": "2026-09-24T20:30:28.770Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 34,
+  "fields": {
+   "name": "GPT-6 Astra \u2014 Starter",
+   "slug": "gpt-6-astra-50k",
+   "description": "A few weeks of everyday study.",
+   "tokens": 50000,
+   "ai_model": 11,
+   "price": "9.49",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "50,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included",
+   "daily_limit": 5000,
+   "weekly_limit": 20000,
+   "monthly_limit": 50000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 303,
+   "created_at": "2026-09-24T20:30:28.771Z",
+   "updated_at": "2026-09-24T20:30:28.771Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 35,
+  "fields": {
+   "name": "GPT-6 Astra \u2014 Standard",
+   "slug": "gpt-6-astra-100k",
+   "description": "Our most popular size.",
+   "tokens": 100000,
+   "ai_model": 11,
+   "price": "14.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "100,000 tokens, and they never expire\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 9000,
+   "weekly_limit": 35000,
+   "monthly_limit": 100000,
+   "is_active": true,
+   "is_featured": true,
+   "display_order": 304,
+   "created_at": "2026-09-24T20:30:28.771Z",
+   "updated_at": "2026-09-24T20:30:28.771Z"
+  }
+ },
+ {
+  "model": "AI.plan",
+  "pk": 36,
+  "fields": {
+   "name": "GPT-6 Astra \u2014 Pro",
+   "slug": "gpt-6-astra-200k",
+   "description": "For heavy research and coding work.",
+   "tokens": 200000,
+   "ai_model": 11,
+   "price": "27.99",
+   "currency": "USD",
+   "duration_days": 365,
+   "features": "200,000 tokens, and they never expire\nBest value per token\nReads images and photos of questions\nFull chat, voice and file support\nImage generation included\nPriority during busy periods",
+   "daily_limit": 16000,
+   "weekly_limit": 65000,
+   "monthly_limit": 200000,
+   "is_active": true,
+   "is_featured": false,
+   "display_order": 305,
+   "created_at": "2026-09-24T20:30:28.771Z",
+   "updated_at": "2026-09-24T20:30:28.771Z"
+  }
+ },
+ {
+  "model": "AI.savedprompt",
+  "pk": 1,
+  "fields": {
+   "user": null,
+   "title": "Explain it simply",
+   "body": "Explain the following concept as if I am meeting it for the first time. Start with a one-sentence summary, then a simple example, then the common mistakes people make:\n\n",
+   "category": "Study",
+   "is_featured": true,
+   "is_active": true,
+   "use_count": 0,
+   "sort_order": 10,
+   "created_by": null,
+   "created_at": "2026-09-24T21:38:51.583Z",
+   "updated_at": "2026-09-24T21:38:51.583Z"
+  }
+ },
+ {
+  "model": "AI.savedprompt",
+  "pk": 2,
+  "fields": {
+   "user": null,
+   "title": "Quiz me",
+   "body": "Write 5 multiple-choice questions to test my understanding of the topic below. Put the answers, with a one-line explanation each, at the end:\n\n",
+   "category": "Study",
+   "is_featured": true,
+   "is_active": true,
+   "use_count": 0,
+   "sort_order": 20,
+   "created_by": null,
+   "created_at": "2026-09-24T21:38:51.585Z",
+   "updated_at": "2026-09-24T21:38:51.586Z"
+  }
+ },
+ {
+  "model": "AI.savedprompt",
+  "pk": 3,
+  "fields": {
+   "user": null,
+   "title": "Summarise my notes",
+   "body": "Summarise these notes into clear bullet points grouped by theme, and list anything that looks unclear or missing:\n\n",
+   "category": "Study",
+   "is_featured": true,
+   "is_active": true,
+   "use_count": 0,
+   "sort_order": 30,
+   "created_by": null,
+   "created_at": "2026-09-24T21:38:51.586Z",
+   "updated_at": "2026-09-24T21:38:51.586Z"
+  }
+ },
+ {
+  "model": "AI.savedprompt",
+  "pk": 4,
+  "fields": {
+   "user": null,
+   "title": "Check my essay",
+   "body": "Review this paragraph for clarity, grammar and argument. Show the corrected version first, then explain the three most important changes:\n\n",
+   "category": "Writing",
+   "is_featured": true,
+   "is_active": true,
+   "use_count": 0,
+   "sort_order": 40,
+   "created_by": null,
+   "created_at": "2026-09-24T21:38:51.587Z",
+   "updated_at": "2026-09-24T21:38:51.587Z"
+  }
+ },
+ {
+  "model": "AI.savedprompt",
+  "pk": 5,
+  "fields": {
+   "user": null,
+   "title": "Debug my code",
+   "body": "Find the bug in this code. Explain what is wrong, why it happens, and show the fixed version:\n\n",
+   "category": "Coding",
+   "is_featured": true,
+   "is_active": true,
+   "use_count": 0,
+   "sort_order": 50,
+   "created_by": null,
+   "created_at": "2026-09-24T21:38:51.588Z",
+   "updated_at": "2026-09-24T21:38:51.588Z"
+  }
+ },
+ {
+  "model": "AI.savedprompt",
+  "pk": 6,
+  "fields": {
+   "user": null,
+   "title": "Step-by-step solution",
+   "body": "Solve this problem step by step, explaining the reasoning at each step so I can do a similar one on my own:\n\n",
+   "category": "Maths",
+   "is_featured": true,
+   "is_active": true,
+   "use_count": 0,
+   "sort_order": 60,
+   "created_by": null,
+   "created_at": "2026-09-24T21:38:51.589Z",
+   "updated_at": "2026-09-24T21:38:51.589Z"
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 34,
+  "fields": {
+   "key": "ai_context_token_budget",
+   "value": "1200",
+   "value_type": "int",
+   "group": "ai",
+   "label": "Context budget (tokens)",
+   "help_text": "How much conversation history is re-sent with each message. Older messages are replaced by a short summary rather than dropped.",
+   "updated_at": "2026-09-05T18:22:44.990Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 39,
+  "fields": {
+   "key": "ai_followups_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "ai",
+   "label": "Suggest follow-up questions",
+   "help_text": "Each answer ends with three one-tap follow-up questions. They are written in the same reply (no extra request), adding roughly 30-50 output tokens per answer.",
+   "updated_at": "2026-09-26T20:25:08.072Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 17,
+  "fields": {
+   "key": "ai_max_context_messages",
+   "value": "8",
+   "value_type": "int",
+   "group": "ai",
+   "label": "Context window (messages)",
+   "help_text": "How many previous messages are sent with each request. Every one of them is re-sent, and paid for, on every message \u2014 raise it only if the assistant starts losing the thread.",
+   "updated_at": "2026-09-04T19:21:25.544Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 35,
+  "fields": {
+   "key": "ai_summarize_history",
+   "value": "true",
+   "value_type": "bool",
+   "group": "ai",
+   "label": "Summarise long conversations",
+   "help_text": "When history outgrows the budget, fold the older part into a short summary instead of losing it. Costs one small call per few messages.",
+   "updated_at": "2026-09-05T18:22:44.990Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 16,
+  "fields": {
+   "key": "ai_system_prompt",
+   "value": "You are the EPC AI Assistant, a study partner for students.\n- Lead with the answer, in as few words as a complete answer needs. No preamble, recap or sign-off.\n- Be right before brief: check every calculation, unit and final answer. If information is missing, state your assumption. If the student is wrong, say so and correct it.\n- Say when unsure; never invent facts, sources, links or figures.\n- Maths and science: numbered steps, one per line, final answer in bold with units. Write maths in plain text with Unicode (x\u00b2, \u221a2, \u03c0, \u2264, \u00d7, (a+b)/c), never LaTeX.\n- Code: complete and runnable, in a fenced block with its language; for a fix, add one sentence on what was wrong.\n- Markdown renders; use lists, tables or ## headings only when they help, never nested lists.\n- Reply in the language the student wrote in.\n- This platform draws pictures: never say it can't; tell the student to ask, e.g. \"create an image of a red bicycle\".",
+   "value_type": "str",
+   "group": "ai",
+   "label": "System prompt",
+   "help_text": "Sets the assistant's behaviour for every conversation.",
+   "updated_at": "2026-09-04T19:21:25.527Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 18,
+  "fields": {
+   "key": "ai_vision_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "ai",
+   "label": "Enable image input",
+   "help_text": "Allow students to attach images in chat.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 40,
+  "fields": {
+   "key": "allow_chat_sharing",
+   "value": "true",
+   "value_type": "bool",
+   "group": "ai",
+   "label": "Allow sharing conversations",
+   "help_text": "Students can publish a read-only link to a conversation. Turning this off hides the Share button and makes every existing link stop working.",
+   "updated_at": "2026-09-26T20:25:08.072Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 38,
+  "fields": {
+   "key": "auto_switch_model",
+   "value": "true",
+   "value_type": "bool",
+   "group": "ai",
+   "label": "Switch model when one runs out",
+   "help_text": "When the chosen model has no room left \u2014 no tokens, or a daily, weekly or monthly ceiling reached \u2014 answer with another model the student already holds tokens for, instead of refusing. The switch is always shown in the conversation and the reply is billed to the model that actually answered.",
+   "updated_at": "2026-09-08T22:39:46.876Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 41,
+  "fields": {
+   "key": "custom_instructions_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "ai",
+   "label": "Allow custom instructions",
+   "help_text": "Students can tell the assistant about themselves and how they like answers written. Their text is added to every request they send.",
+   "updated_at": "2026-09-26T20:25:08.072Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 8,
+  "fields": {
+   "key": "expiry_reminder_days",
+   "value": "[7, 3, 1]",
+   "value_type": "json",
+   "group": "alerts",
+   "label": "Expiry reminder days",
+   "help_text": "Send subscription reminders this many days before expiry.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 37,
+  "fields": {
+   "key": "low_token_email_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "alerts",
+   "label": "E-mail low token warnings",
+   "help_text": "Send the low-balance warning to the student's registered e-mail address, through the same account verification codes use.",
+   "updated_at": "2026-09-07T11:39:19.013Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 36,
+  "fields": {
+   "key": "low_token_percent_thresholds",
+   "value": "[50, 25, 10, 5]",
+   "value_type": "json",
+   "group": "alerts",
+   "label": "Low token warning points (%)",
+   "help_text": "E-mail the student when a model's balance falls to each of these percentages of what they were allocated. A percentage rather than a fixed count, so the same rule means the same thing on a 10,000-token package and a 200,000-token one. Each point is sent once per model until the student tops that model up.",
+   "updated_at": "2026-09-07T11:39:19.013Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 6,
+  "fields": {
+   "key": "low_token_threshold",
+   "value": "50",
+   "value_type": "int",
+   "group": "alerts",
+   "label": "Low token threshold",
+   "help_text": "Students are alerted when their balance drops below this number.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 7,
+  "fields": {
+   "key": "low_token_threshold_critical",
+   "value": "10",
+   "value_type": "int",
+   "group": "alerts",
+   "label": "Critical token threshold",
+   "help_text": "A second, more urgent alert at this balance.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 55,
+  "fields": {
+   "key": "admin_digest_enabled",
+   "value": "false",
+   "value_type": "bool",
+   "group": "general",
+   "label": "Daily admin digest",
+   "help_text": "Every morning (after 8 am Phnom Penh) each administrator gets the last 24 hours \u2014 sign-ups, payments, tokens, errors, tickets, model status \u2014 on Telegram and by e-mail. Sent by the hourly send_reminders job.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 13,
+  "fields": {
+   "key": "app_name",
+   "value": "EPC AI Assistant",
+   "value_type": "str",
+   "group": "general",
+   "label": "Application name",
+   "help_text": "Shown in the UI and e-mails.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 53,
+  "fields": {
+   "key": "chat_paused",
+   "value": "false",
+   "value_type": "bool",
+   "group": "general",
+   "label": "Pause all chat (maintenance)",
+   "help_text": "Stops new messages to every model. Students can still read, search and export their chats, and see the note below. Administrators are not affected.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 54,
+  "fields": {
+   "key": "chat_paused_note",
+   "value": "",
+   "value_type": "str",
+   "group": "general",
+   "label": "Maintenance message",
+   "help_text": "Shown to students while chat is paused, e.g. \"Back by 9:00 pm \u2014 we're upgrading.\"",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 51,
+  "fields": {
+   "key": "chat_streaming",
+   "value": "true",
+   "value_type": "bool",
+   "group": "general",
+   "label": "Live answers (word by word)",
+   "help_text": "Show answers as they are written. Off: each answer appears when it is complete.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 20,
+  "fields": {
+   "key": "maintenance_note",
+   "value": "",
+   "value_type": "str",
+   "group": "general",
+   "label": "Dashboard banner",
+   "help_text": "Optional message shown on student dashboards.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 52,
+  "fields": {
+   "key": "semantic_search_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "general",
+   "label": "Search by meaning",
+   "help_text": "Let students find past answers by what they mean, not only by exact words. Needs an OpenAI-compatible embeddings key (EMBEDDING_API_KEY or OPENAI_API_KEY).",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 19,
+  "fields": {
+   "key": "signup_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "general",
+   "label": "Public signup",
+   "help_text": "Allow students to register themselves.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 14,
+  "fields": {
+   "key": "support_email",
+   "value": "support@epc-ai.local",
+   "value_type": "str",
+   "group": "general",
+   "label": "Support e-mail",
+   "help_text": "Where students should write.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 15,
+  "fields": {
+   "key": "support_telegram",
+   "value": "",
+   "value_type": "str",
+   "group": "general",
+   "label": "Support Telegram",
+   "help_text": "Optional @handle for support.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 57,
+  "fields": {
+   "key": "telegram_channel_title",
+   "value": "{\"for\": \"-1003853267886\", \"title\": \"EPC AI ASSISTANT\"}",
+   "value_type": "str",
+   "group": "general",
+   "label": "Telegram Channel Title",
+   "help_text": "",
+   "updated_at": "2026-10-01T10:18:41.758Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 2,
+  "fields": {
+   "key": "free_trial_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "growth",
+   "label": "Enable free trial",
+   "help_text": "Turn the welcome grant on or off for new signups.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 1,
+  "fields": {
+   "key": "free_trial_tokens",
+   "value": "3000",
+   "value_type": "int",
+   "group": "growth",
+   "label": "Free trial tokens",
+   "help_text": "Credited once, in the default model (GPT-5 Mini), when a new account is verified. Every other model starts at zero.",
+   "updated_at": "2026-10-02T11:02:26.594Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 4,
+  "fields": {
+   "key": "referral_bonus_referred",
+   "value": "5000",
+   "value_type": "int",
+   "group": "growth",
+   "label": "Referral bonus \u2014 new user",
+   "help_text": "Tokens awarded to the person who signed up with a code.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 3,
+  "fields": {
+   "key": "referral_bonus_referrer",
+   "value": "10000",
+   "value_type": "int",
+   "group": "growth",
+   "label": "Referral bonus \u2014 referrer",
+   "help_text": "Tokens awarded to the person who shared the code.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 5,
+  "fields": {
+   "key": "referral_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "growth",
+   "label": "Enable referrals",
+   "help_text": "Allow referral codes at signup.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 30,
+  "fields": {
+   "key": "image_api_key",
+   "value": "",
+   "value_type": "secret",
+   "group": "images",
+   "label": "Image API key",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.718Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 27,
+  "fields": {
+   "key": "image_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "images",
+   "label": "Enable image generation",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.717Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 29,
+  "fields": {
+   "key": "image_model",
+   "value": "",
+   "value_type": "str",
+   "group": "images",
+   "label": "Image model",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.718Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 28,
+  "fields": {
+   "key": "image_provider",
+   "value": "openai",
+   "value_type": "str",
+   "group": "images",
+   "label": "Image provider",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.718Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 32,
+  "fields": {
+   "key": "image_quality",
+   "value": "medium",
+   "value_type": "str",
+   "group": "images",
+   "label": "Quality",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.720Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 31,
+  "fields": {
+   "key": "image_size",
+   "value": "1024x1024",
+   "value_type": "str",
+   "group": "images",
+   "label": "Default size",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.718Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 33,
+  "fields": {
+   "key": "image_token_cost",
+   "value": "0",
+   "value_type": "int",
+   "group": "images",
+   "label": "Tokens per image",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.720Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 21,
+  "fields": {
+   "key": "minimum_limit_package",
+   "value": "50000",
+   "value_type": "int",
+   "group": "limits",
+   "label": "Minimum metered package",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.713Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 23,
+  "fields": {
+   "key": "usage_meter_visible",
+   "value": "true",
+   "value_type": "bool",
+   "group": "limits",
+   "label": "Show the usage meter",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.714Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 22,
+  "fields": {
+   "key": "usage_warning_thresholds",
+   "value": "[70, 80, 90]",
+   "value_type": "json",
+   "group": "limits",
+   "label": "Warning thresholds (%)",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.713Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 43,
+  "fields": {
+   "key": "payment_expiry_minutes",
+   "value": "15",
+   "value_type": "int",
+   "group": "payments",
+   "label": "Payment window (minutes)",
+   "help_text": "How long a student has to finish paying before the order expires and a new one has to be started. The gateways are told the same limit.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 42,
+  "fields": {
+   "key": "payment_khr_rate",
+   "value": "4100",
+   "value_type": "int",
+   "group": "payments",
+   "label": "KHR exchange rate",
+   "help_text": "Riel per US dollar, used to price KHR payments (ABA PayWay, ACLEDA). Fixed on each order when it is created, so changing it never alters an order that is already open.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 44,
+  "fields": {
+   "key": "payment_manual_review",
+   "value": "true",
+   "value_type": "bool",
+   "group": "payments",
+   "label": "Manual confirmation fallback",
+   "help_text": "When a gateway has no credentials yet, offer a manual transfer that an administrator confirms from the Payments page. Turn off to hide such methods entirely.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 10,
+  "fields": {
+   "key": "otp_length",
+   "value": "6",
+   "value_type": "int",
+   "group": "security",
+   "label": "OTP length",
+   "help_text": "Number of digits in a verification code.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 9,
+  "fields": {
+   "key": "otp_ttl_minutes",
+   "value": "10",
+   "value_type": "int",
+   "group": "security",
+   "label": "OTP lifetime (minutes)",
+   "help_text": "How long a verification code stays valid.",
+   "updated_at": "2026-08-27T18:23:50.268Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 11,
+  "fields": {
+   "key": "require_verification",
+   "value": "true",
+   "value_type": "bool",
+   "group": "security",
+   "label": "Require verification",
+   "help_text": "New students must verify by e-mail or Telegram before chatting.",
+   "updated_at": "2026-09-06T22:42:15.893Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 12,
+  "fields": {
+   "key": "single_session",
+   "value": "true",
+   "value_type": "bool",
+   "group": "security",
+   "label": "One active session",
+   "help_text": "Signing in on a new device signs the account out everywhere else.",
+   "updated_at": "2026-09-06T22:42:15.913Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 26,
+  "fields": {
+   "key": "support_hours",
+   "value": "Every day, 9am \u2014 9pm",
+   "value_type": "str",
+   "group": "support",
+   "label": "Support hours",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.716Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 24,
+  "fields": {
+   "key": "support_whatsapp",
+   "value": "+923162211830",
+   "value_type": "str",
+   "group": "support",
+   "label": "WhatsApp number",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.715Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 25,
+  "fields": {
+   "key": "support_whatsapp_message",
+   "value": "Hello! I need help with my EPC AI Assistant account.",
+   "value_type": "str",
+   "group": "support",
+   "label": "WhatsApp opening message",
+   "help_text": "",
+   "updated_at": "2026-09-05T17:46:16.715Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 45,
+  "fields": {
+   "key": "telegram_alerts_enabled",
+   "value": "true",
+   "value_type": "bool",
+   "group": "telegram",
+   "label": "Telegram alerts",
+   "help_text": "Send students' alerts to their linked Telegram chat. Off: alerts stay in the app (and e-mail); sign-in codes still go to Telegram for students who chose it.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 48,
+  "fields": {
+   "key": "telegram_send_expiry",
+   "value": "true",
+   "value_type": "bool",
+   "group": "telegram",
+   "label": "Plan expiry",
+   "help_text": "Reminders before a plan ends, and when it has ended.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 46,
+  "fields": {
+   "key": "telegram_send_payment",
+   "value": "true",
+   "value_type": "bool",
+   "group": "telegram",
+   "label": "Payments",
+   "help_text": "Payment confirmed, failed, expired or refunded.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 50,
+  "fields": {
+   "key": "telegram_send_referral",
+   "value": "true",
+   "value_type": "bool",
+   "group": "telegram",
+   "label": "Referral rewards",
+   "help_text": "Tokens earned by inviting friends.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 49,
+  "fields": {
+   "key": "telegram_send_system",
+   "value": "true",
+   "value_type": "bool",
+   "group": "telegram",
+   "label": "Support and messages",
+   "help_text": "Support replies, messages from the team and account changes.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ },
+ {
+  "model": "AI.appsetting",
+  "pk": 47,
+  "fields": {
+   "key": "telegram_send_tokens",
+   "value": "true",
+   "value_type": "bool",
+   "group": "telegram",
+   "label": "Tokens",
+   "help_text": "Low-balance warnings and tokens added by an administrator.",
+   "updated_at": "2026-09-29T12:07:09.865Z",
+   "updated_by": null
+  }
+ }
+]

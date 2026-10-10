@@ -1,0 +1,11 @@
+{% extends "auth/_epc_auth.html" %}
+
+{% block title %}Sign in · {{ BRAND.full_name }}{% endblock %}
+
+{% comment %}
+  The sign-in page. Both panels render; only this one is bound to a form,
+  so an error from a sign-in attempt can only ever come back here.
+{% endcomment %}
+{% block card %}
+  {% include "auth/_auth_card.html" with mode="in" login_form=form %}
+{% endblock %}

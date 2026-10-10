@@ -1,0 +1,86 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Saved replies for support. Each one can be dropped into a ticket reply from
+  the ticket page and edited there before sending; {name} becomes the
+  student's first name. Most used first.
+{% endcomment %}
+
+{% block title %}Saved replies · Console{% endblock %}
+{% block heading %}Saved replies{% endblock %}
+{% block subheading %}
+  <p>Answers support gives often enough to write once. Insert one from any ticket, then adjust it before you send.</p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-inbox" label="Saved replies" value=replies|length foot="ready to insert" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-send" label="Times used" value=total_uses|intcomma foot="in replies that were sent" %}
+  </section>
+
+  <div class="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+    <section class="card overflow-hidden reveal">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">All saved replies</h2>
+        <a href="{% url 'console:tickets' %}" class="btn-ghost btn-sm">Open tickets</a>
+      </div>
+      {% if replies %}
+        <ul class="divide-y divide-ink-100 dark:divide-white/5">
+          {% for reply in replies %}
+            <li class="flex items-start gap-3 px-5 py-4{% if editing and editing.pk == reply.pk %} bg-brand-500/5{% endif %}">
+              <span class="chip-brand mt-0.5 h-8 w-8 shrink-0 rounded-[.7rem]" aria-hidden="true">
+                <svg style="width:15px;height:15px"><use href="#i-inbox"/></svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-ink-900 dark:text-white">{{ reply.title }}</p>
+                <p class="mt-1 line-clamp-2 whitespace-pre-line text-xs leading-relaxed text-ink-600 dark:text-ink-300">{{ reply.body }}</p>
+                <p class="mt-1.5 text-[11px] text-ink-400">Used {{ reply.use_count|intcomma }} time{{ reply.use_count|pluralize }} · updated {{ reply.updated_at|timeago }}</p>
+              </div>
+              <div class="flex shrink-0 items-center gap-1">
+                <a href="?edit={{ reply.pk }}#cannedForm" class="btn-icon h-7 w-7" title="Edit" aria-label="Edit {{ reply.title }}">
+                  <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg>
+                </a>
+                <form method="post" action="{% url 'console:canned_delete' reply.pk %}" onsubmit="return confirm('Delete this saved reply?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-icon h-7 w-7" title="Delete" aria-label="Delete {{ reply.title }}">
+                    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-trash"/></svg>
+                  </button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-inbox" title="No saved replies yet" body="Write the first one with the form — the answer you find yourself typing most." %}
+      {% endif %}
+    </section>
+
+    <section class="card spotlight p-5 sm:p-6 reveal" id="cannedForm">
+      <h2 class="section-title">{% if editing %}Edit saved reply{% else %}New saved reply{% endif %}</h2>
+      <p class="section-note mt-0.5">Write <code class="rounded bg-ink-100 px-1 dark:bg-white/10">{name}</code> where the student's first name should go.</p>
+      <form method="post" class="mt-5 space-y-4" data-loading-form
+            action="{% if editing %}{% url 'console:canned_save' editing.pk %}{% else %}{% url 'console:canned_create' %}{% endif %}">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="cTitle">Title</label>
+          <input class="input" id="cTitle" name="title" maxlength="80" required value="{{ editing.title|default:'' }}" placeholder="Payment not credited yet">
+        </div>
+        <div>
+          <label class="label" for="cBody">Reply</label>
+          <textarea class="input resize-y leading-relaxed" id="cBody" name="body" rows="9" maxlength="4000" required
+                    placeholder="Hi {name}, thanks for getting in touch…">{{ editing.body|default:'' }}</textarea>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          {% if editing %}<a href="{% url 'console:canned_replies' %}" class="btn-ghost">Cancel</a>{% endif %}
+          <button type="submit" class="btn-primary">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#{% if editing %}i-check{% else %}i-plus{% endif %}"/></svg>
+            {% if editing %}Save changes{% else %}Save reply{% endif %}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

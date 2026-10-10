@@ -1,0 +1,541 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Console · {{ BRAND.full_name }}{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">Platform health at a glance.</p>
+{% endblock %}
+
+{% block header_actions %}
+  {% if console_can.accounts %}
+  <a href="{% url 'console:accounts' %}" class="btn-primary btn-sm">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> New account
+  </a>
+  {% endif %}
+{% endblock %}
+
+{# The hero below is this page's masthead, so the shell's is suppressed. #}
+{% block page_head %}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {% comment %}
+    An administrator whose staff role has not been chosen sees only the pages
+    everyone has, so the page says why rather than looking broken.
+  {% endcomment %}
+  {% if console_role == "" %}
+    <div class="flex flex-wrap items-center gap-3 rounded-xl2 border border-amber-500/25 bg-amber-500/8 p-4 animate-fade-up" role="status">
+      <svg class="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true"><use href="#i-lock"/></svg>
+      <p class="min-w-0 flex-1 text-sm text-ink-800 dark:text-ink-100">
+        <span class="font-bold">Your account has no console role yet.</span>
+        Until an owner chooses one on the Staff page you can see this overview, search and your own sign-in settings.
+      </p>
+    </div>
+  {% endif %}
+
+  {% comment %}
+    The hero. An administrator opening the console should be told where things
+    stand before being handed a grid of numbers, so this states the one thing
+    that matters — is anything wrong — and puts the three actions they came for
+    within reach.
+  {% endcomment %}
+  {% comment %}
+    The masthead, composed as the design composes it: the date, the greeting,
+    a briefing panel that says in one sentence what the numbers below spell
+    out, the three things an administrator actually starts by doing, and the
+    day's request count read as a dial.
+
+    The briefing is assembled from the same figures the cards show rather than
+    written separately, so the two can never disagree.
+  {% endcomment %}
+  <section class="hero-console animate-fade-up">
+    <div class="hero-console-body">
+      <div class="min-w-0 flex-1">
+        <p class="hero-date">{{ today|date:"l, j F Y" }}</p>
+
+        <h1 class="hero-greet-console">
+          {{ greeting|default:"Welcome back" }}, {{ user.display_name|default:"Administrator" }}
+        </h1>
+
+        <div class="brief-card">
+          <p class="brief-head">
+            <span class="brief-mark"><svg aria-hidden="true"><use href="#i-sparkles"/></svg></span>
+            Daily briefing
+          </p>
+          {% comment %}
+            Each clause says what its number counts. "Enabled" is the account
+            status, and "seen" is the last-seen stamp over seven days — neither
+            is "active today", which nothing here measures. The balance clause
+            is chosen from the running-low and run-dry counts, so "healthy" is
+            only said when both are zero.
+          {% endcomment %}
+          <p class="brief-text">
+            {{ stats.active_users|intcomma }} of {{ stats.total_users|intcomma }} student
+            account{{ stats.total_users|pluralize }} {{ stats.active_users|pluralize:"is,are" }} enabled,
+            and {{ stats.recently_active|intcomma }} {{ stats.recently_active|pluralize:"has,have" }}
+            been seen in the last 7 days.
+            {% if running_low or stats.no_token_users %}
+              Students hold {{ stats.tokens_remaining|compact_number }} tokens, but
+              {% if running_low %}{{ running_low|intcomma }} student{{ running_low|pluralize }} {{ running_low|pluralize:"is,are" }} running low{% endif %}{% if running_low and stats.no_token_users %} and {% endif %}{% if stats.no_token_users %}{{ stats.no_token_users|intcomma }} student{{ stats.no_token_users|pluralize }} {{ stats.no_token_users|pluralize:"has,have" }} run dry{% endif %}{% elif stats.tokens_remaining %}
+              Balances look healthy at {{ stats.tokens_remaining|compact_number }} tokens{% else %}
+              No tokens have been handed out yet{% endif %}{% if console_can.finance and stats.payments_pending %}, and
+            {{ stats.payments_pending|intcomma }} payment{{ stats.payments_pending|pluralize }}
+            {{ stats.payments_pending|pluralize:"is,are" }} still waiting on you{% endif %}.
+          </p>
+          {% comment %}
+            The design puts three questions here and answers them inline. There
+            is no model behind this console, so rather than fake an answer each
+            one goes to the page that genuinely holds it.
+          {% endcomment %}
+          {% if console_can.tokens or console_can.operations or console_can.finance %}
+          <div class="brief-asks">
+            {% if console_can.tokens %}<a href="{% url 'console:usage' %}" class="brief-ask">Who is using the most tokens?</a>{% endif %}
+            {% if console_can.operations %}<a href="{% url 'console:health' %}" class="brief-ask">What needs my attention?</a>{% endif %}
+            {% if console_can.finance %}<a href="{% url 'console:reports' %}" class="brief-ask">How is revenue trending?</a>{% endif %}
+          </div>
+          {% endif %}
+        </div>
+
+        {% if console_can.accounts or console_can.tokens or console_can.operations %}
+        <div class="mt-5 flex flex-wrap items-center gap-2.5">
+          {% if console_can.accounts %}
+          <a href="{% url 'console:accounts' %}" class="btn-primary">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> Create accounts
+          </a>
+          {% endif %}
+          {% if console_can.tokens %}
+          <a href="{% url 'console:ai_distribute' %}" class="btn-outline">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-coin"/></svg> Allocate tokens
+          </a>
+          {% endif %}
+          {% comment %}
+            The design gives this one the alarm colour rather than a third
+            neutral outline, because it is the button that reports a problem.
+          {% endcomment %}
+          {% if console_can.operations %}
+          <a href="{% url 'console:health' %}" class="btn-alarm">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-activity"/></svg>
+            System health
+            {% if health_alert_count %}<span class="badge-danger ml-0.5">{{ health_alert_count }}</span>{% endif %}
+          </a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      {% comment %}
+        Today's requests, as a dial and the fourteen days behind it. The dial's
+        sweep is set from a CSS custom property so the arc is the number, not a
+        decoration beside it.
+      {% endcomment %}
+      <aside class="live-panel">
+        <div class="live-dial" style="--sweep: {{ requests_dial }}%">
+          <span class="live-dial-face">
+            <b data-countup>{{ stats.requests_today|intcomma }}</b>
+            <i>Today</i>
+          </span>
+        </div>
+        <div class="live-body">
+          <p class="live-title"><span class="live-dot"></span> Live requests</p>
+          <div class="live-spark" aria-hidden="true">
+            {% for bar in requests_spark %}
+              <i style="height: {{ bar.percent }}%"></i>
+            {% endfor %}
+          </div>
+          <p class="live-foot">
+            {{ stats.tokens_today|compact_number }} tokens today ·
+            {{ stats.recently_active|intcomma }} student{{ stats.recently_active|pluralize }} active
+          </p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  {% comment %}
+    One line per vendor that an active model still routes to but that has no
+    credential, naming that vendor's key and the models that cannot answer
+    without it. A vendor no active model uses is not a problem, so it is not
+    listed.
+  {% endcomment %}
+  {% if unconfigured_providers and console_can.operations or unconfigured_providers and console_can.tokens %}
+    <div class="flex flex-wrap items-center gap-3 rounded-xl2 border border-amber-500/25 bg-amber-500/8 p-4 animate-fade-up">
+      <svg class="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true"><use href="#i-alert"/></svg>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-bold text-ink-900 dark:text-white">
+          {% if unconfigured_providers|length == 1 %}{{ unconfigured_providers.0.name }} is not configured{% else %}{{ unconfigured_providers|length }} AI providers are not configured{% endif %}
+        </p>
+        {% for row in unconfigured_providers %}
+          <p class="mt-0.5 text-xs text-ink-600 dark:text-ink-400">
+            Set <code class="font-mono">{{ row.setting }}</code> in the environment —
+            {{ row.models|join:", " }} cannot answer until it is present{% if row.has_default %}, including the default model students start on{% endif %}.
+          </p>
+        {% endfor %}
+      </div>
+      {% if console_can.settings %}<a href="{% url 'console:settings' %}" class="btn-outline btn-sm shrink-0">Open settings</a>{% endif %}
+    </div>
+  {% endif %}
+
+  {% comment %}
+    Money waiting on somebody is the one thing on this page that is neither
+    news nor a measurement — it is a queue with the administrator at the end of
+    it. The design gives it the alarm colour rather than the brand blue, which
+    is what stops it reading as another blue panel among blue panels.
+
+    It can be dismissed for the session. It is not marked read and nothing is
+    confirmed by closing it: the next page load brings it back while the
+    payments are still pending, because they still are.
+  {% endcomment %}
+  {% if console_can.finance and stats.payments_pending %}
+    <div class="alarm-banner animate-fade-up" id="pendingBanner">
+      <span class="alarm-mark"><svg aria-hidden="true"><use href="#i-receipt"/></svg></span>
+      <p class="min-w-0 flex-1 text-sm text-ink-800 dark:text-ink-100">
+        <span class="font-bold">{{ stats.payments_pending }}</span>
+        payment{{ stats.payments_pending|pluralize }}
+        {{ stats.payments_pending|pluralize:"is,are" }} waiting for your confirmation{% if stats.payments_pending_total %} —
+        {{ stats.payments_pending_total|money }} in total{% endif %}.
+      </p>
+      <a href="{% url 'console:payments' %}?status=pending" class="btn-danger btn-sm shrink-0">Review now</a>
+      <button type="button" class="alarm-x" data-dismiss="pendingBanner" aria-label="Dismiss until the next page load">
+        <svg aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+  {% endif %}
+
+  {# ---------- Headline metrics ---------- #}
+  {% comment %}
+    Four tiles, alternating brand and ink. The alternation is not decoration:
+    it splits the row into two pairs — people, then money — so the eye reads
+    four numbers as two comparisons.
+  {% endcomment %}
+  {% if console_can.students %}{% url 'console:users' as url_users %}{% endif %}
+  {% if console_can.tokens %}{% url 'console:usage' as url_usage %}{% url 'console:tokens' as url_tokens %}{% endif %}
+  {% url 'console:payments' as url_payments %}
+  <section class="grid gap-4 sm:grid-cols-2 {% if console_can.finance %}xl:grid-cols-4{% else %}xl:grid-cols-3{% endif %}" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-users" label="Total students" value=stats.total_users|intcomma delta=stats.new_users_30d|plus_prefix delta_tone="up" foot="in the last 30 days" url=url_users spark=sparks.students %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-bolt" label="Active students" value=stats.active_users|intcomma delta=active_percent|stringformat:"s"|add:"%" delta_tone="up" foot=stats.recently_active|stringformat:"s"|add:" active this week" url=url_usage spark=sparks.requests %}
+    {% include "console/_kpi.html" with variant="brand" icon="i-coin" label="Tokens remaining" value=stats.tokens_remaining|compact_number foot=stats.tokens_consumed|compact_number|add:" consumed all time" url=url_tokens spark=sparks.tokens %}
+    {% if console_can.finance %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-card" label="Revenue" value=stats.revenue_total|money delta=stats.revenue_30d|money|plus_prefix delta_tone="up" foot="in the last 30 days" url=url_payments spark=sparks.revenue %}
+    {% endif %}
+  </section>
+
+  <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="60">
+    {% include "components/stat_card.html" with icon="i-chat" label="Requests today" value=stats.requests_today|intcomma tone="brand" hint=stats.tokens_today|compact_number|add:" tokens today" %}
+    {% include "components/stat_card.html" with icon="i-check-circle" label="Active plans" value=stats.active_subscriptions|intcomma tone="success" hint=stats.expiring_soon|stringformat:"s"|add:" expiring within 7 days" hint_tone=stats.expiring_soon|yesno:"warning,neutral" %}
+    {% include "components/stat_card.html" with icon="i-gift" label="Referrals" value=stats.referrals_total|intcomma tone="accent" hint=stats.referrals_rewarded|stringformat:"s"|add:" rewarded" %}
+    {% include "components/stat_card.html" with icon="i-alert" label="Needs attention" value=stats.no_token_users|intcomma tone="warning" hint="students with no tokens" %}
+  </section>
+
+  {# ---------- Charts ---------- #}
+  <div class="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="title-accent">Token consumption</h2>
+          <p class="section-note mt-0.5">Across all students · last {{ chart_days }} days</p>
+        </div>
+        {% comment %}
+          The design's window control. Real links rather than buttons: the
+          chosen window is in the URL, so it survives a reload, can be
+          bookmarked, and works before any JavaScript runs.
+        {% endcomment %}
+        <div class="range-switch" role="group" aria-label="Chart window">
+          {% for days in chart_ranges %}
+            <a href="?range={{ days }}" class="range-opt{% if days == chart_days %} is-on{% endif %}"
+               {% if days == chart_days %}aria-current="true"{% endif %}>{{ days }}D</a>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="mt-5" data-chart="area" data-height="230" data-title="Token consumption" data-config='{{ usage_chart|safe }}'></div>
+    </section>
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="title-brand">AI requests</h2>
+          <p class="section-note mt-0.5">Daily volume · last {{ chart_days }} days</p>
+        </div>
+        <span class="live-pill"><span class="live-dot"></span> Live</span>
+      </div>
+      <div class="mt-5" data-chart="bars" data-height="230" data-title="AI requests" data-config='{{ requests_chart|safe }}'></div>
+    </section>
+  </div>
+
+  <div class="grid items-start gap-5 lg:grid-cols-2">
+    {% comment %}
+      Three shares on one dial. Concentric rather than side by side because
+      they are three readings of the same platform at the same moment, and
+      stacking them lets one glance take all three.
+
+      Each arc is a single dash the length of its share and a gap the length
+      of what is left, so the stroke is the measurement rather than a picture
+      of it. Hovering a row in the legend dims the other two and puts that
+      figure in the middle.
+    {% endcomment %}
+    <section class="card spotlight p-5 sm:p-6 reveal" id="vitals">
+      <h2 class="title-brand">Platform vitals</h2>
+      <p class="section-note mt-0.5">Hover a metric to isolate it</p>
+
+      <div class="vitals-body">
+        <div class="vitals-dial">
+          <svg viewBox="0 0 150 150" role="img" aria-label="Platform vitals">
+            <g transform="rotate(-90 75 75)">
+              {% for vital in vitals %}
+                <circle class="vitals-track" cx="75" cy="75" r="{{ vital.radius }}"></circle>
+              {% endfor %}
+              {% for vital in vitals %}
+                <circle class="vitals-arc" data-vital="{{ forloop.counter0 }}"
+                        cx="75" cy="75" r="{{ vital.radius }}"
+                        stroke="{{ vital.colour }}"
+                        stroke-dasharray="{{ vital.dash }} {{ vital.gap }}"></circle>
+              {% endfor %}
+            </g>
+          </svg>
+          <span class="vitals-centre">
+            <b id="vitalsValue">{{ vitals.0.percent }}%</b>
+          </span>
+        </div>
+
+        <ul class="vitals-legend">
+          {% for vital in vitals %}
+            <li>
+              <button type="button" class="vitals-row" data-vital="{{ forloop.counter0 }}"
+                      data-label="{{ vital.label }}" data-percent="{{ vital.percent }}%">
+                <span class="vitals-dot" style="background: {{ vital.colour }}"></span>
+                <span class="vitals-name">{{ vital.label }}</span>
+                <span class="vitals-pct">{{ vital.percent }}%</span>
+              </button>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <p class="vitals-caption" id="vitalsCaption">{{ vitals.0.label }} this month</p>
+    </section>
+
+    {% comment %}
+      Signups, with something to judge them against. A bar chart on its own
+      answers "when" but never "is that good" — so the window is summed, set
+      beside the window before it, and the busiest day is named underneath.
+    {% endcomment %}
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="title-brand">New students</h2>
+          <p class="section-note mt-0.5">Signups per day · last {{ chart_days }} days</p>
+        </div>
+        <span class="chip-brand h-9 w-9 shrink-0 rounded-xl">
+          <svg style="width:16px;height:16px" aria-hidden="true"><use href="#i-users"/></svg>
+        </span>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <p class="signup-total" data-countup>{{ signups_now|intcomma }}</p>
+        {% if signups_change is not None %}
+          <span class="delta-pill {% if signups_change < 0 %}delta-down{% elif signups_change > 0 %}delta-up{% else %}delta-flat{% endif %}">
+            {% if signups_change > 0 %}+{% endif %}{{ signups_change }}%
+          </span>
+          <span class="text-xs text-ink-500 dark:text-ink-400">
+            vs {{ signups_before|intcomma }} the {{ chart_days }} days before
+          </span>
+        {% else %}
+          <span class="text-xs text-ink-500 dark:text-ink-400">
+            none in the {{ chart_days }} days before
+          </span>
+        {% endif %}
+      </div>
+
+      <div class="mt-3" data-chart="bars" data-height="132" data-title="New students" data-config='{{ signup_chart|safe }}'></div>
+
+      {% if signups_peak %}
+        <p class="mt-2 text-xs text-ink-500 dark:text-ink-400">
+          Busiest day was <span class="font-bold text-ink-700 dark:text-ink-200">{{ signups_peak_day }}</span>,
+          with {{ signups_peak|intcomma }} signup{{ signups_peak|pluralize }}.
+        </p>
+      {% endif %}
+    </section>
+
+    {% if console_can.finance %}
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="title-brand">Revenue</h2>
+      <p class="section-note mt-0.5">Confirmed payments per day</p>
+      <div class="mt-4" data-chart="area" data-height="132" data-title="Revenue" data-config='{{ revenue_chart|safe }}'></div>
+    </section>
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="title-accent">Payment methods</h2>
+      <p class="section-note mt-0.5">Share of confirmed revenue</p>
+      {% if method_split %}
+        <div class="mt-3" data-chart="donut" data-height="128" data-caption="USD"
+             data-config='[{% for row in method_split %}{"label":"{{ row.label|escapejs }}","value":{{ row.total }}}{% if not forloop.last %},{% endif %}{% endfor %}]'></div>
+        <ul class="mt-3 space-y-0.5">
+          {% for row in method_split %}
+            <li class="flex items-center justify-between gap-3 rounded-lg px-1.5 py-1.5 text-xs transition-colors duration-200 hover:bg-ink-100/70 dark:hover:bg-white/5">
+              <span class="flex min-w-0 items-center gap-2">
+                {% comment %}
+                  The same custom properties the donut draws from, in the same
+                  order. Previously this was a second hardcoded list that had
+                  drifted: the first method showed blue in the chart and violet
+                  in the legend right beside it.
+                {% endcomment %}
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{% cycle 'var(--chart-1)' 'var(--chart-2)' 'var(--chart-3)' 'var(--chart-4)' 'var(--chart-5)' 'var(--chart-6)' %}"></span>
+                <span class="truncate font-medium text-ink-600 dark:text-ink-300">{{ row.label }}</span>
+              </span>
+              <span class="shrink-0 font-bold tabular-nums text-ink-900 dark:text-white">
+                ${{ row.total|floatformat:2 }} <span class="font-medium text-ink-400">({{ row.count }})</span>
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-card" title="No payments yet" body="Confirmed payments will break down by method here." %}
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+
+  {# ---------- Lists ---------- #}
+  {% if console_can.students or console_can.finance %}
+  <div class="grid gap-5 xl:grid-cols-2">
+
+    {% if console_can.students %}
+    <section class="card overflow-hidden reveal{% if not console_can.finance %} xl:col-span-2{% endif %}">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">Top consumers</h2>
+        <span class="badge-neutral">Last 30 days</span>
+      </div>
+      {% if top_users %}
+        <ul class="divide-y divide-ink-200/60 dark:divide-white/8">
+          {% for row in top_users %}
+            <li>
+              <a href="{% url 'console:user_detail' row.id %}"
+                 class="group flex items-center gap-3 px-5 py-3 transition-colors duration-200 hover:bg-brand-500/[.045] dark:hover:bg-white/[.04]">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-[10px] font-extrabold
+                             text-ink-500 transition-colors duration-200 group-hover:bg-brand-500 group-hover:text-white
+                             dark:bg-white/8 dark:text-ink-300">
+                  {{ forloop.counter }}
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-[13.5px] font-semibold text-ink-800 dark:text-ink-100">{{ row.name }}</span>
+                  <span class="block truncate text-[11.5px] text-ink-500 dark:text-ink-400">{{ row.requests }} request{{ row.requests|pluralize }}</span>
+                </span>
+                <span class="shrink-0 text-sm font-extrabold tabular-nums text-ink-900 dark:text-white">{{ row.tokens|compact_number }}</span>
+                <svg class="h-4 w-4 shrink-0 -translate-x-1 text-ink-300 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-chart" title="No usage in this period" body="Once students start chatting, the heaviest users will appear here." %}
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if console_can.finance %}
+    <section class="card overflow-hidden reveal{% if not console_can.students %} xl:col-span-2{% endif %}">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">Recent payments</h2>
+        <a href="{% url 'console:payments' %}" class="link text-xs">View all</a>
+      </div>
+      {% if recent_payments %}
+        <ul class="divide-y divide-ink-200/60 dark:divide-white/8">
+          {% for payment in recent_payments %}
+            <li>
+              <a href="{% url 'console:payment_detail' payment.reference %}"
+                 class="group flex items-center gap-3 px-5 py-3 transition-colors duration-200 hover:bg-brand-500/[.045] dark:hover:bg-white/[.04]">
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-[13.5px] font-semibold text-ink-800 dark:text-ink-100">{{ payment.user.display_name }}</span>
+                  <span class="block truncate font-mono text-[11px] text-ink-500 dark:text-ink-400">{{ payment.reference }}</span>
+                </span>
+                <span class="shrink-0 text-right">
+                  <span class="block text-sm font-extrabold tabular-nums text-ink-900 dark:text-white">${{ payment.amount }}</span>
+                  <span class="{{ payment.status_tone|tone_classes }} mt-0.5">{{ payment.get_status_display }}</span>
+                </span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-receipt" title="No payments yet" body="Orders will appear here as students purchase plans." %}
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if console_can.staff or console_can.students %}
+  <div class="grid gap-5 xl:grid-cols-2">
+
+    {% if console_can.staff %}
+    <section class="card overflow-hidden reveal{% if not console_can.students %} xl:col-span-2{% endif %}">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">Recent activity</h2>
+        <a href="{% url 'console:audit_logs' %}" class="link text-xs">Audit log</a>
+      </div>
+      {% if recent_activity %}
+        {% comment %}A timeline: the rail makes the sequence readable at a glance.{% endcomment %}
+        <ul class="relative space-y-0 px-5 py-2">
+          <span class="absolute bottom-4 left-[1.53rem] top-4 w-px bg-ink-200/80 dark:bg-white/8" aria-hidden="true"></span>
+          {% for entry in recent_activity %}
+            <li class="relative flex items-start gap-3.5 py-2.5">
+              <span class="relative z-10 mt-1.5 flex h-2.5 w-2.5 shrink-0 rounded-full ring-4 ring-white dark:ring-ink-900
+                           {% if entry.tone == 'danger' %}bg-rose-500{% elif entry.tone == 'success' %}bg-emerald-500{% else %}bg-brand-400 dark:bg-brand-500{% endif %}"></span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-[13px] text-ink-800 dark:text-ink-100">
+                  <span class="font-semibold">{{ entry.actor.display_name|default:"System" }}</span>
+                  <span class="text-ink-500 dark:text-ink-400">{{ entry.get_action_display|lower }}</span>
+                  {% if entry.target_label %}<span class="font-semibold">{{ entry.target_label|truncatechars:28 }}</span>{% endif %}
+                </span>
+                <span class="block truncate text-[11px] font-medium text-ink-400">{{ entry.created_at|timeago }}</span>
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-history" title="No activity yet" body="Administrative actions are recorded here." %}
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if console_can.students %}
+    <section class="card overflow-hidden reveal{% if not console_can.staff %} xl:col-span-2{% endif %}">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">Newest students</h2>
+        <a href="{% url 'console:users' %}" class="link text-xs">View all</a>
+      </div>
+      {% if recent_users %}
+        <ul class="divide-y divide-ink-200/60 dark:divide-white/8">
+          {% for student in recent_users %}
+            <li>
+              <a href="{% url 'console:user_detail' student.pk %}"
+                 class="group flex items-center gap-3 px-5 py-3 transition-colors duration-200 hover:bg-brand-500/[.045] dark:hover:bg-white/[.04]">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500
+                             to-accent-500 text-[10px] font-extrabold text-white shadow-pill transition-transform duration-300
+                             group-hover:scale-105">
+                  {{ student.initials }}
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-[13.5px] font-semibold text-ink-800 dark:text-ink-100">{{ student.display_name }}</span>
+                  <span class="block truncate text-[11.5px] text-ink-500 dark:text-ink-400">{{ student.get_source_display }} · {{ student.date_joined|timeago }}</span>
+                </span>
+                <span class="shrink-0 text-sm font-bold tabular-nums text-ink-700 dark:text-ink-200">
+                  {{ student.token_balance|compact_number }}
+                </span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% if console_can.accounts %}
+          {% include "components/empty_state.html" with icon="i-users" title="No students yet" body="Accounts you create will appear here." action_url="/admin/accounts/" action_label="Create an account" %}
+        {% else %}
+          {% include "components/empty_state.html" with icon="i-users" title="No students yet" body="New accounts will appear here." %}
+        {% endif %}
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

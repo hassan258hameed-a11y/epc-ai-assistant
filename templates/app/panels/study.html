@@ -1,0 +1,161 @@
+{% load ai_extras %}
+{% comment %}
+  Study — flashcards and quizzes made from the student's own chats, plus how
+  today is going against their goal. Making a set is an AI request on the
+  model selected in the composer; studying one is free and happens in the
+  player overlay (chat.html), so this panel only lists and launches.
+{% endcomment %}
+<div class="panel" data-panel-name="study">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Learn</p>
+    <h2 class="panel-title">Study</h2>
+    <p class="panel-sub">Turn any chat into flashcards or a quiz, then revise it as often as you like — revising is free.</p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <section class="st-today" aria-label="Today">
+    <div class="st-tile st-goal{% if today.met %} is-met{% endif %}">
+      <span class="st-ring" style="--p:{% if today.goal %}{{ today.percent }}{% else %}0{% endif %}" aria-hidden="true">
+        <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" class="st-ring-track"/><circle cx="18" cy="18" r="15.5" class="st-ring-fill" pathLength="100"/></svg>
+        <b>{{ today.asked }}</b>
+      </span>
+      <div>
+        <span class="st-label">Today</span>
+        {% if today.goal %}
+          <strong>{% if today.met %}Goal reached{% else %}{{ today.asked }} of {{ today.goal }} answers{% endif %}</strong>
+          <span class="st-note">{% if today.met %}Nice work — anything more is extra.{% else %}{{ today.remaining }} to go for your daily goal.{% endif %}</span>
+        {% else %}
+          <strong>{{ today.asked }} answer{{ today.asked|pluralize }}</strong>
+          <a class="st-note st-link" href="{% url 'student:settings' %}#defaults" data-panel-link="settings">Set a daily goal</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="st-tile">
+      <span class="st-flame{% if today.streak %} is-lit{% endif %}" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3c1 3.2 4.8 5 4.8 9.4a4.8 4.8 0 0 1-9.6 0c0-1.9.8-3.2 2-4.4.2 1.5.9 2.4 1.9 2.8C10.5 8.6 11 5.6 12 3z"/></svg>
+      </span>
+      <div>
+        <span class="st-label">Streak</span>
+        <strong>{{ today.streak }} day{{ today.streak|pluralize }}</strong>
+        <span class="st-note">{% if today.streak %}Ask something every day to keep it going.{% else %}Ask one question today to start one.{% endif %}</span>
+      </div>
+    </div>
+    <div class="st-tile">
+      <span class="st-icon" aria-hidden="true"><svg><use href="#i-layers"/></svg></span>
+      <div>
+        <span class="st-label">Study sets</span>
+        <strong>{{ counts.all }}</strong>
+        <span class="st-note">{{ counts.flashcards }} flashcard deck{{ counts.flashcards|pluralize }} · {{ counts.quiz }} quiz{{ counts.quiz|pluralize:"zes" }}</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card st-maker" aria-labelledby="stMakeTitle">
+    <div class="card-head">
+      <h3 id="stMakeTitle">Make a new set</h3>
+      <p>Written by the model selected in the chat box, from the newest part of the chat. It uses tokens like a reply.</p>
+    </div>
+    {% if sources %}
+      <div class="card-body st-maker-body" data-study-maker-inline>
+        <div class="field">
+          <label for="stSource">From this chat</label>
+          <select id="stSource" data-study-source>
+            {% for conv in sources %}<option value="{{ conv.pk }}">{{ conv.title|truncatechars:70 }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <span class="st-flabel">Make</span>
+          <div class="st-seg" role="radiogroup" aria-label="Kind of set">
+            <label><input type="radio" name="stKind" value="flashcards" checked><span><svg aria-hidden="true"><use href="#i-layers"/></svg> Flashcards</span></label>
+            <label><input type="radio" name="stKind" value="quiz"><span><svg aria-hidden="true"><use href="#i-graduation"/></svg> Quiz</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <span class="st-flabel">How many</span>
+          <div class="st-seg st-seg-sm" role="radiogroup" aria-label="How many">
+            {% for n in study_counts %}
+              <label><input type="radio" name="stCount" value="{{ n }}" {% if n == default_count %}checked{% endif %}><span>{{ n }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary st-go" data-study-make>
+          <svg aria-hidden="true"><use href="#i-sparkles"/></svg> <span>Make it</span>
+        </button>
+      </div>
+    {% else %}
+      <div class="card-body">
+        <p class="st-empty-note">Chat about a topic first — once there is an answer to learn from, you can turn it into cards or a quiz here, or from any chat's <b>…</b> menu.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <div class="st-bar">
+    <div class="sa-tabs" style="--i:{% if kind == 'flashcards' %}1{% elif kind == 'quiz' %}2{% else %}0{% endif %};--n:3">
+      <span class="sa-tabs-pill" aria-hidden="true"></span>
+      <a href="{% url 'student:study' %}" data-panel-link="study" class="{% if not kind %}is-on{% endif %}">All</a>
+      <a href="{% url 'student:study' %}?kind=flashcards" data-panel-link="study" class="{% if kind == 'flashcards' %}is-on{% endif %}">Flashcards</a>
+      <a href="{% url 'student:study' %}?kind=quiz" data-panel-link="study" class="{% if kind == 'quiz' %}is-on{% endif %}">Quizzes</a>
+    </div>
+  </div>
+
+  {% if sets %}
+    <div class="st-grid">
+      {% for set in sets %}
+        <article class="st-card is-{{ set.kind }}" style="animation-delay:{% widthratio forloop.counter0 1 40 %}ms">
+          <header class="st-card-head">
+            <span class="st-kind">
+              <svg aria-hidden="true"><use href="{% if set.kind == 'quiz' %}#i-graduation{% else %}#i-layers{% endif %}"/></svg>
+              {{ set.get_kind_display }}
+            </span>
+            {% if set.kind == 'quiz' and set.best_score is not None %}
+              <span class="st-score{% if set.best_score >= 80 %} is-good{% elif set.best_score < 50 %} is-low{% endif %}" title="Best score">{{ set.best_score }}%</span>
+            {% endif %}
+          </header>
+          <h3>{{ set.title }}</h3>
+          <p class="st-meta">
+            {{ set.size }} {% if set.kind == 'quiz' %}question{{ set.size|pluralize }}{% else %}card{{ set.size|pluralize }}{% endif %}
+            {% if set.attempts %} · studied {{ set.attempts }} time{{ set.attempts|pluralize }}{% endif %}
+            · {{ set.created_at|timeago }}
+          </p>
+          {% if set.conversation %}<p class="st-from">From “{{ set.conversation.title|truncatechars:48 }}”</p>{% endif %}
+          <footer class="st-foot">
+            <button type="button" class="btn btn-sm btn-primary" data-study-open="{{ set.pk }}">
+              <svg aria-hidden="true"><use href="#i-arrow-right"/></svg> {% if set.kind == 'quiz' %}Take quiz{% else %}Study{% endif %}
+            </button>
+            {% if set.conversation %}
+              <a href="{% url 'student:chat_detail' set.conversation.pk %}" class="btn btn-sm btn-ghost" title="Open the chat it came from">
+                <svg aria-hidden="true"><use href="#i-chat"/></svg>
+              </a>
+            {% endif %}
+            <span style="flex:1"></span>
+            <form method="post" action="{% url 'student:study' %}{% if kind %}?kind={{ kind }}{% endif %}" data-panel-form="study"
+                  data-confirm-title="Delete this study set?"
+                  data-confirm="“{{ set.title }}” and your scores for it will be deleted. Making it again uses tokens."
+                  data-confirm-button="Delete set">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="set_id" value="{{ set.pk }}">
+              <button type="submit" class="btn btn-sm btn-ghost" aria-label="Delete {{ set.title }}" title="Delete">
+                <svg aria-hidden="true"><use href="#i-trash"/></svg>
+              </button>
+            </form>
+          </footer>
+        </article>
+      {% endfor %}
+    </div>
+    {% if page.has_other_pages %}
+      <nav class="sv-pages" aria-label="Pages">
+        {% if page.has_previous %}<a class="btn btn-sm" data-panel-link="study" href="{% url 'student:study' %}?page={{ page.previous_page_number }}{% if kind %}&kind={{ kind }}{% endif %}">Newer</a>{% endif %}
+        <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="btn btn-sm" data-panel-link="study" href="{% url 'student:study' %}?page={{ page.next_page_number }}{% if kind %}&kind={{ kind }}{% endif %}">Older</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% else %}
+    <div class="st-empty">
+      <span class="st-empty-art" aria-hidden="true"><svg><use href="#i-layers"/></svg></span>
+      <b>{% if kind == "quiz" %}No quizzes yet{% elif kind == "flashcards" %}No flashcard decks yet{% else %}No study sets yet{% endif %}</b>
+      <span>Make one above, or open any chat's <b>…</b> menu and choose <b>Make flashcards</b> or <b>Make a quiz</b>.</span>
+    </div>
+  {% endif %}
+</div>

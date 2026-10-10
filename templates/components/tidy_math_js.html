@@ -1,0 +1,57 @@
+{% comment %}
+  Included inside a <script> by every page that renders an answer (the chat and
+  the public shared transcript), so both show maths the same way.
+
+  The chat renders Markdown but not LaTeX. Models are asked for plain-text
+  maths and mostly comply; when one slips, the student should still read x²,
+  √2 and (a+b)/c — not \frac{a+b}{c}. Only the commands students actually meet
+  are translated; anything unknown is left exactly as written. Callers run it
+  on text outside code, after escaping.
+{% endcomment %}
+  var TEX_SYMBOLS = {
+    times: '×', cdot: '·', div: '÷', pm: '±', mp: '∓', le: '≤', leq: '≤', ge: '≥', geq: '≥',
+    neq: '≠', ne: '≠', approx: '≈', equiv: '≡', propto: '∝', infty: '∞', circ: '°', degree: '°',
+    pi: 'π', theta: 'θ', alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', epsilon: 'ε',
+    lambda: 'λ', mu: 'μ', sigma: 'σ', Sigma: 'Σ', omega: 'ω', Omega: 'Ω', phi: 'φ', rho: 'ρ', tau: 'τ',
+    to: '→', rightarrow: '→', Rightarrow: '⇒', leftarrow: '←', leftrightarrow: '↔', iff: '⇔', implies: '⇒',
+    sum: 'Σ', prod: '∏', int: '∫', partial: '∂', nabla: '∇', therefore: '∴', because: '∵', angle: '∠',
+    perp: '⊥', parallel: '∥', in: '∈', notin: '∉', cup: '∪', cap: '∩', subset: '⊂', subseteq: '⊆',
+    emptyset: '∅', forall: '∀', exists: '∃', ldots: '…', cdots: '⋯', dots: '…', quad: ' ', qquad: '  ',
+    sqrt: '√'
+  };
+  var SUPERSCRIPT = {
+    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+    '+': '⁺', '-': '⁻', 'n': 'ⁿ'
+  };
+  /* Named functions read as words: \sin\theta is "sin θ". */
+  ['sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'arcsin', 'arccos', 'arctan', 'sinh', 'cosh', 'tanh',
+   'log', 'ln', 'exp', 'lim', 'max', 'min', 'det', 'gcd'].forEach(function (name) { TEX_SYMBOLS[name] = name + ' '; });
+  /* A lone number, letter or root needs no brackets; anything longer does,
+     or 1/2a reads as (1/2)·a. */
+  function texGroup(x) { return /^(?:\d+(?:\.\d+)?|[a-zA-Zπθ][²³]?|√\w+)$/.test(x) ? x : '(' + x + ')'; }
+  function tidyMath(s) {
+    if (s.indexOf('\\') < 0 && s.indexOf('$') < 0 && s.indexOf('^') < 0) return s;
+    s = s.replace(/\$\$([\s\S]+?)\$\$/g, '$1')
+      .replace(/\\\(([\s\S]+?)\\\)/g, '$1')
+      .replace(/\\\[([\s\S]+?)\\\]/g, '$1')
+      /* $x^2$ is maths; "$5 and $10" is money, and stays. */
+      .replace(/\$([^$\s](?:[^$\n]{0,120}?[^$\s])?)\$/g, function (whole, body) {
+        return /[\\^_=+*\/-]|^[a-zA-Z]$/.test(body) ? body : whole;
+      });
+    for (var pass = 0; pass < 4; pass++) {          /* innermost first: \frac{\sqrt{2}}{3} */
+      var before = s;
+      s = s.replace(/\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, function (_, a, b) { return texGroup(a) + '/' + texGroup(b); })
+        .replace(/\\sqrt\{([^{}]*)\}/g, function (_, a) { return '√' + texGroup(a); })
+        .replace(/\\(?:text|mathrm|mathbf|mathit|textbf|operatorname|boxed)\{([^{}]*)\}/g, '$1');
+      if (s === before) break;
+    }
+    return s
+      .replace(/\^\{?\\circ\}?/g, '°')
+      .replace(/\\left|\\right|\\[,;!]/g, '')
+      .replace(/\\([a-zA-Z]+)/g, function (whole, name) {
+        return Object.prototype.hasOwnProperty.call(TEX_SYMBOLS, name) ? TEX_SYMBOLS[name] : whole;
+      })
+      .replace(/([\w)\]])\^\{([0-9n+-]{1,4})\}|([\w)\]])\^([0-9]{1,3}|n)(?!\w)/g, function (whole, b1, e1, b2, e2) {
+        return (b1 || b2) + (e1 || e2).split('').map(function (c) { return SUPERSCRIPT[c] || c; }).join('');
+      });
+  }

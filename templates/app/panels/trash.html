@@ -1,0 +1,85 @@
+{% load ai_extras %}
+{% comment %}
+  Recently deleted. Deleting a chat anywhere in the app lands it here, from
+  where it can be restored for {{ trash_days }} days. Only "Delete for good"
+  and "Empty" are irreversible, and both ask first.
+{% endcomment %}
+{% if refresh_sidebar %}<i data-refresh-sidebar hidden></i>{% endif %}
+<div class="panel" data-panel-name="trash">
+  <header class="panel-head tr-head">
+    <div>
+      <p class="panel-eyebrow">Workspace</p>
+      <h2 class="panel-title">Recently deleted</h2>
+      <p class="panel-sub">
+        Deleted chats stay here for {{ trash_days }} days, then they're removed for good.
+        Restore one to put it back exactly where it was.
+      </p>
+    </div>
+    {% if total %}
+      <form method="post" action="{% url 'student:trash' %}" data-panel-form="trash"
+            data-confirm-title="Empty Recently deleted?"
+            data-confirm="{{ total }} chat{{ total|pluralize }} and {{ total|pluralize:'its,their' }} messages and files will be deleted for good. This can't be undone."
+            data-confirm-button="Delete {{ total }} for good">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="empty">
+        <button type="submit" class="btn btn-sm tr-empty">
+          <svg aria-hidden="true"><use href="#i-trash"/></svg> Empty
+        </button>
+      </form>
+    {% endif %}
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  {% if items %}
+    <div class="card ar-list">
+      {% for row in items %}
+        {% with conversation=row.conversation %}
+        <div class="ar-row" style="animation-delay:{% widthratio forloop.counter0 1 30 %}ms">
+          <span class="ar-icon tr-icon" aria-hidden="true"><svg><use href="#i-trash"/></svg></span>
+          <div class="ar-main">
+            <span class="ar-title">{{ conversation.title }}</span>
+            <span class="ar-sub">
+              {% if conversation.folder %}<span class="sv-folder" style="--f:{{ conversation.folder.hex }}"><i></i>{{ conversation.folder.name }}</span> · {% endif %}
+              {{ conversation.message_count }} message{{ conversation.message_count|pluralize }}
+              · deleted {{ conversation.deleted_at|timeago }}
+              {% if conversation.is_archived %}· was archived{% endif %}
+            </span>
+          </div>
+          <span class="tr-days{% if row.days_left <= 3 %} is-soon{% endif %}"
+                title="Removed for good in {{ row.days_left }} day{{ row.days_left|pluralize }}">
+            {{ row.days_left }} day{{ row.days_left|pluralize }} left
+          </span>
+          <div class="ar-actions">
+            <form method="post" action="{% url 'student:trash' %}" data-panel-form="trash">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="restore">
+              <input type="hidden" name="conversation_id" value="{{ conversation.pk }}">
+              <button type="submit" class="btn btn-sm">
+                <svg aria-hidden="true"><use href="#i-refresh"/></svg> <span class="m-hide">Restore</span>
+              </button>
+            </form>
+            <form method="post" action="{% url 'student:trash' %}" data-panel-form="trash"
+                  data-confirm-title="Delete for good?"
+                  data-confirm="“{{ conversation.title }}” and its messages and files will be deleted permanently. This can't be undone."
+                  data-confirm-button="Delete for good">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="purge">
+              <input type="hidden" name="conversation_id" value="{{ conversation.pk }}">
+              <button type="submit" class="btn btn-sm btn-ghost tr-purge"
+                      aria-label="Delete {{ conversation.title }} for good" title="Delete for good">
+                <svg aria-hidden="true"><use href="#i-x"/></svg>
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endwith %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">
+      <svg aria-hidden="true"><use href="#i-trash"/></svg>
+      Nothing here. Chats you delete stay in Recently deleted for {{ trash_days }} days, so a mistake is never permanent.
+    </p>
+  {% endif %}
+</div>

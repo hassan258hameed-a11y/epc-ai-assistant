@@ -1,0 +1,154 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Plans · Console{% endblock %}
+{% block heading %}Plans{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">What students can buy, and what it earns.</p>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:plan_create' %}" class="btn-primary btn-sm hidden sm:inline-flex">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-plus"/></svg> New plan
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="sm:hidden">
+    <a href="{% url 'console:plan_create' %}" class="btn-primary w-full">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> New plan
+    </a>
+  </div>
+
+  {% if plans %}
+    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3" data-stagger="70">
+      {% for plan in plans %}
+        <div class="card card-hover spotlight group flex flex-col overflow-hidden p-5
+                    {% if not plan.is_active %}opacity-70{% endif %}
+                    {% if plan.is_featured %}ring-1 ring-inset ring-brand-500/25{% endif %}">
+          {% if plan.is_featured %}
+            <span class="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand-500 via-accent-500 to-brand-500"></span>
+          {% endif %}
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h2 class="text-[17px] font-extrabold leading-tight tracking-[-.025em] text-ink-900 break-words dark:text-white">{{ plan.name }}</h2>
+              <p class="mt-0.5 font-mono text-[11px] text-ink-400">{{ plan.slug }}</p>
+            </div>
+            <div class="flex shrink-0 gap-1.5">
+              {% if plan.is_featured %}<span class="badge-brand">Featured</span>{% endif %}
+              {% if plan.is_active %}
+                <span class="badge-success">Active</span>
+              {% else %}
+                <span class="badge-neutral">Inactive</span>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if plan.description %}
+            <p class="mt-2 text-xs leading-relaxed text-ink-500 dark:text-ink-400">{{ plan.description }}</p>
+          {% endif %}
+
+          {% comment %}
+           Which currency this package sells. Tokens are per model, so buying
+             the wrong card credits a balance nobody meant to top up.
+          {% endcomment %}
+          {% comment %}
+            Every model this plan credits, not just the one it is sold for — a
+            bundle that lists only its primary model understates what a student
+            is buying.
+          {% endcomment %}
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            {% for row in plan.grant_rows %}
+              <span class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold
+                           {% if row.is_primary %}bg-brand-500/10 text-brand-700 dark:text-brand-300
+                           {% else %}bg-accent-500/10 text-accent-700 dark:text-accent-300{% endif %}">
+                <svg class="h-3 w-3" aria-hidden="true"><use href="#i-sparkles"/></svg>
+                {{ row.model.name }} · {{ row.tokens|compact_number }}
+              </span>
+            {% endfor %}
+          </div>
+
+          <dl class="mt-4 grid grid-cols-2 gap-3 rounded-xl2 border hairline bg-ink-50 p-4
+                     transition-colors duration-300 group-hover:border-brand-300/50 dark:bg-white/[.03]">
+            <div>
+              <dt class="stat-label">Price</dt>
+              <dd class="mt-0.5 text-xl font-extrabold tabular-nums tracking-[-.03em] text-ink-900 dark:text-white">
+                {% if plan.currency == 'USD' %}${% endif %}{{ plan.price|floatformat:"-2" }}
+              </dd>
+            </div>
+            <div>
+              <dt class="stat-label">Tokens</dt>
+              <dd class="mt-0.5 text-xl font-extrabold tabular-nums tracking-[-.03em] text-brand-600 dark:text-brand-300">{{ plan.tokens|compact_number }}</dd>
+            </div>
+            <div>
+              <dt class="stat-label">Duration</dt>
+              <dd class="mt-0.5 text-sm font-bold text-ink-900 dark:text-white">{{ plan.duration_days }} days</dd>
+            </div>
+            <div>
+              <dt class="stat-label">Per 1M</dt>
+              <dd class="mt-0.5 text-sm font-bold tabular-nums text-ink-900 dark:text-white">${{ plan.price_per_million }}</dd>
+            </div>
+          </dl>
+
+          {% comment %}
+           The three ceilings, in the same order the student sees them. A dash
+             means no ceiling of that kind rather than a ceiling of zero.
+          {% endcomment %}
+          <dl class="mt-3 rounded-xl2 border hairline p-3">
+            <p class="stat-label mb-2 text-ink-400">Usage ceilings</p>
+            <div class="grid grid-cols-3 gap-2">
+            {% for row in plan.limit_rows %}
+              <div class="min-w-0">
+                <dt class="stat-label truncate">{{ row.window|capfirst }}</dt>
+                <dd class="mt-0.5 text-xs font-bold tabular-nums text-ink-900 dark:text-white">
+                  {% if row.value %}{{ row.value|intcomma }}{% else %}<span class="text-ink-400">None</span>{% endif %}
+                </dd>
+              </div>
+            {% endfor %}
+            </div>
+          </dl>
+
+          <div class="mt-4 flex items-center justify-between gap-3 text-xs">
+            <span class="text-ink-500 dark:text-ink-400">
+              <span class="font-bold text-ink-900 dark:text-white">{{ plan.sold|default:0 }}</span> sold
+            </span>
+            <span class="text-ink-500 dark:text-ink-400">
+              <span class="font-bold text-ink-900 dark:text-white">${{ plan.revenue|default:0|floatformat:2 }}</span> earned
+            </span>
+          </div>
+
+          {% if plan.feature_list %}
+            <ul class="mt-4 flex-1 space-y-1.5 border-t hairline pt-3">
+              {% for feature in plan.feature_list %}
+                <li class="flex items-start gap-2 text-xs text-ink-600 dark:text-ink-300">
+                  <span class="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-500/12 text-brand-600 dark:text-brand-300">
+                    <svg class="h-2.5 w-2.5" aria-hidden="true"><use href="#i-check"/></svg>
+                  </span>
+                  <span class="leading-relaxed">{{ feature }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}<div class="flex-1"></div>{% endif %}
+
+          <div class="mt-5 flex gap-2">
+            <a href="{% url 'console:plan_edit' plan.pk %}" class="btn-outline btn-sm flex-1">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg> Edit
+            </a>
+            <form method="post" action="{% url 'console:plan_toggle' plan.pk %}" class="flex-1">
+              {% csrf_token %}
+              <button type="submit" class="{% if plan.is_active %}btn-ghost{% else %}btn-accent{% endif %} btn-sm w-full">
+                {% if plan.is_active %}Disable{% else %}Activate{% endif %}
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <section class="card reveal">
+      {% include "components/empty_state.html" with icon="i-card" title="No plans yet" body="Create your first plan so students have something to buy." action_url="/admin/plans/new/" action_label="Create a plan" action_icon="i-plus" %}
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

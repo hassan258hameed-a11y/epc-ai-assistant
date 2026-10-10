@@ -1,0 +1,195 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Revenue & growth. Month by month in the site's timezone: gross is every
+  payment taken in the month, refunds are taken off the month the payment was
+  made, and net is what the month's sales were really worth. Retention reads
+  the usage log — a student who asked anything in a month was active in it.
+{% endcomment %}
+
+{% block title %}Revenue & growth · Console{% endblock %}
+{% block heading %}Revenue &amp; growth{% endblock %}
+{% block subheading %}
+  <p>Monthly revenue after refunds, what paying students are worth, and whether new students keep coming back — over the last {{ months }} months.</p>
+{% endblock %}
+
+{% block head %}
+<style>
+  .rp-share { display: grid; grid-template-columns: minmax(0, 1fr) 120px 76px; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid rgba(100, 116, 139, .12); font-size: 12.5px; }
+  .rp-share:last-child { border-bottom: 0; }
+  .rp-track { height: 7px; border-radius: 99px; background: rgba(100, 116, 139, .14); overflow: hidden; }
+  .rp-track > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #60A5FA, #2563EB); transform-origin: left; animation: rpGrow .9s cubic-bezier(.2,.7,.2,1) both; }
+  .rp-track.is-method > i { background: linear-gradient(90deg, #34D399, #059669); }
+  @keyframes rpGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .rp-cohort { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 560px; }
+  .rp-cohort th { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgb(100 116 139); text-align: center; padding: 4px; }
+  .rp-cohort th:first-child { text-align: left; }
+  .rp-cohort td { text-align: center; font-size: 12px; font-weight: 600; border-radius: 9px; padding: 9px 4px; font-variant-numeric: tabular-nums; }
+  .rp-cohort td.rp-name { text-align: left; font-weight: 600; white-space: nowrap; padding-left: 2px; }
+  .rp-cell { background: rgba(37, 99, 235, calc(.06 + var(--p) * .0082)); color: rgb(30 41 59); }
+  .rp-cell.is-hot { color: #fff; }
+  .rp-cell.is-none { background: rgba(100, 116, 139, .08); color: rgb(148 163 184); font-weight: 500; }
+  .dark .rp-cell { color: #E5E7EB; background: rgba(96, 165, 250, calc(.06 + var(--p) * .0062)); }
+  .dark .rp-cell.is-none { background: rgba(255, 255, 255, .04); color: rgb(100 116 139); }
+  .dark .rp-cohort th { color: rgb(148 163 184); }
+  @media (max-width: 640px) { .rp-share { grid-template-columns: minmax(0, 1fr) 70px 64px; } }
+  @media (prefers-reduced-motion: reduce) { :root:not([data-motion="full"]) .rp-track > i { animation: none; } }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  <div class="flex flex-wrap items-center gap-1.5">
+    {% for value, label in range_options %}
+      <a href="{% qs request range=value %}" class="chip{% if months|stringformat:'s' == value %} chip-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+    <a href="{% url 'console:reports_export' %}?range={{ months }}" class="btn-ghost btn-sm">
+      <svg style="width:14px;height:14px" aria-hidden="true"><use href="#i-download"/></svg> CSV
+    </a>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-coin" label="Net revenue" value=kpi.net foot=kpi.net_foot %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-trend-up" label="This month" value=kpi.this delta=kpi.delta delta_tone=change_tone foot=kpi.this_foot %}
+    {% include "console/_kpi.html" with variant="violet" icon="i-users" label="Net per paying student" value=kpi.arppu foot=kpi.arppu_foot %}
+    {% include "console/_kpi.html" with variant="plain" icon="i-refresh" label="Refunds" value=kpi.refunds foot=kpi.refunds_foot %}
+  </section>
+
+  <div class="grid gap-5 xl:grid-cols-2">
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="title-brand">Revenue by month</h2>
+      <p class="section-note mt-0.5">Net revenue and refunds, {{ report.currency }}</p>
+      <div class="mt-4" data-chart="bars" data-height="220" data-title="Revenue by month" data-config='{{ revenue_chart|safe }}'></div>
+    </section>
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="title-accent">Students by month</h2>
+      <p class="section-note mt-0.5">New sign-ups, and students who paid</p>
+      <div class="mt-4" data-chart="bars" data-height="220" data-title="Students by month" data-config='{{ growth_chart|safe }}'></div>
+    </section>
+  </div>
+
+  <section class="card overflow-hidden reveal">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <h2 class="section-title">Month by month</h2>
+      <span class="text-[11px] text-ink-500 dark:text-ink-400">{{ report.currency }} · refunds taken off the month of the payment</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table min-w-[760px]">
+        <thead>
+          <tr>
+            <th class="th">Month</th>
+            <th class="th text-right">Gross</th>
+            <th class="th text-right">Refunds</th>
+            <th class="th text-right">Net</th>
+            <th class="th text-right">Payments</th>
+            <th class="th text-right">Paying students</th>
+            <th class="th text-right">Net per payer</th>
+            <th class="th text-right">New students</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in report.months reversed %}
+            <tr class="row">
+              <td class="td text-sm font-semibold text-ink-900 dark:text-white">{{ m.label }}</td>
+              <td class="td text-right tabular-nums">{{ m.gross|floatformat:2 }}</td>
+              <td class="td text-right tabular-nums {% if m.refunds %}text-rose-600 dark:text-rose-400{% else %}text-ink-400{% endif %}">{% if m.refunds %}−{{ m.refunds|floatformat:2 }}{% else %}—{% endif %}</td>
+              <td class="td text-right font-bold tabular-nums text-ink-900 dark:text-white">{{ m.net|floatformat:2 }}</td>
+              <td class="td text-right tabular-nums">{{ m.payments|intcomma }}</td>
+              <td class="td text-right tabular-nums">{{ m.payers|intcomma }}</td>
+              <td class="td text-right tabular-nums">{% if m.payers %}{{ m.arppu|floatformat:2 }}{% else %}<span class="text-ink-400">—</span>{% endif %}</td>
+              <td class="td text-right tabular-nums">{{ m.new_students|intcomma }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="td text-sm font-bold">Total</td>
+            <td class="td text-right font-bold tabular-nums">{{ report.totals.gross|floatformat:2 }}</td>
+            <td class="td text-right font-bold tabular-nums text-rose-600 dark:text-rose-400">{% if report.totals.refunds %}−{{ report.totals.refunds|floatformat:2 }}{% else %}—{% endif %}</td>
+            <td class="td text-right font-bold tabular-nums text-ink-900 dark:text-white">{{ report.totals.net|floatformat:2 }}</td>
+            <td class="td text-right font-bold tabular-nums">{{ report.totals.payments|intcomma }}</td>
+            <td class="td text-right font-bold tabular-nums">{{ report.totals.payers|intcomma }}</td>
+            <td class="td text-right font-bold tabular-nums">{{ report.totals.arppu|floatformat:2 }}</td>
+            <td class="td text-right font-bold tabular-nums">{{ report.totals.new_students|intcomma }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+  <div class="grid gap-5 xl:grid-cols-2">
+    <section class="card p-5 reveal">
+      <h2 class="section-title">By plan</h2>
+      <p class="section-note mt-0.5">Net revenue and share, {{ report.currency }}</p>
+      {% if report.by_plan %}
+        <div class="mt-4">
+          {% for row in report.by_plan %}
+            <div class="rp-share">
+              <span class="min-w-0"><span class="block truncate font-semibold text-ink-800 dark:text-ink-100">{{ row.name }}</span>
+                <span class="text-[11px] text-ink-500 dark:text-ink-400">{{ row.count }} payment{{ row.count|pluralize }}</span></span>
+              <span class="rp-track"><i style="width:{{ row.percent }}%"></i></span>
+              <span class="text-right font-bold tabular-nums text-ink-900 dark:text-white">{{ row.net|floatformat:2 }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-coin" title="No sales yet" body="Paid plans in this window will show here." %}
+      {% endif %}
+    </section>
+    <section class="card p-5 reveal">
+      <h2 class="section-title">By payment method</h2>
+      <p class="section-note mt-0.5">Where the money came through</p>
+      {% if report.by_method %}
+        <div class="mt-4">
+          {% for row in report.by_method %}
+            <div class="rp-share">
+              <span class="min-w-0"><span class="block truncate font-semibold text-ink-800 dark:text-ink-100">{{ row.name }}</span>
+                <span class="text-[11px] text-ink-500 dark:text-ink-400">{{ row.count }} payment{{ row.count|pluralize }}</span></span>
+              <span class="rp-track is-method"><i style="width:{{ row.percent }}%"></i></span>
+              <span class="text-right font-bold tabular-nums text-ink-900 dark:text-white">{{ row.net|floatformat:2 }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-card" title="No payments yet" body="Confirmed payments in this window will show here." %}
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card overflow-hidden reveal">
+    <div class="border-b hairline px-5 py-4">
+      <h2 class="section-title">Do new students come back?</h2>
+      <p class="section-note mt-0.5">Of the students who joined each month, the share who used the assistant in each month since. Darker is better.</p>
+    </div>
+    <div class="table-wrap px-3 py-3">
+      <table class="rp-cohort">
+        <thead>
+          <tr>
+            <th>Joined</th>
+            <th>Students</th>
+            {% for n in cohorts.rows.0.cells %}<th>{% if forloop.first %}Month 0{% else %}+{{ forloop.counter0 }}{% endif %}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in cohorts.rows %}
+            <tr>
+              <td class="rp-name text-ink-800 dark:text-ink-100">{{ row.label }}</td>
+              <td class="rp-cell is-none" style="--p:0">{{ row.size|intcomma }}</td>
+              {% for cell in row.cells %}
+                {% if cell.percent is None %}
+                  <td class="rp-cell is-none" style="--p:0">—</td>
+                {% else %}
+                  <td class="rp-cell{% if cell.percent >= 55 %} is-hot{% endif %}" style="--p:{{ cell.percent }}" title="{{ cell.count }} of {{ row.size }} students">{{ cell.percent }}%</td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

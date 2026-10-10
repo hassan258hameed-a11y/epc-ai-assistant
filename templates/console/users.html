@@ -1,0 +1,299 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Students · Console{% endblock %}
+{% block heading %}Students{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">{{ total_matching|intcomma }} account{{ total_matching|pluralize }} matching</p>
+{% endblock %}
+
+{% block header_actions %}
+  {% if console_can.accounts %}
+  <a href="{% url 'console:accounts' %}" class="btn-primary btn-sm">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> New account
+  </a>
+  {% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+  /* The bulk bar: appears once a row is ticked, and stays in view while the
+     list scrolls. */
+  /* One row, always: on a phone the actions scroll sideways inside the bar
+     and drop their words, instead of wrapping into a 130px slab that sat on
+     top of the list it was acting on. The page gains matching room at the
+     bottom while the bar is showing (body.has-bulk-bar). */
+  .bulk-bar { position: fixed; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; width: min(820px, calc(100vw - 24px)); display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 16px; background: #0F172A; color: #fff; box-shadow: 0 22px 48px -18px rgba(15, 23, 42, .65); transform: translate(-50%, 14px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .25s cubic-bezier(.2,.7,.2,1); }
+  .bulk-bar.is-on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .dark .bulk-bar { background: #1E293B; border: 1px solid rgba(255,255,255,.08); }
+  .bulk-bar .bulk-count { flex: 0 0 auto; font-size: 13px; font-weight: 700; margin-right: 2px; white-space: nowrap; }
+  .bulk-bar .bulk-actions { display: flex; flex: 1 1 auto; min-width: 0; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .bulk-bar .bulk-actions::-webkit-scrollbar { display: none; }
+  .bulk-bar button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; min-width: 36px; padding: 0 11px; border-radius: 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #E2E8F0; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1); transition: background .15s; }
+  .bulk-bar button:hover { background: rgba(255,255,255,.16); color: #fff; }
+  .bulk-bar button.is-danger:hover { background: rgba(225, 29, 72, .35); }
+  .bulk-bar svg { width: 15px; height: 15px; flex: 0 0 auto; }
+  @media (max-width: 639px) {
+    .bulk-bar .bulk-word { display: none; }
+    .bulk-bar button { width: 40px; height: 40px; padding: 0; }
+  }
+  @media (pointer: coarse) { .bulk-bar button { min-height: 40px; min-width: 40px; } }
+  body.has-bulk-bar { padding-bottom: 5.5rem; }
+  .bulk-check { width: 16px; height: 16px; border-radius: 5px; cursor: pointer; accent-color: #2563EB; }
+  .row.is-picked { background: rgba(37, 99, 235, .06); }
+  .dark .row.is-picked { background: rgba(96, 165, 250, .08); }
+  .tag-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 6px; font-size: 10.5px; font-weight: 600; background: rgba(100,116,139,.12); color: rgb(71 85 105); }
+  .dark .tag-chip { background: rgba(255,255,255,.08); color: rgb(203 213 225); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {# ---------- Filters ---------- #}
+  <form method="get" class="card spotlight p-4 animate-fade-up sm:p-5">
+    {% include "console/_scope_field.html" %}
+    <div class="mb-4 flex items-center gap-2">
+      <span class="icon-tile h-8 w-8 rounded-[.7rem]">
+        <svg style="width:15px;height:15px" aria-hidden="true"><use href="#i-filter"/></svg>
+      </span>
+      <h2 class="section-title">Filter students</h2>
+    </div>
+
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div class="sm:col-span-2 lg:col-span-2">
+        <label for="id_q" class="label">Search</label>
+        <div class="search-shell">
+          <svg aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="search" name="q" id="id_q" value="{{ form.q.value|default:'' }}"
+                 placeholder="Name, username, e-mail, phone" class="input py-2 pl-9 text-sm">
+        </div>
+      </div>
+
+      {% for field in form %}
+        {% if field.name != 'q' %}
+          <div>
+            <label for="{{ field.id_for_label }}" class="label">{{ field.label }}</label>
+            <select name="{{ field.name }}" id="{{ field.id_for_label }}" class="input py-2 text-sm">
+              {% for value, label in field.field.choices %}
+                <option value="{{ value }}" {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="mt-4 flex flex-wrap items-center gap-2 border-t hairline pt-4">
+      <button type="submit" class="btn-primary btn-sm">
+        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-filter"/></svg> Apply filters
+      </button>
+      <a href="{% url 'console:users' %}" class="btn-ghost btn-sm">Clear</a>
+      <span class="badge-neutral ml-auto">{{ page.paginator.count|intcomma }} result{{ page.paginator.count|pluralize }}</span>
+    </div>
+  </form>
+
+  {# ---------- Results ---------- #}
+  <section class="card overflow-hidden reveal">
+    {% if page.object_list %}
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">All students</h2>
+        <span class="text-[11.5px] font-semibold text-ink-500 dark:text-ink-400">
+          Page {{ page.number }} of {{ page.paginator.num_pages }}
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="table min-w-[980px]">
+          <thead>
+            <tr>
+              {% comment %}
+                The tick boxes only exist for a role that has something to do
+                with a selection (see the bulk bar below).
+              {% endcomment %}
+              {% if console_can.student_care or console_can.tokens or console_can.accounts %}
+              <th class="th w-10"><input type="checkbox" class="bulk-check" data-bulk-all aria-label="Select every student on this page"></th>
+              {% endif %}
+              <th class="th">Student</th><th class="th">Source</th><th class="th">Status</th>
+              {% if model_scope.is_all %}
+                <th class="th text-right">Tokens left</th><th class="th text-right">Used</th>
+              {% else %}
+                {# Scoped to one model, the useful figures are that model's own #}
+                <th class="th text-right">Allocated</th>
+                <th class="th text-right">Used</th>
+                <th class="th text-right">Remaining</th>
+                <th class="th text-right">Usage</th>
+              {% endif %}
+              <th class="th">Plan</th><th class="th">Expires</th><th class="th">Joined</th><th class="th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for student in page.object_list %}
+              {% with badge=student.status_badge subscription=active_subs|get_item:student.pk %}
+                <tr class="row group/row">
+                  {% if console_can.student_care or console_can.tokens or console_can.accounts %}
+                  <td class="td w-10"><input type="checkbox" class="bulk-check" data-bulk-id="{{ student.pk }}" aria-label="Select {{ student.display_name }}"></td>
+                  {% endif %}
+                  {% comment %}
+                    An administrator's account (the list shows them under the
+                    Administrator filter) is opened by owners only.
+                  {% endcomment %}
+                  {% url 'console:user_detail' student.pk as open_url %}
+                  <td class="td">
+                    {% if console_is_owner or not student.is_admin_user %}<a href="{{ open_url }}" class="flex items-center gap-3">{% else %}<span class="flex items-center gap-3">{% endif %}
+                      {% with av=student|avatar_tone %}<span class="student-mark transition-transform duration-300 group-hover/row:scale-105" aria-hidden="true" style="background: linear-gradient(140deg, {{ av.from }}, {{ av.to }})">{{ student.initials }}</span>{% endwith %}
+                      <span class="min-w-0">
+                        <span class="block max-w-[13rem] truncate font-semibold text-ink-900 dark:text-white">{{ student.display_name }}</span>
+                        <span class="block max-w-[13rem] truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+                          {{ student.email|default:student.username }}
+                        </span>
+                        {% if student.tags %}
+                          <span class="mt-1 flex max-w-[13rem] flex-wrap gap-1">{% for tag in student.tags|slice:":3" %}<span class="tag-chip">{{ tag }}</span>{% endfor %}</span>
+                        {% endif %}
+                      </span>
+                    {% if console_is_owner or not student.is_admin_user %}</a>{% else %}</span>{% endif %}
+                  </td>
+                  <td class="td text-xs">{{ student.get_source_display }}</td>
+                  <td class="td"><span class="{{ badge.1|tone_classes }}">{{ badge.0 }}</span></td>
+                  {% if model_scope.is_all %}
+                    <td class="td text-right font-semibold tabular-nums
+                               {% if student.token_balance <= 0 %}text-rose-600 dark:text-rose-400{% endif %}">
+                      {{ student.token_balance|intcomma }}
+                    </td>
+                    <td class="td text-right tabular-nums text-ink-500 dark:text-ink-400">
+                      {% if student.token_account %}{{ student.token_account.total_consumed|compact_number }}{% else %}0{% endif %}
+                    </td>
+                  {% else %}
+                    {% with wallet=scoped_wallets|get_item:student.pk %}
+                      <td class="td text-right tabular-nums text-ink-500 dark:text-ink-400">{{ wallet.allocated_tokens|default:0|intcomma }}</td>
+                      <td class="td text-right tabular-nums text-ink-500 dark:text-ink-400">{{ wallet.used_tokens|default:0|intcomma }}</td>
+                      <td class="td text-right font-semibold tabular-nums
+                                 {% if not wallet or wallet.balance <= 0 %}text-rose-600 dark:text-rose-400{% endif %}">
+                        {{ wallet.balance|default:0|intcomma }}
+                      </td>
+                      <td class="td text-right tabular-nums text-ink-500 dark:text-ink-400">
+                        {% if wallet.allocated_tokens %}{{ wallet.used_tokens|percent_of:wallet.allocated_tokens }}%{% else %}—{% endif %}
+                      </td>
+                    {% endwith %}
+                  {% endif %}
+                  <td class="td text-xs">
+                    {% if subscription %}{{ subscription.plan.name }}{% else %}<span class="text-ink-400">—</span>{% endif %}
+                  </td>
+                  <td class="td text-xs">
+                    {% if subscription %}
+                      <span class="{% if subscription.days_remaining <= 7 %}text-amber-600 dark:text-amber-400{% else %}text-ink-500 dark:text-ink-400{% endif %}">
+                        {{ subscription.ends_at|date:"d M Y" }}
+                      </span>
+                    {% else %}<span class="text-ink-400">—</span>{% endif %}
+                  </td>
+                  <td class="td text-xs text-ink-500 dark:text-ink-400">{{ student.date_joined|date:"d M Y" }}</td>
+                  <td class="td text-right">
+                    <div class="flex items-center justify-end gap-1">
+                      {% if console_is_owner or not student.is_admin_user %}
+                      <a href="{{ open_url }}" class="btn-icon h-7 w-7" title="View student" aria-label="View {{ student.display_name }}">
+                        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-eye"/></svg>
+                      </a>
+                      {% endif %}
+                      {% if console_can.student_care and not student.is_admin_user or console_is_owner %}
+                      <a href="{% url 'console:user_edit' student.pk %}" class="btn-icon h-7 w-7" title="Edit student" aria-label="Edit {{ student.display_name }}">
+                        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg>
+                      </a>
+                      <form method="post" action="{% url 'console:user_toggle' student.pk %}" class="inline"
+                            onsubmit="return confirm('{% if student.status == "active" %}Disable{% else %}Enable{% endif %} {{ student.display_name|escapejs }}?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="btn-icon h-7 w-7 {% if student.status == 'active' %}hover:text-rose-600{% else %}hover:text-emerald-600{% endif %}"
+                                title="{% if student.status == 'active' %}Disable{% else %}Enable{% endif %} account"
+                                aria-label="{% if student.status == 'active' %}Disable{% else %}Enable{% endif %} {{ student.display_name }}">
+                          <svg class="h-3.5 w-3.5" aria-hidden="true">
+                            <use href="#{% if student.status == 'active' %}i-lock{% else %}i-check-circle{% endif %}"/>
+                          </svg>
+                        </button>
+                      </form>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+
+    {% else %}
+      {% if console_can.accounts %}
+        {% include "components/empty_state.html" with icon="i-users" title="No students match those filters" body="Try widening your search, or create a new account." action_url="/admin/accounts/" action_label="Create an account" action_icon="i-plus" %}
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-users" title="No students match those filters" body="Try widening your search." %}
+      {% endif %}
+    {% endif %}
+  </section>
+</div>
+
+{% if page.object_list and console_can.student_care or page.object_list and console_can.tokens or page.object_list and console_can.accounts %}
+  {# ---------- Bulk bar: each action only for the role that owns it ---------- #}
+  <form method="post" action="{% url 'console:users_bulk' %}" class="bulk-bar" id="bulkBar" aria-live="polite">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <input type="hidden" name="action" value="">
+    <span class="bulk-count"><span data-bulk-count>0</span> selected</span>
+    <div class="bulk-actions">
+      {% if console_can.tokens %}<button type="button" data-bulk-act="tokens" title="Give tokens" aria-label="Give tokens"><svg aria-hidden="true"><use href="#i-coin"/></svg><span class="bulk-word">Give tokens</span></button>{% endif %}
+      {% if console_can.student_care %}
+      <button type="button" data-bulk-act="message" title="Message" aria-label="Message"><svg aria-hidden="true"><use href="#i-send"/></svg><span class="bulk-word">Message</span></button>
+      <button type="button" data-bulk-act="tag" title="Tag" aria-label="Tag"><svg aria-hidden="true"><use href="#i-tag"/></svg><span class="bulk-word">Tag</span></button>
+      {% endif %}
+      {% if console_can.accounts %}<button type="button" data-bulk-act="export" title="Export CSV" aria-label="Export CSV"><svg aria-hidden="true"><use href="#i-download"/></svg><span class="bulk-word">Export CSV</span></button>{% endif %}
+      {% if console_can.student_care %}
+      <button type="button" data-bulk-act="enable" title="Enable" aria-label="Enable"><svg aria-hidden="true"><use href="#i-check-circle"/></svg><span class="bulk-word">Enable</span></button>
+      <button type="button" data-bulk-act="disable" class="is-danger" title="Disable" aria-label="Disable"><svg aria-hidden="true"><use href="#i-lock"/></svg><span class="bulk-word">Disable</span></button>
+      {% endif %}
+    </div>
+    <button type="button" data-bulk-clear aria-label="Clear the selection" title="Clear the selection"><svg aria-hidden="true"><use href="#i-x"/></svg></button>
+  </form>
+{% endif %}
+
+<script>
+  (function () {
+    var bar = document.getElementById('bulkBar');
+    if (!bar) return;
+    /* Out of <main>: its entry animation leaves a transform on it, and a
+       transformed ancestor would pin a fixed bar to itself, not the screen. */
+    document.body.appendChild(bar);
+    var all = document.querySelector('[data-bulk-all]');
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-bulk-id]'));
+    var count = bar.querySelector('[data-bulk-count]');
+
+    function picked() { return boxes.filter(function (b) { return b.checked; }); }
+    function paint() {
+      var n = picked().length;
+      count.textContent = n;
+      bar.classList.toggle('is-on', n > 0);
+      document.body.classList.toggle('has-bulk-bar', n > 0);
+      boxes.forEach(function (b) { b.closest('tr').classList.toggle('is-picked', b.checked); });
+      if (all) { all.checked = n > 0 && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+    }
+    boxes.forEach(function (b) { b.addEventListener('change', paint); });
+    if (all) all.addEventListener('change', function () { boxes.forEach(function (b) { b.checked = all.checked; }); paint(); });
+    bar.querySelector('[data-bulk-clear]').addEventListener('click', function () { boxes.forEach(function (b) { b.checked = false; }); paint(); });
+
+    bar.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-bulk-act]');
+      if (!button) return;
+      var action = button.dataset.bulkAct, rows = picked();
+      if (!rows.length) return;
+      if (action === 'disable' && !confirm('Disable ' + rows.length + ' account(s)? They are signed out straight away. Administrators are skipped.')) return;
+      if (action === 'enable' && !confirm('Enable ' + rows.length + ' account(s)?')) return;
+      bar.querySelectorAll('input[name="ids"]').forEach(function (n) { n.remove(); });
+      rows.forEach(function (b) {
+        var input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'ids'; input.value = b.dataset.bulkId;
+        bar.appendChild(input);
+      });
+      bar.querySelector('input[name="action"]').value = action;
+      HTMLFormElement.prototype.requestSubmit ? HTMLFormElement.prototype.requestSubmit.call(bar) : HTMLFormElement.prototype.submit.call(bar);
+    });
+    paint();
+  })();
+</script>
+{% endblock %}

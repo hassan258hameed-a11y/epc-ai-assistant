@@ -1,0 +1,78 @@
+{% load ai_extras %}
+{% comment %}
+  Archived chats — out of the sidebar, never lost. Restore puts a chat back
+  where it was; Delete moves it to Recently deleted, where it can still be
+  restored for 30 days.
+{% endcomment %}
+{% if refresh_sidebar %}<i data-refresh-sidebar hidden></i>{% endif %}
+<div class="panel" data-panel-name="archived">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Workspace</p>
+    <h2 class="panel-title">Archived chats</h2>
+    <p class="panel-sub">
+      Chats you archived are kept here, out of your sidebar. Restore one to carry
+      on where you left off.
+    </p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  {% if total %}
+    <form class="sv-search" method="get" action="{% url 'student:archived' %}" data-panel-search="archived">
+      <svg aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="search" name="q" value="{{ query }}" placeholder="Search archived chats" aria-label="Search archived chats">
+    </form>
+  {% endif %}
+
+  {% if items %}
+    <div class="card ar-list">
+      {% for conversation in items %}
+        <div class="ar-row" style="animation-delay:{% widthratio forloop.counter0 1 30 %}ms">
+          <span class="ar-icon" aria-hidden="true"><svg><use href="#i-inbox"/></svg></span>
+          <a class="ar-main" href="{% url 'student:chat_detail' conversation.pk %}">
+            <span class="ar-title">{{ conversation.title }}</span>
+            <span class="ar-sub">
+              {% if conversation.folder %}<span class="sv-folder" style="--f:{{ conversation.folder.hex }}"><i></i>{{ conversation.folder.name }}</span> · {% endif %}
+              {{ conversation.message_count }} message{{ conversation.message_count|pluralize }} · {{ conversation.updated_at|timeago }}
+            </span>
+          </a>
+          <div class="ar-actions">
+            <form method="post" action="{% url 'student:archived' %}" data-panel-form="archived">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="restore">
+              <input type="hidden" name="conversation_id" value="{{ conversation.pk }}">
+              <input type="hidden" name="q" value="{{ query }}">
+              <button type="submit" class="btn btn-sm">
+                <svg aria-hidden="true"><use href="#i-refresh"/></svg> <span class="m-hide">Restore</span>
+              </button>
+            </form>
+            <form method="post" action="{% url 'student:archived' %}" data-panel-form="archived">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="conversation_id" value="{{ conversation.pk }}">
+              <input type="hidden" name="q" value="{{ query }}">
+              <button type="submit" class="btn btn-sm btn-ghost" aria-label="Move {{ conversation.title }} to Recently deleted"
+                      title="Move to Recently deleted">
+                <svg aria-hidden="true"><use href="#i-trash"/></svg>
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    {% if page.has_other_pages %}
+      <nav class="sv-pages" aria-label="Pages">
+        {% if page.has_previous %}<a class="btn btn-sm" data-panel-link="archived" href="{% url 'student:archived' %}?page={{ page.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">Newer</a>{% endif %}
+        <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="btn btn-sm" data-panel-link="archived" href="{% url 'student:archived' %}?page={{ page.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">Older</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% elif query %}
+    <p class="empty"><svg aria-hidden="true"><use href="#i-search"/></svg> No archived chats match “{{ query }}”.</p>
+  {% else %}
+    <p class="empty">
+      <svg aria-hidden="true"><use href="#i-inbox"/></svg>
+      Nothing archived. Use <b>Archive</b> in a chat's <b>⋯</b> menu to tidy your sidebar without deleting anything.
+    </p>
+  {% endif %}
+</div>

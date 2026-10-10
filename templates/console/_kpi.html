@@ -1,0 +1,53 @@
+{% load ai_extras %}{% comment %}
+Console KPI tile — the headline metric surface.
+
+  {% include "console/_kpi.html" with variant="brand" icon="i-users"
+     label="Total students" value=stats.total_users delta="+12.4%"
+     delta_tone="up" foot="30 new in 30 days" url="/console/users/" %}
+
+variant : brand | ink | violet | plain   — colours the icon chip only.
+          Every tile shares one surface, so four of them in a row stay
+          comparable; the chip is what tells them apart.
+delta_tone : up | down | flat
+Anything omitted is simply not rendered.
+{% endcomment %}
+{% comment %}A tile only links where the viewer's staff role can go (StaffAreaMiddleware).{% endcomment %}
+{% if url and console_reach|get_item:url %}<a href="{{ url }}"{% else %}<div{% endif %}
+  class="{% if variant == 'brand' %}kpi-brand{% elif variant == 'ink' %}kpi-ink{% elif variant == 'violet' %}kpi-violet{% else %}kpi-plain{% endif %} group">
+
+  <div class="flex items-start justify-between gap-3">
+    <p class="kpi-label truncate">{{ label }}</p>
+    <span class="{% if variant == 'violet' %}chip-violet{% elif variant == 'ink' %}chip-ink{% else %}chip-brand{% endif %} h-8 w-8 rounded-[.7rem] shrink-0">
+      <svg style="width:15px;height:15px" aria-hidden="true"><use href="#{{ icon|default:'i-trend-up' }}"/></svg>
+    </span>
+  </div>
+
+  <div class="mt-auto">
+    <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+      <p class="kpi-value" data-countup>{{ value }}</p>
+      {% if delta %}
+        <span class="kpi-delta
+              {% if delta_tone == 'down' %}bg-rose-500/10 text-rose-600 dark:text-rose-400
+              {% elif delta_tone == 'up' %}bg-emerald-500/10 text-emerald-600 dark:text-emerald-400
+              {% else %}bg-ink-500/10 text-ink-500 dark:text-ink-400{% endif %}">
+          {% if delta_tone == 'down' %}
+            <svg style="width:11px;height:11px" aria-hidden="true"><use href="#i-trend-down"/></svg>
+          {% elif delta_tone == 'up' %}
+            <svg style="width:11px;height:11px" aria-hidden="true"><use href="#i-trend-up"/></svg>
+          {% endif %}
+          {{ delta }}
+        </span>
+      {% endif %}
+    </div>
+    {% if foot %}<p class="kpi-foot truncate">{{ foot }}</p>{% endif %}
+  </div>
+  {% comment %}
+    Fourteen days behind the figure. Decorative and unlabelled — it says which
+    way this has been going, and the number above says where it stands.
+  {% endcomment %}
+  {% if spark %}
+    <div class="stat-spark" aria-hidden="true">
+      {% for bar in spark %}<i style="height: {{ bar.percent }}%"></i>{% endfor %}
+    </div>
+  {% endif %}
+{% if url and console_reach|get_item:url %}</a>{% else %}</div>{% endif %}

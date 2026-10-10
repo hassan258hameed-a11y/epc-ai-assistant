@@ -1,0 +1,93 @@
+{% extends "auth/_auth_base.html" %}
+
+{% block title %}Console sign-in · {{ BRAND.full_name }}{% endblock %}
+{% block panel_title %}Administrator console.{% endblock %}
+{% block panel_body %}
+  Manage students, allocate tokens, verify payments and review the audit trail. Access is restricted and every action is logged.
+{% endblock %}
+{% block panel_points %}
+  <li class="flex items-start gap-3 text-sm text-slate-200">
+    <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/20 text-blue-300">
+      <svg class="h-3 w-3" aria-hidden="true"><use href="#i-check"/></svg>
+    </span>
+    Full audit trail of every administrative action
+  </li>
+  <li class="flex items-start gap-3 text-sm text-slate-200">
+    <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/20 text-blue-300">
+      <svg class="h-3 w-3" aria-hidden="true"><use href="#i-check"/></svg>
+    </span>
+    Token allocation with complete transaction history
+  </li>
+  <li class="flex items-start gap-3 text-sm text-slate-200">
+    <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/20 text-blue-300">
+      <svg class="h-3 w-3" aria-hidden="true"><use href="#i-check"/></svg>
+    </span>
+    Backend-verified payments — never trusted from the browser
+  </li>
+{% endblock %}
+
+{% block form_content %}
+<header>
+  <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-ink-800 to-ink-950 text-white shadow-card">
+    <svg class="h-5 w-5" aria-hidden="true"><use href="#i-shield"/></svg>
+  </div>
+  <h1 class="mt-5 text-2xl font-bold tracking-tight text-ink-900 dark:text-white sm:text-3xl">Console sign-in</h1>
+  <p class="mt-2 text-sm text-ink-600 dark:text-ink-400">Administrator access only.</p>
+</header>
+
+<form method="post" class="mt-8 space-y-5" data-loading-form novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.GET.next|default:'' }}">
+
+  <div>
+    <label for="id_identifier" class="label">Administrator username</label>
+    <div class="relative">
+      <span class="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-ink-400">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-user"/></svg>
+      </span>
+      <input type="text" name="identifier" id="id_identifier" value="{{ form.identifier.value|default:'' }}"
+             autocomplete="username" autofocus required
+             class="input pl-10 {% if form.identifier.errors %}input-error{% endif %}">
+    </div>
+  </div>
+
+  <div>
+    <label for="id_password" class="label">Password</label>
+    <div class="relative">
+      <span class="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-ink-400">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-lock"/></svg>
+      </span>
+      <input type="password" name="password" id="id_password" autocomplete="current-password" required
+             class="input pl-10 pr-11 {% if form.password.errors %}input-error{% endif %}">
+      <button type="button" data-toggle-password="id_password" aria-label="Show password"
+              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-ink-500 transition hover:text-ink-700 dark:text-ink-400 dark:hover:text-ink-200">
+        <svg data-eye class="h-4 w-4" aria-hidden="true"><use href="#i-eye"/></svg>
+        <svg data-eye-off class="hidden h-4 w-4" aria-hidden="true"><use href="#i-eye-off"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <label class="tap-row flex cursor-pointer items-center gap-2.5">
+    <input type="checkbox" name="remember" class="checkbox" checked>
+    <span class="text-sm text-ink-600 dark:text-ink-300">Keep me signed in</span>
+  </label>
+
+  <button type="submit" class="btn w-full bg-ink-900 py-3 text-white hover:bg-ink-800 dark:bg-white dark:text-ink-900 dark:hover:bg-ink-100"
+          data-submit data-loading-label="Signing in…">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-shield"/></svg>
+    Enter console
+  </button>
+</form>
+
+<div class="mt-7 rounded-xl border border-amber-500/25 bg-amber-500/8 p-3.5">
+  <p class="flex items-start gap-2.5 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+    <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true"><use href="#i-alert"/></svg>
+    <span>Failed attempts are rate limited and recorded with your IP address.</span>
+  </p>
+</div>
+
+<p class="mt-6 text-center text-xs text-ink-600 dark:text-ink-400">
+  Not an administrator?
+  <a href="{% url 'auth:login' %}" class="tap-inline font-semibold text-ink-800 transition hover:text-brand-600 dark:text-ink-200 dark:hover:text-brand-300">Student sign-in</a>
+</p>
+{% endblock %}

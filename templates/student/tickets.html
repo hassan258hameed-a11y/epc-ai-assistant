@@ -1,0 +1,45 @@
+{% extends "base/shell_page.html" %}
+{% load ai_extras %}
+
+{% block title %}Your requests · {{ BRAND.full_name }}{% endblock %}
+{% block back_url %}{% url 'student:help' %}{% endblock %}
+{% block back_label %}Help{% endblock %}
+
+{% block content %}
+<header class="panel-head">
+  <p class="panel-eyebrow">Support</p>
+  <h2 class="panel-title">Your requests</h2>
+  <p class="panel-sub">Every support request you have raised, and where each one got to.</p>
+</header>
+
+<div class="card">
+  <div class="rows">
+    {% for ticket in tickets %}
+      <a class="row" href="{% url 'student:ticket_detail' ticket.reference %}">
+        <span class="row-main">
+          <span class="row-title">{{ ticket.subject }}</span>
+          <span class="row-sub">{{ ticket.reference }} · {{ ticket.get_category_display }} · {{ ticket.created_at|timeago }}</span>
+        </span>
+        <span class="badge {% if ticket.status == 'resolved' or ticket.status == 'closed' %}is-ok{% elif ticket.status == 'waiting_user' %}is-warn{% endif %}">
+          {{ ticket.get_status_display }}
+        </span>
+        <svg aria-hidden="true" style="width:15px;height:15px;color:var(--ink-4)"><use href="#i-chevron-right"/></svg>
+      </a>
+    {% empty %}
+      <div class="empty">
+        <svg aria-hidden="true"><use href="#i-inbox"/></svg>
+        <p style="margin:0 0 4px;font-weight:500;color:var(--ink-2)">You have not raised any requests</p>
+        <p style="margin:0 0 14px">Most questions are answered in the FAQ.</p>
+        <a href="{% url 'student:help' %}" class="btn btn-primary btn-sm">Read the FAQ</a>
+      </div>
+    {% endfor %}
+  </div>
+  {% if tickets %}
+    <div class="card-foot">
+      <a href="{% url 'student:help' %}" class="btn btn-sm btn-primary">
+        <svg aria-hidden="true"><use href="#i-plus"/></svg> New request
+      </a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

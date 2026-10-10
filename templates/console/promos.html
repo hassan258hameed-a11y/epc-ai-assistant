@@ -1,0 +1,89 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Promo codes — every code, whether it is live, and what it has cost.
+  Discount and revenue count completed payments only.
+{% endcomment %}
+
+{% block title %}Promo codes · Console{% endblock %}
+{% block heading %}Promo codes{% endblock %}
+{% block subheading %}
+  <p>Discount codes students enter at checkout. One discount per order — if a referral discount is larger, it is used instead.</p>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:promo_create' %}" class="btn-primary btn-sm">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> New code
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-tag" label="Live codes" value=overview.live|intcomma foot="usable right now" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-receipt" label="Paid orders" value=overview.redemptions|intcomma foot="completed with a code" %}
+    {% include "console/_kpi.html" with variant="violet" icon="i-gift" label="Discount given" value=overview.discount|money foot="taken off paid orders" %}
+    {% include "console/_kpi.html" with variant="plain" icon="i-trend-up" label="Revenue from codes" value=overview.revenue|money foot="collected on those orders" %}
+  </section>
+
+  <section class="card overflow-hidden reveal">
+    {% if rows %}
+      <div class="table-wrap">
+        <table class="table min-w-[860px]">
+          <thead>
+            <tr>
+              <th class="th">Code</th>
+              <th class="th">Discount</th>
+              <th class="th">Applies to</th>
+              <th class="th text-right">Uses</th>
+              <th class="th text-right">Discount given</th>
+              <th class="th">Status</th>
+              <th class="th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr class="row">
+                <td class="td">
+                  <a href="{% url 'console:promo_detail' row.promo.pk %}" class="block">
+                    <span class="font-mono text-sm font-bold tracking-wide text-ink-900 dark:text-white">{{ row.promo.code }}</span>
+                    {% if row.promo.description %}<span class="block truncate text-[11px] text-ink-500 dark:text-ink-400">{{ row.promo.description|truncatechars:48 }}</span>{% endif %}
+                  </a>
+                </td>
+                <td class="td text-sm font-semibold">{{ row.promo.value_label }}</td>
+                <td class="td text-xs text-ink-600 dark:text-ink-300">
+                  {% if row.promo.ai_model %}{{ row.promo.ai_model.name }}{% else %}Any model{% endif %}
+                  {% with count=row.promo.eligible_plans.all|length %}{% if count %} · {{ count }} package{{ count|pluralize }}{% endif %}{% endwith %}
+                  {% if row.promo.expires_at %}<span class="block text-ink-400">until {{ row.promo.expires_at|date:"j M Y" }}</span>{% endif %}
+                </td>
+                <td class="td text-right tabular-nums">
+                  {{ row.uses }}{% if row.promo.max_uses %}<span class="text-ink-400"> / {{ row.promo.max_uses }}</span>{% endif %}
+                </td>
+                <td class="td text-right tabular-nums text-emerald-600 dark:text-emerald-400">{{ row.discount|money }}</td>
+                <td class="td text-xs"><span class="badge-{{ row.tone }}">{{ row.status }}</span></td>
+                <td class="td w-px whitespace-nowrap text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href="{% url 'console:promo_edit' row.promo.pk %}" class="btn-icon h-7 w-7" title="Edit" aria-label="Edit {{ row.promo.code }}">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg>
+                    </a>
+                    <form method="post" action="{% url 'console:promo_toggle' row.promo.pk %}">
+                      {% csrf_token %}
+                      <button type="submit" class="btn-icon h-7 w-7" title="{% if row.promo.is_active %}Pause{% else %}Resume{% endif %}"
+                              aria-label="{% if row.promo.is_active %}Pause{% else %}Resume{% endif %} {{ row.promo.code }}">
+                        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#{% if row.promo.is_active %}i-eye-off{% else %}i-eye{% endif %}"/></svg>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-tag" title="No promo codes yet" body="Create one to offer students a discount at checkout." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

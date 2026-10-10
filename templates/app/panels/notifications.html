@@ -1,0 +1,124 @@
+{% load ai_extras %}
+{% comment %}
+  Notifications — the Student App design's account view.
+
+  An unread alert carries its level's colour on its edge, its icon and its
+  button; once it has been read it goes quiet and keeps only a trace of it.
+  The tabs are a real filter, so "Unread" is a shorter list rather than a
+  hidden one.
+{% endcomment %}
+<div class="panel" data-panel-name="notifications">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Account</p>
+    <h2 class="panel-title">Notifications</h2>
+    <p class="panel-sub">Alerts about your balance, your orders and your account.</p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <section class="panel-section">
+    <div class="sa-notif-bar" style="margin-top:0">
+      <div class="sa-tabs" style="--i:{% if unread_only %}1{% else %}0{% endif %}">
+        <span class="sa-tabs-pill" aria-hidden="true"></span>
+        <a href="{% url 'student:notifications' %}" data-panel-link="notifications"
+           class="{% if not unread_only %}is-on{% endif %}">All</a>
+        <a href="{% url 'student:notifications' %}?filter=unread" data-panel-link="notifications"
+           class="{% if unread_only %}is-on{% endif %}">Unread</a>
+      </div>
+      <span style="flex:1 1 20px"></span>
+      <span class="count" data-unread="{{ unread }}" {% if not unread %}hidden{% endif %}>{{ unread }} unread</span>
+      {% if unread %}
+        <form method="post" action="{% url 'student:notifications_read_all_panel' %}"
+              data-panel-form="notifications" style="flex:0 0 auto">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm">
+            <svg aria-hidden="true"><use href="#i-check"/></svg> Mark all as read
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="sa-notifs">
+      {% for card in cards %}
+        <article class="sa-notif{% if not card.note.is_read %} is-unread{% endif %}"
+                 style="--n-from:{{ card.tone.from }};--n-to:{{ card.tone.to }};--n-line:{{ card.tone.line }};animation-delay:{{ card.delay }}">
+          <span class="edge" aria-hidden="true"></span>
+          <div class="sa-notif-row">
+            <span class="sa-notif-ic">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ card.tone.glyph }}"/></svg>
+            </span>
+            <div style="min-width:0;flex:1 1 auto">
+              <div class="sa-notif-head">
+                <b>{{ card.note.title }}</b>
+                {% if not card.note.is_read %}
+                  <span class="sa-notif-dot" aria-hidden="true"><b></b><em></em></span>
+                {% endif %}
+                {% if card.note.is_pinned and not card.note.is_read %}<span class="note-pin">Pinned</span>{% endif %}
+              </div>
+              {% if card.note.body %}<p>{{ card.note.body }}</p>{% endif %}
+              <div class="sa-notif-foot">
+                {% if card.note.action_url %}
+                  {% comment %}
+                    A notification about a balance points at Pricing, which is
+                    a region of this screen — so it opens as one rather than
+                    navigating away from the shell it was read in.
+                  {% endcomment %}
+                  {% if '/plans/' in card.note.action_url or '/pricing/' in card.note.action_url %}
+                    <a href="{% url 'student:pricing' %}" class="sa-notif-cta"
+                       data-panel-link="pricing"{% if not card.note.is_read %} data-mark-read="{% url 'student:notification_read' card.note.pk %}"{% endif %}>{{ card.note.action_label|default:"View plans" }}</a>
+                  {% else %}
+                    <a href="{{ card.note.action_url }}" class="sa-notif-cta"{% if not card.note.is_read %} data-mark-read="{% url 'student:notification_read' card.note.pk %}"{% endif %}>{{ card.note.action_label|default:"Open" }}</a>
+                  {% endif %}
+                {% else %}
+                  <a href="{% url 'student:chat' %}" class="sa-notif-cta" data-panel="chat">Start chatting</a>
+                {% endif %}
+                {% comment %}
+                  Real POST forms: marking read and deleting change data, and a
+                  plain link is a GET the view rightly refuses. ``return`` keeps
+                  the tab and page the student was on.
+                {% endcomment %}
+                {% if not card.note.is_read %}
+                  <form method="post" action="{% url 'student:notification_read' card.note.pk %}"
+                        data-panel-form="notifications" class="sa-notif-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="return" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm btn-ghost">Mark as read</button>
+                  </form>
+                {% endif %}
+                <span style="flex:1 1 10px"></span>
+                <span class="sa-notif-when">{{ card.note.created_at|timeago }}</span>
+                <form method="post" action="{% url 'student:notification_delete' card.note.pk %}"
+                      data-panel-form="notifications" class="sa-notif-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="return" value="{{ request.get_full_path }}">
+                  <button type="submit" class="sa-notif-x" aria-label="Delete this notification" title="Delete">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </article>
+      {% empty %}
+        <div class="sa-notif-empty">
+          <i><svg width="26" height="26" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 8.4 6.6 11.4l5.8-6.8"/></svg></i>
+          <b>{% if unread_only %}You are all caught up{% else %}Nothing to read yet{% endif %}</b>
+          <span>{% if unread_only %}Nothing unread — new alerts will land here.{% else %}We will let you know when something needs you.{% endif %}</span>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if page.paginator.num_pages > 1 %}
+      <nav class="pager" aria-label="Notification pages">
+        {% for number in page_numbers %}
+          {% if number == page.number %}
+            <span class="is-on" aria-current="page">{{ number }}</span>
+          {% else %}
+            <a href="{% url 'student:notifications' %}?{% if unread_only %}filter=unread&amp;{% endif %}page={{ number }}"
+               data-panel-link="notifications">{{ number }}</a>
+          {% endif %}
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </section>
+</div>

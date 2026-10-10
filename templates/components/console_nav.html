@@ -1,0 +1,242 @@
+{% comment %}
+Admin console navigation.
+
+Every label lives in `.nav-label` and every count in `.nav-badge` so the
+desktop rail can collapse to icons without touching this file.
+
+Only the pages the administrator's staff role reaches are drawn:
+`console_can.<area>` comes from AI/context_processors.staff_access and the
+areas from AI/services/staff_permissions.py. A section heading is drawn only
+when something under it is. The ⌘K palette is built from these links, so it
+follows automatically. Hiding a link is a courtesy — the rule itself is
+enforced by StaffAreaMiddleware.
+{% endcomment %}
+<a href="{% url 'console:dashboard' %}" title="Dashboard"
+   class="nav-link {% if nav_active == 'dashboard' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-home"/></svg>
+  <span class="nav-label">Dashboard</span>
+</a>
+
+{% if console_can.students or console_can.accounts or console_can.finance %}
+<p class="nav-section">People</p>
+{% endif %}
+{% if console_can.students %}
+<a href="{% url 'console:users' %}" title="Students"
+   class="nav-link {% if nav_active == 'users' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-users"/></svg>
+  <span class="nav-label">Students</span>
+</a>
+{% comment %}
+  The two pages an administrator opens when something needs doing rather than
+  looking at: who is about to run out, and whose access lapses this week. They
+  sit under People because that is what they are lists of.
+{% endcomment %}
+<a href="{% url 'console:low_tokens' %}" title="Students running low"
+   class="nav-link {% if nav_active == 'low_tokens' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-alert"/></svg>
+  <span class="nav-label flex-1">Running low</span>
+  {% if low_token_count %}<span class="badge-warning nav-badge">{{ low_token_count }}</span>{% endif %}
+</a>
+<a href="{% url 'console:expiring_tokens' %}" title="Access expiring soon"
+   class="nav-link {% if nav_active == 'expiring' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-clock"/></svg>
+  <span class="nav-label">Expiring access</span>
+</a>
+{% endif %}
+{% if console_can.accounts %}
+<a href="{% url 'console:accounts' %}" title="Create accounts"
+   class="nav-link {% if nav_active == 'accounts' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-user"/></svg>
+  <span class="nav-label">Create accounts</span>
+</a>
+{% endif %}
+{% if console_can.finance %}
+<a href="{% url 'console:referrals' %}" title="Referrals"
+   class="nav-link {% if nav_active == 'referrals' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-gift"/></svg>
+  <span class="nav-label">Referrals</span>
+</a>
+<a href="{% url 'console:referral_campaigns' %}" title="Referral campaigns"
+   class="nav-link {% if nav_active == 'referral_campaigns' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-share"/></svg>
+  <span class="nav-label">Referral campaigns</span>
+</a>
+{% endif %}
+
+{% if console_can.support or console_can.tokens or console_can.content %}
+<p class="nav-section">Usage</p>
+{% endif %}
+{% if console_can.support %}
+<a href="{% url 'console:conversations' %}" title="Conversations"
+   class="nav-link {% if nav_active == 'conversations' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-chat"/></svg>
+  <span class="nav-label">Conversations</span>
+</a>
+{% endif %}
+{% if console_can.tokens %}
+<a href="{% url 'console:ai_tokens' %}" title="AI tokens"
+   class="nav-link {% if nav_active == 'ai_tokens' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-sparkles"/></svg>
+  <span class="nav-label flex-1">AI tokens</span>
+</a>
+<a href="{% url 'console:tokens' %}" title="Token management"
+   class="nav-link {% if nav_active == 'tokens' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-coin"/></svg>
+  <span class="nav-label flex-1">Token management</span>
+</a>
+<a href="{% url 'console:usage_limits' %}" title="Usage limits"
+   class="nav-link {% if nav_active == 'usage_limits' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-sliders"/></svg>
+  <span class="nav-label flex-1">Usage limits</span>
+</a>
+{% endif %}
+{% if console_can.content %}
+<a href="{% url 'console:quality' %}" title="Answer quality"
+   class="nav-link {% if nav_active == 'quality' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-thumb-up"/></svg>
+  <span class="nav-label">Answer quality</span>
+</a>
+<a href="{% url 'console:prompt_library' %}" title="Prompt library"
+   class="nav-link {% if nav_active == 'prompt_library' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-sparkles"/></svg>
+  <span class="nav-label">Prompt library</span>
+</a>
+{% endif %}
+{% if console_can.tokens %}
+<a href="{% url 'console:usage' %}" title="Usage analytics"
+   class="nav-link {% if nav_active == 'usage' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-chart"/></svg>
+  <span class="nav-label">Usage analytics</span>
+</a>
+{% endif %}
+
+{% if console_can.finance %}
+<p class="nav-section">Revenue</p>
+<a href="{% url 'console:reports' %}" title="Revenue and growth"
+   class="nav-link {% if nav_active == 'reports' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-chart"/></svg>
+  <span class="nav-label">Revenue &amp; growth</span>
+</a>
+<a href="{% url 'console:plans' %}" title="Plans"
+   class="nav-link {% if nav_active == 'plans' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-card"/></svg>
+  <span class="nav-label">Plans</span>
+</a>
+<a href="{% url 'console:promos' %}" title="Promo codes"
+   class="nav-link {% if nav_active == 'promos' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-tag"/></svg>
+  <span class="nav-label">Promo codes</span>
+</a>
+<a href="{% url 'console:payments' %}" title="Payments"
+   class="nav-link {% if nav_active == 'payments' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-receipt"/></svg>
+  <span class="nav-label flex-1">Payments</span>
+  {% if pending_payment_count %}<span class="badge-warning nav-badge">{{ pending_payment_count }}</span>{% endif %}
+</a>
+<a href="{% url 'console:gateways' %}" title="Payment gateways"
+   class="nav-link {% if nav_active == 'gateways' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-shield"/></svg>
+  <span class="nav-label">Payment gateways</span>
+</a>
+<a href="{% url 'console:subscriptions' %}" title="Subscriptions"
+   class="nav-link {% if nav_active == 'subscriptions' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-check-circle"/></svg>
+  <span class="nav-label">Subscriptions</span>
+</a>
+<a href="{% url 'console:model_costs' %}" title="Cost and margin"
+   class="nav-link {% if nav_active == 'model_costs' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-trend-up"/></svg>
+  <span class="nav-label">Cost &amp; margin</span>
+</a>
+{% endif %}
+
+{# Telegram is on everyone's list: it is where you link your own Telegram and turn on your own sign-in codes. #}
+<p class="nav-section">System</p>
+{% if console_can.content %}
+<a href="{% url 'console:notifications' %}" title="Announcements"
+   class="nav-link {% if nav_active == 'notifications' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-bell"/></svg>
+  <span class="nav-label">Announcements</span>
+</a>
+{% endif %}
+{% if console_can.personal %}
+<a href="{% url 'console:telegram' %}" title="Telegram"
+   class="nav-link {% if nav_active == 'telegram' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-telegram"/></svg>
+  <span class="nav-label">Telegram</span>
+</a>
+{% endif %}
+{% if console_can.content or console_can.student_care %}
+<a href="{% url 'console:telegram_send' %}" title="Send a Telegram message"
+   class="nav-link {% if nav_active == 'telegram_send' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-send"/></svg>
+  <span class="nav-label">Send on Telegram</span>
+</a>
+{% endif %}
+{% if console_can.support %}
+<a href="{% url 'console:tickets' %}" title="Support tickets"
+   class="nav-link {% if nav_active == 'tickets' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-inbox"/></svg>
+  <span class="nav-label flex-1">Support tickets</span>
+  {% if open_ticket_count %}<span class="badge-danger nav-badge">{{ open_ticket_count }}</span>{% endif %}
+</a>
+<a href="{% url 'console:canned_replies' %}" title="Saved replies"
+   class="nav-link {% if nav_active == 'canned_replies' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-copy"/></svg>
+  <span class="nav-label">Saved replies</span>
+</a>
+{% endif %}
+{% if console_can.operations %}
+<a href="{% url 'console:emails' %}" title="Email log"
+   class="nav-link {% if nav_active == 'emails' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-mail"/></svg>
+  <span class="nav-label">Email log</span>
+</a>
+{% endif %}
+{% if console_can.staff %}
+<a href="{% url 'console:audit_logs' %}" title="Audit logs"
+   class="nav-link {% if nav_active == 'audit' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-history"/></svg>
+  <span class="nav-label">Audit logs</span>
+</a>
+{% endif %}
+{% if console_can.operations %}
+<a href="{% url 'console:model_status' %}" title="Model status"
+   class="nav-link {% if nav_active == 'model_status' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-cpu"/></svg>
+  <span class="nav-label flex-1">Model status</span>
+  {% if model_status_alert.count %}<span class="badge-{{ model_status_alert.tone }} nav-badge" title="{% if model_status_alert.chat_paused %}All chat is paused. {% endif %}{{ model_status_alert.paused }} paused, {{ model_status_alert.degraded }} slow">{% if model_status_alert.chat_paused %}Paused{% else %}{{ model_status_alert.count }}{% endif %}</span>{% endif %}
+</a>
+<a href="{% url 'console:health' %}" title="System health"
+   class="nav-link {% if nav_active == 'health' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-activity"/></svg>
+  <span class="nav-label flex-1">System health</span>
+  {% if health_alert_count %}<span class="badge-danger nav-badge">{{ health_alert_count }}</span>{% endif %}
+</a>
+<a href="{% url 'console:exports' %}" title="Data exports"
+   class="nav-link {% if nav_active == 'exports' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-download"/></svg>
+  <span class="nav-label">Data exports</span>
+</a>
+{% endif %}
+{% if console_can.staff %}
+<a href="{% url 'console:staff' %}" title="Staff and roles"
+   class="nav-link {% if nav_active == 'staff' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-lock"/></svg>
+  <span class="nav-label">Staff &amp; roles</span>
+</a>
+{% endif %}
+{% if console_can.settings %}
+<a href="{% url 'console:settings' %}" title="Settings"
+   class="nav-link {% if nav_active == 'settings' %}nav-link-active{% endif %}">
+  <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-sliders"/></svg>
+  <span class="nav-label">Settings</span>
+</a>
+{% endif %}
+
+<div class="mt-4 border-t hairline pt-3">
+  <a href="{% url 'public:home' %}" title="View website" class="nav-link">
+    <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-globe"/></svg>
+    <span class="nav-label">View website</span>
+  </a>
+</div>

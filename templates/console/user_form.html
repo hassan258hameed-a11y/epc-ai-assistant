@@ -1,0 +1,86 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Edit {{ student.display_name }} · Console{% endblock %}
+{% block heading %}Edit account{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">{{ student.display_name }} · {{ student.username }}</p>
+{% endblock %}
+
+{% block measure %}max-w-3xl{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <a href="{% url 'console:user_detail' student.pk %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> Back to student
+  </a>
+
+  <form method="post" data-loading-form>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="mb-5 rounded-xl border border-rose-500/25 bg-rose-500/8 p-3.5">
+        {% for error in form.non_field_errors %}
+          <p class="text-sm font-medium text-rose-700 dark:text-rose-300">{{ error }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="section-title">Identity</h2>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        {% include "console/_form_field.html" with field=form.username %}
+        {% include "console/_form_field.html" with field=form.full_name %}
+        {% include "console/_form_field.html" with field=form.email %}
+        {% include "console/_form_field.html" with field=form.phone %}
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Access</h2>
+      <p class="section-note mt-0.5">
+        Setting the status to Disabled signs the student out and blocks all AI requests immediately.
+      </p>
+      <div class="mt-5 grid gap-4 sm:grid-cols-3">
+        {% comment %}
+          Only an owner makes somebody an administrator (and StaffAreaMiddleware
+          refuses the post otherwise), so everyone else sees the account type
+          and sends it back unchanged.
+        {% endcomment %}
+        {% if console_is_owner %}
+          {% include "console/_form_field.html" with field=form.role %}
+        {% else %}
+          <div>
+            <p class="label">Account type</p>
+            <input type="hidden" name="{{ form.role.html_name }}" value="{{ form.role.value|default:'student' }}">
+            <p class="flex min-h-[44px] items-center rounded-xl border border-dashed border-ink-200 px-3.5 text-sm text-ink-700 dark:border-white/10 dark:text-ink-200">
+              {% if form.role.value == "admin" %}Administrator{% else %}Student{% endif %}
+            </p>
+            <p class="help">Staff accounts are made by an owner.</p>
+          </div>
+        {% endif %}
+        {% include "console/_form_field.html" with field=form.status %}
+        {% include "console/_form_field.html" with field=form.source %}
+      </div>
+      <div class="mt-4">
+        {% include "console/_form_field.html" with field=form.disable_reason %}
+      </div>
+      <div class="mt-4">
+        {% include "console/_form_field.html" with field=form.password %}
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Internal notes</h2>
+      <p class="section-note mt-0.5">Only administrators can see this.</p>
+      <div class="mt-4">{% include "console/_form_field.html" with field=form.notes %}</div>
+    </section>
+
+    <div class="mt-5 flex flex-wrap justify-end gap-2">
+      <a href="{% url 'console:user_detail' student.pk %}" class="btn-ghost">Cancel</a>
+      <button type="submit" class="btn-primary" data-submit data-loading-label="Saving…">Save changes</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+

@@ -1,0 +1,1355 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  =====================================================================
+  Token management — the whole loop on one page.
+  Overview · Students · AI models · Activity · Analytics
+
+  Follows the console theme like every other page. It used to be pinned to
+  light; the page's own `tk-*` components now carry dark variants that match
+  the console's surfaces (ink-900 cards, white/8 hairlines, ink-200..400
+  text), and every colour utility in the markup has its dark twin beside it.
+  =====================================================================
+{% endcomment %}
+
+{% block title %}Token management · {{ BRAND.full_name }}{% endblock %}
+{% block heading %}Token management{% endblock %}
+{% block subheading %}
+  <p class="truncate text-xs text-ink-500 dark:text-ink-400">Allocations, consumption and model budgets across every student</p>
+{% endblock %}
+
+{% block head %}
+<style type="text/tailwindcss">
+  @layer components {
+    /* Surfaces match the console's .card in both themes. */
+    .tk-card      { @apply rounded-xl2 border border-ink-200/90 bg-white shadow-[0_1px_2px_rgba(11,16,32,.04),0_10px_30px_-18px_rgba(11,16,32,.18)]
+                           dark:border-white/8 dark:bg-ink-900 dark:shadow-[0_1px_2px_rgba(0,0,0,.3)]; }
+    .tk-pad       { @apply p-4 sm:p-5; }
+    .tk-title     { @apply text-sm font-semibold text-ink-900 dark:text-white; }
+    .tk-sub       { @apply mt-0.5 text-xs text-ink-500 dark:text-ink-400; }
+    .tk-label     { @apply text-[10px] font-bold uppercase tracking-[.12em] text-ink-500 dark:text-ink-400; }
+    .tk-figure    { @apply mt-1.5 text-[1.7rem] font-bold leading-none tabular-nums tracking-tight text-ink-900 dark:text-white; }
+
+    .tk-tab       { @apply relative inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm
+                           font-semibold text-ink-500 transition duration-200 hover:bg-ink-100 hover:text-ink-800
+                           dark:text-ink-400 dark:hover:bg-white/8 dark:hover:text-white; }
+    .tk-tab-on    { @apply bg-white text-brand-700 shadow-[0_1px_2px_rgba(11,16,32,.06),0_6px_16px_-10px_rgba(11,16,32,.3)]
+                           dark:bg-white/10 dark:text-white dark:shadow-none; }
+
+    .tk-th        { @apply whitespace-nowrap px-4 py-2.5 text-left text-[10.5px] font-bold uppercase tracking-[.09em] text-ink-500 dark:text-ink-400; }
+    .tk-td        { @apply px-4 py-3 align-middle text-sm text-ink-700 dark:text-ink-200; }
+    .tk-row       { @apply border-t border-ink-200/70 transition-colors duration-150 hover:bg-brand-500/4
+                           dark:border-white/8 dark:hover:bg-white/[.04]; }
+
+    .tk-input     { @apply w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm
+                           transition placeholder:text-ink-400 focus:border-brand-400 focus:outline-none
+                           focus:ring-4 focus:ring-brand-500/12
+                           dark:border-white/10 dark:bg-white/[.04] dark:text-white dark:shadow-none
+                           dark:placeholder:text-ink-500 dark:hover:border-white/18
+                           dark:focus:border-brand-500/60 dark:focus:ring-brand-500/22; }
+    .tk-chip      { @apply inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5
+                           text-xs font-semibold text-ink-600 transition hover:border-brand-300 hover:text-brand-700
+                           dark:border-white/12 dark:bg-white/[.04] dark:text-ink-200
+                           dark:hover:border-brand-500/45 dark:hover:bg-white/8 dark:hover:text-white; }
+    .tk-switch    { @apply relative inline-flex items-center justify-center rounded-full
+                           focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/25; }
+    @media (pointer: coarse) {
+      .tk-switch { min-width: 48px; min-height: 40px; }
+      .tk-chip, .tk-tab { min-height: 40px; }
+      .tk-input { min-height: 44px; font-size: 16px; }
+      .tk-card a.truncate { padding-top: .6rem; padding-bottom: .6rem; }
+    }
+    .tk-chip-on   { @apply border-brand-400 bg-brand-500/8 text-brand-700
+                           dark:border-brand-400/50 dark:bg-brand-400/12 dark:text-brand-200; }
+
+    .tk-meter     { @apply h-1.5 w-full overflow-hidden rounded-full bg-ink-200/70 dark:bg-white/10; }
+    .tk-meter-bar { @apply h-full rounded-full transition-[width] duration-700 ease-out; }
+
+    .tk-panel-enter { animation: tk-panel .28s cubic-bezier(.22,1,.36,1) both; }
+  }
+  @keyframes tk-panel { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes tk-slide-in { from { transform: translateX(100%); } to { transform: none; } }
+  .tk-drawer-panel { animation: tk-slide-in .3s cubic-bezier(.22,1,.36,1) both; }
+
+  /* The KPI tiles come from console/_token_kpi.html, which colours its icon
+     for white. On the dark card those inks fall under 3:1, so the tiles on
+     this page take the lighter end of the same hues. */
+  .dark .tk-kpis .text-brand-600   { color: #93C5FD; }
+  .dark .tk-kpis .text-accent-600  { color: #FDA4AF; }
+  .dark .tk-kpis .text-amber-600   { color: #FBBF24; }
+  .dark .tk-kpis .text-emerald-600 { color: #34D399; }
+  .dark .tk-kpis .text-rose-600    { color: #FB7185; }
+  .dark .tk-kpis .tk-card:hover    { box-shadow: 0 2px 4px rgba(0,0,0,.35), 0 18px 40px -20px rgba(0,0,0,.6); }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:token_history' %}" class="btn-outline btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-history"/></svg> Full ledger
+  </a>
+  {% comment %}
+    The primary action for this page, in the header where the design puts it.
+    It was only reachable from inside a notice panel further down, which is a
+    strange place for the thing most people came to do.
+  {% endcomment %}
+  <a href="{% url 'console:ai_distribute' %}" class="btn-primary btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-coin"/></svg> Distribute tokens
+  </a>
+{% endblock %}
+
+{% block measure %}max-w-[92rem]{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% comment %}
+    ================= Where allocation lives now =================
+    Tokens are a separate currency per model, so allocation moved to a page
+    that asks which model. This page keeps the analytics, the catalogue and
+    the activity log — everything that reads rather than writes.
+  {% endcomment %}
+  <div class="tk-card tk-pad flex flex-col gap-3 border-brand-300/60 bg-brand-500/[.05] dark:border-brand-400/25 dark:bg-brand-400/[.07] sm:flex-row sm:items-center">
+    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-500/15 text-brand-700 dark:text-brand-300">
+      <svg class="h-4.5 w-4.5" aria-hidden="true"><use href="#i-sparkles"/></svg>
+    </span>
+    <p class="min-w-0 flex-1 text-sm text-ink-700 dark:text-ink-200">
+      <b class="font-semibold text-ink-900 dark:text-white">Distributing tokens has moved.</b>
+      Each AI model has its own supply and its own student balances, so allocation
+      now happens per model — with a preview of exactly what changes before you confirm.
+    </p>
+    <div class="flex shrink-0 gap-2">
+      <a href="{% url 'console:ai_tokens' %}" class="btn-secondary btn-sm">AI tokens</a>
+      <a href="{% url 'console:ai_distribute' %}" class="btn-primary btn-sm">Distribute tokens</a>
+    </div>
+  </div>
+
+  {# ================= The pool ================= #}
+  {% comment %}
+    The design puts the status strip and the pool into one card, and it is
+    right to: they answer the same question. How much is there, is the provider
+    reachable, which model do messages go to by default, and how do I add more —
+    four things an administrator checks together and previously read across two
+    panels with a gap between them.
+
+    The split bar underneath is the pool's whole story in one line: what was
+    added, what came back, and what students are holding right now.
+  {% endcomment %}
+  <section class="pool-hero">
+    <div class="pool-hero-main">
+      <p class="pool-eyebrow">
+        Your token pool
+        <span class="pool-pill {% if provider.configured %}is-ok{% else %}is-bad{% endif %}">
+          <span class="pool-pill-dot"></span>
+          {% if provider.configured %}Provider connected{% else %}Provider not configured{% endif %}
+        </span>
+        <span class="pool-meta">
+          Default model <b>{{ provider.model_name|default:provider.model }}</b>
+          · {{ stats.models_active }} of {{ stats.models_total }} available
+        </span>
+      </p>
+
+      <p class="pool-figure">
+        <span class="{% if pool.is_empty %}text-rose-600 dark:text-rose-400{% endif %}" title="{{ pool.balance|intcomma }}">
+          {{ pool.balance|intcomma }}
+        </span>
+        <i>available to give out</i>
+      </p>
+
+      {% comment %}
+        Three quantities on one track, each the width of its share. Held is
+        usually the smallest and matters the most, so it sits at the end where
+        a thin sliver is still visible against the track.
+      {% endcomment %}
+      <span class="pool-split" aria-hidden="true">
+        <i class="is-added" style="width: {{ pool.share_added }}%"></i>
+        <i class="is-returned" style="width: {{ pool.share_returned }}%"></i>
+        <i class="is-held" style="width: {{ pool.share_held }}%"></i>
+      </span>
+      <ul class="pool-legend">
+        <li><span class="is-added"></span>Added <b>{{ pool.total_added|intcomma }}</b></li>
+        <li><span class="is-returned"></span>Returned <b>{{ pool.total_reclaimed|intcomma }}</b></li>
+        <li><span class="is-held"></span>Held by students <b>{{ pool.outstanding|intcomma }}</b></li>
+      </ul>
+
+      {% if env_model_mismatch %}
+        <p class="mt-3 inline-flex items-start gap-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+          <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true"><use href="#i-alert"/></svg>
+          <span>
+            Students' messages go to <b class="font-semibold">{{ provider.model }}</b>, but
+            <code class="font-mono">OPENAI_MODEL</code> is set to
+            <b class="font-semibold">{{ env_model_mismatch }}</b>.
+            Use <b class="font-semibold">Make default</b> on the AI models tab if that is not what you want.
+          </span>
+        </p>
+      {% endif %}
+    </div>
+
+    {% comment %}
+      Adding to the pool inline rather than behind a dialog. It is the thing an
+      administrator comes to this page to do, and a dialog put one click and a
+      context switch in front of it. The presets are the amounts actually used
+      in practice; the field still accepts anything.
+
+      There is no shared pool any more — every model keeps its own supply — so
+      the form asks which one, and posts to the same per-model top-up the AI
+      tokens page uses.
+    {% endcomment %}
+    <form method="post" action="{% url 'console:ai_pool_topup' %}" class="pool-add">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <p class="pool-add-label">Add tokens to a model's pool</p>
+      <select name="model_id" id="poolInlineModel" class="input mb-2 w-full" aria-label="Model to top up" required>
+        {% for card in model_budgets %}
+          <option value="{{ card.model.pk }}">{{ card.model.name }} · {{ card.available|intcomma }} available</option>
+        {% endfor %}
+      </select>
+      <div class="flex gap-2">
+        <input type="number" name="amount" id="poolInlineAmount" step="1000" min="1"
+               placeholder="e.g. 500000" class="input flex-1" required>
+        <button type="submit" class="btn-primary shrink-0">Top up</button>
+      </div>
+      <p class="pool-add-note">
+        Each model keeps its own supply, so these tokens can only be given out as that model's tokens.
+      </p>
+      <div class="pool-presets">
+        <button type="button" class="tk-chip" data-pool-inline="100000">+100K</button>
+        <button type="button" class="tk-chip" data-pool-inline="500000">+500K</button>
+        <button type="button" class="tk-chip" data-pool-inline="1000000">+1.0M</button>
+        <button type="button" class="tk-chip" data-pool-inline="5000000">+5.0M</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="tk-card overflow-hidden">
+    {% if pool.never_funded %}
+      <div class="flex flex-wrap items-center gap-3 border-t border-amber-500/25 bg-amber-500/8 px-5 py-3">
+        <svg class="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true"><use href="#i-info"/></svg>
+        <p class="flex-1 text-xs leading-relaxed text-ink-700 dark:text-ink-200">
+          Your pool is empty, so assignments will be refused. Add the tokens your organisation has
+          bought — everything you give a student is taken from here, and everything you take back
+          returns to it.
+        </p>
+      </div>
+    {% elif pool.is_empty %}
+      <div class="flex flex-wrap items-center gap-3 border-t border-rose-500/25 bg-rose-500/8 px-5 py-3">
+        <svg class="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden="true"><use href="#i-alert"/></svg>
+        <p class="flex-1 text-xs font-medium text-rose-700 dark:text-rose-300">
+          Your pool has run out. Top it up before assigning any more tokens.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ================= Model budgets ================= #}
+  {% comment %}
+    The pool above is one number; this is where it actually lives. Six
+    independent supplies, each with what is left, what has gone out and who is
+    holding it — the same figures the AI tokens page shows, built from the same
+    function so the two pages cannot disagree.
+  {% endcomment %}
+  {% if model_budgets %}
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div class="min-w-0">
+        <h2 class="text-[17px] font-bold tracking-[-.02em] text-ink-900 dark:text-white">Model budgets</h2>
+        <p class="section-note mt-0.5">
+          Every model keeps its own supply. Open one to allocate, top up and review its students.
+        </p>
+      </div>
+      <ul class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-500 dark:text-ink-400">
+        <li class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-brand-500"></span>OpenAI</li>
+        <li class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-accent-500"></span>Anthropic</li>
+      </ul>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-stagger="60">
+      {% for card in model_budgets %}
+        <section class="card card-hover budget-card">
+          <header class="flex items-start gap-3">
+            <span class="model-tile" aria-hidden="true"
+                  style="--from: {{ card.tone.from }}; --to: {{ card.tone.to }}">
+              <svg><use href="#{{ card.tone.icon }}"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="model-provider" style="color: {{ card.tone.ink }}">{{ card.model.provider_name }}</span>
+                {% if card.model.is_default %}<span class="badge-brand">Default</span>{% endif %}
+              </div>
+              <h3 class="mt-0.5 truncate text-[16px] font-extrabold tracking-[-.025em] text-ink-900 dark:text-white">
+                {{ card.model.name }}
+              </h3>
+              <p class="truncate font-mono text-[11px] text-ink-400">{{ card.model.key }}</p>
+            </div>
+            <a href="{% url 'console:ai_tokens' %}?model={{ card.model.key|urlencode }}"
+               class="budget-open" aria-label="Open {{ card.model.name }}"
+               style="--ink: {{ card.tone.ink }}">
+              <svg aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </a>
+          </header>
+
+          <div class="budget-panel">
+            <p class="stat-label">Available to distribute</p>
+            <p class="mt-1 text-[1.6rem] font-extrabold leading-none tabular-nums tracking-[-.035em]
+                      {% if card.pool_empty %}text-rose-600 dark:text-rose-400{% else %}text-ink-900 dark:text-white{% endif %}">
+              {{ card.available|intcomma }}
+            </p>
+            <span class="budget-meter" aria-hidden="true">
+              <i style="width: {{ card.pool_percent }}%;
+                        background: linear-gradient(90deg, {{ card.tone.from }}, {{ card.tone.to }})"></i>
+            </span>
+            <p class="flex items-center justify-between gap-2 text-[11px] text-ink-500 dark:text-ink-400">
+              <span>{{ card.distributed|compact_number }} given out</span>
+              <span>{{ card.pool_added|compact_number }} added</span>
+            </p>
+          </div>
+
+          <dl class="mt-3 grid grid-cols-3 gap-2">
+            <div><dt class="stat-label">Distributed</dt>
+              <dd class="mt-0.5 text-sm font-bold tabular-nums text-ink-900 dark:text-white">{{ card.distributed|compact_number }}</dd></div>
+            <div><dt class="stat-label">Consumed</dt>
+              <dd class="mt-0.5 text-sm font-bold tabular-nums text-ink-900 dark:text-white">{{ card.consumed|compact_number }}</dd></div>
+            <div><dt class="stat-label">Students</dt>
+              <dd class="mt-0.5 text-sm font-bold tabular-nums text-ink-900 dark:text-white">{{ card.holders|intcomma }}</dd></div>
+          </dl>
+
+          <div class="mt-3 flex items-center justify-between gap-2 border-t hairline pt-3 text-[11.5px]">
+            <span class="min-w-0 truncate text-ink-500 dark:text-ink-400">
+              Students hold {{ card.outstanding|intcomma }} · {{ card.period_requests|intcomma }} requests / {{ days }}d
+            </span>
+            <a href="{% url 'console:ai_tokens' %}?model={{ card.model.key|urlencode }}"
+               class="model-distribute shrink-0" style="--ink: {{ card.tone.ink }}">
+              Manage <svg aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </a>
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ================= KPI grid ================= #}
+  <div class="tk-kpis grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_token_kpi.html" with label="Tokens allocated" value=stats.tokens_allocated icon="i-upload" tone="brand" hint="Granted to students, all time" %}
+    {% include "console/_token_kpi.html" with label="Tokens consumed" value=stats.tokens_consumed icon="i-bolt" tone="warning" hint=consumed_hint progress=stats.consumed_percent %}
+    {% include "console/_token_kpi.html" with label="Tokens remaining" value=stats.tokens_remaining icon="i-coin" tone="success" hint="Held across every student balance" %}
+    {% include "console/_token_kpi.html" with label="AI requests" value=stats.requests_total icon="i-chart" tone="accent" hint=requests_hint %}
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="tk-card tk-pad">
+      <p class="tk-label">Students</p>
+      <p class="tk-figure">{{ stats.students_total|intcomma }}</p>
+      <div class="mt-3 flex flex-wrap items-center gap-1.5">
+        <span class="badge-success">{{ stats.students_active }} active</span>
+        {% if stats.students_low %}<span class="badge-warning">{{ stats.students_low }} low</span>{% endif %}
+        {% if stats.students_empty %}<span class="badge-danger">{{ stats.students_empty }} empty</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="tk-card tk-pad">
+      <p class="tk-label">Most-used model</p>
+      <p class="mt-1.5 truncate text-lg font-bold text-ink-900 dark:text-white">
+        {% if stats.top_model %}{{ stats.top_model.name }}{% else %}—{% endif %}
+      </p>
+      <p class="mt-1 font-mono text-[11px] text-ink-400">{% if stats.top_model %}{{ stats.top_model.key }}{% else %}No usage yet{% endif %}</p>
+      <p class="mt-2 text-xs text-ink-500 dark:text-ink-400">{{ stats.top_model_tokens|intcomma }} tokens spent</p>
+    </div>
+
+    <div class="tk-card tk-pad">
+      <p class="tk-label">Average per request</p>
+      <p class="tk-figure">{{ stats.avg_tokens_per_request|intcomma }}</p>
+      <p class="mt-2 text-xs text-ink-500 dark:text-ink-400">
+        {{ stats.tokens_input|compact_number }} in · {{ stats.tokens_output|compact_number }} out
+      </p>
+    </div>
+
+    <div class="tk-card tk-pad">
+      <p class="tk-label">Request health</p>
+      <p class="tk-figure">{{ stats.success_rate }}<span class="text-lg text-ink-400">%</span></p>
+      <p class="mt-2 text-xs {% if stats.requests_failed %}text-rose-600 dark:text-rose-400{% else %}text-ink-500 dark:text-ink-400{% endif %}">
+        {{ stats.requests_failed|intcomma }} failed · {{ stats.avg_latency_ms|intcomma }}ms average
+      </p>
+    </div>
+  </div>
+
+  {# ================= Tabs ================= #}
+  <div class="flex items-center gap-1 overflow-x-auto rounded-xl2 bg-ink-100 dark:bg-white/[.05] p-1 no-scrollbar" role="tablist">
+    <button type="button" class="tk-tab" data-tab="overview" role="tab">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-home"/></svg> Overview
+    </button>
+    <button type="button" class="tk-tab" data-tab="students" role="tab">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-users"/></svg> Students
+      <span class="rounded-md bg-ink-200/80 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">{{ page.paginator.count }}</span>
+    </button>
+    <button type="button" class="tk-tab" data-tab="models" role="tab">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-sparkles"/></svg> AI models
+      <span class="rounded-md bg-ink-200/80 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">{{ model_count }}</span>
+    </button>
+    <button type="button" class="tk-tab" data-tab="activity" role="tab">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-history"/></svg> Token activity
+    </button>
+    <button type="button" class="tk-tab" data-tab="analytics" role="tab">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chart"/></svg> Analytics
+    </button>
+  </div>
+
+  {# ============================================================ #}
+  {# OVERVIEW                                                     #}
+  {# ============================================================ #}
+  <section data-panel="overview" class="hidden space-y-4">
+    <div class="grid gap-4 xl:grid-cols-3">
+      <div class="tk-card tk-pad xl:col-span-2">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="tk-title">Token consumption</h3>
+            <p class="tk-sub">Tokens spent per day over the last {{ days }} days</p>
+          </div>
+          <span class="badge-brand">{{ stats.tokens_window|compact_number }} in period</span>
+        </div>
+        <div class="mt-4" data-chart="area" data-config='{{ usage_chart }}' style="height:250px"></div>
+      </div>
+
+      <div class="tk-card tk-pad">
+        <h3 class="tk-title">Where tokens went</h3>
+        <p class="tk-sub">By model, last {{ days }} days</p>
+        <div class="mt-3" data-chart="donut" data-config='{{ model_chart }}' style="height:210px"></div>
+        <div class="mt-3 space-y-2">
+          {% for row in models|slice:":4" %}
+            {% if row.period_tokens and row.model %}
+              <div class="flex items-center justify-between gap-2 text-xs">
+                <span class="truncate font-medium text-ink-700 dark:text-ink-200">{{ row.model.name }}</span>
+                <span class="shrink-0 font-semibold tabular-nums text-ink-500 dark:text-ink-400">{{ row.period_tokens|compact_number }}</span>
+              </div>
+            {% endif %}
+          {% empty %}
+            <p class="text-xs text-ink-400">No usage recorded yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid gap-4 xl:grid-cols-2">
+      <div class="tk-card tk-pad">
+        <h3 class="tk-title">Heaviest users</h3>
+        <p class="tk-sub">Top consumers over the last {{ days }} days</p>
+        <div class="mt-4 space-y-3">
+          {% for student in top_students %}
+            <div class="flex items-center gap-3">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 shadow-pill text-[10px] font-bold text-white">
+                {{ student.name|slice:":2"|upper }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline justify-between gap-2">
+                  <a href="{% url 'console:user_detail' student.id %}" class="truncate text-sm font-medium text-ink-800 dark:text-ink-100 hover:text-brand-700 dark:hover:text-brand-200">{{ student.name }}</a>
+                  <span class="shrink-0 text-xs font-semibold tabular-nums text-ink-600 dark:text-ink-300">{{ student.tokens|intcomma }}</span>
+                </div>
+                <div class="tk-meter mt-1.5">
+                  <div class="tk-meter-bar bg-gradient-to-r from-brand-500 to-accent-500"
+                       style="width:{{ student.tokens|percent_of:top_students.0.tokens }}%"></div>
+                </div>
+              </div>
+            </div>
+          {% empty %}
+            <p class="text-sm text-ink-400">No AI usage in this period.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="tk-card tk-pad">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="tk-title">Recent allocations</h3>
+            <p class="tk-sub">Grants, purchases and adjustments</p>
+          </div>
+          <a href="{% url 'console:token_history' %}" class="text-xs font-semibold text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:hover:text-brand-200">View all</a>
+        </div>
+        <div class="mt-3 divide-y divide-ink-200/70 dark:divide-white/8">
+          {% for entry in ledger %}
+            <div class="flex items-center gap-3 py-2.5">
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg
+                           {% if entry.is_credit %}bg-emerald-500/12 text-emerald-600 dark:text-emerald-400{% else %}bg-rose-500/12 text-rose-600 dark:text-rose-400{% endif %}">
+                <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#{% if entry.is_credit %}i-plus{% else %}i-x{% endif %}"/></svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-ink-800 dark:text-ink-100">{{ entry.user.display_name }}</p>
+                <p class="truncate text-[11px] text-ink-500 dark:text-ink-400">{{ entry.get_transaction_type_display }}{% if entry.created_by %} · by {{ entry.created_by.display_name }}{% endif %}</p>
+              </div>
+              <div class="shrink-0 text-right">
+                <p class="text-sm font-bold tabular-nums {% if entry.is_credit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+                  {% if entry.is_credit %}+{% else %}−{% endif %}{{ entry.abs_amount|intcomma }}
+                </p>
+                <p class="text-[10px] text-ink-400">{{ entry.created_at|timeago }}</p>
+              </div>
+            </div>
+          {% empty %}
+            <p class="py-6 text-center text-sm text-ink-400">No allocations recorded yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="tk-card tk-pad">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h3 class="tk-title">Pool movements</h3>
+          <p class="tk-sub">Top-ups in, allocations out, reclaims back</p>
+        </div>
+        <a href="{% url 'console:token_history' %}"
+           class="shrink-0 text-[12.5px] font-bold text-brand-600 hover:underline dark:text-brand-300">
+          Full ledger
+        </a>
+      </div>
+
+      {% comment %}
+        Direction is carried by the arrow and the sign together, and both point
+        the same way: down and rose for tokens leaving the pool, up and green
+        for tokens coming back. The old version used a plus and a blue disc for
+        one and an arrow for the other, which said nothing about direction.
+
+        The model is named on the row because a movement is always against one
+        pool, and "−30,000" means something very different depending on which.
+      {% endcomment %}
+      <div class="mt-4 divide-y divide-ink-200/70 dark:divide-white/8">
+        {% for entry in pool_ledger %}
+          {% with tone=entry.ai_model|model_tone %}
+            <div class="pool-row">
+              <span class="pool-arrow {% if entry.is_credit %}is-up{% else %}is-down{% endif %}" aria-hidden="true">
+                <svg><use href="#{% if entry.is_credit %}i-trend-up{% else %}i-trend-down{% endif %}"/></svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="flex flex-wrap items-center gap-2">
+                  <span class="truncate text-[14px] font-bold text-ink-900 dark:text-white">
+                    {{ entry.get_action_display }}
+                  </span>
+                  {% if entry.ai_model %}
+                    <span class="pool-model"
+                          style="color: {{ tone.ink }}; background: {{ tone.ink }}1A">{{ entry.ai_model.name }}</span>
+                  {% endif %}
+                </p>
+                <p class="truncate text-[12px] text-ink-500 dark:text-ink-400">
+                  {{ entry.description }}{% if entry.created_by %} · by {{ entry.created_by.display_name }}{% endif %}
+                </p>
+              </div>
+              <div class="shrink-0 text-right">
+                <p class="pool-amount {% if entry.is_credit %}is-up{% else %}is-down{% endif %}">
+                  {% if entry.is_credit %}+{% else %}&minus;{% endif %}{{ entry.abs_amount|intcomma }}
+                </p>
+                <p class="text-[11px] tabular-nums text-ink-400">{{ entry.balance_after|compact_number }} left</p>
+              </div>
+            </div>
+          {% endwith %}
+        {% empty %}
+          <p class="py-6 text-center text-sm text-ink-400">Nothing has moved through the pool yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ============================================================ #}
+  {# STUDENTS                                                     #}
+  {# ============================================================ #}
+  <section data-panel="students" class="hidden space-y-4">
+    <div class="tk-card">
+      <div class="flex flex-col gap-3 border-b border-ink-200/70 dark:border-white/8 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <form method="get" class="flex flex-1 flex-wrap items-center gap-2">
+          <input type="hidden" name="tab" value="students">
+          <input type="hidden" name="range" value="{{ days }}">
+          <div class="search-shell min-w-[13rem] flex-1">
+          <svg aria-hidden="true"><use href="#i-search"/></svg>
+            <input type="search" name="q" value="{{ search }}" placeholder="Search by name, username or e-mail"
+                   class="tk-input pl-10" aria-label="Search students">
+          </div>
+          <select name="tokens" class="tk-input w-auto min-w-[9.5rem]" aria-label="Token filter">
+            <option value="">All balances</option>
+            <option value="healthy" {% if token_filter == 'healthy' %}selected{% endif %}>Healthy</option>
+            <option value="low" {% if token_filter == 'low' %}selected{% endif %}>Low (≤ {{ threshold|compact_number }})</option>
+            <option value="empty" {% if token_filter == 'empty' %}selected{% endif %}>Out of tokens</option>
+          </select>
+          <select name="status" class="tk-input w-auto min-w-[8.5rem]" aria-label="Status filter">
+            <option value="">All statuses</option>
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+            <option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>Disabled</option>
+          </select>
+          <select name="sort" class="tk-input w-auto min-w-[9.5rem]" aria-label="Sort">
+            <option value="-consumed" {% if sort == '-consumed' %}selected{% endif %}>Most consumed</option>
+            <option value="-balance" {% if sort == '-balance' %}selected{% endif %}>Highest balance</option>
+            <option value="balance" {% if sort == 'balance' %}selected{% endif %}>Lowest balance</option>
+            <option value="-allocated" {% if sort == '-allocated' %}selected{% endif %}>Most allocated</option>
+            <option value="name" {% if sort == 'name' %}selected{% endif %}>Name A–Z</option>
+            <option value="-joined" {% if sort == '-joined' %}selected{% endif %}>Newest</option>
+          </select>
+          <button type="submit" class="btn-primary btn-sm">Apply</button>
+          {% if search or token_filter or status_filter %}
+            <a href="?tab=students&range={{ days }}" class="btn-ghost btn-sm">Clear</a>
+          {% endif %}
+        </form>
+      </div>
+
+      <div class="table-wrap">
+        <table class="w-full min-w-[62rem] border-collapse">
+          <thead>
+            <tr>
+              <th class="tk-th">Student</th>
+              <th class="tk-th text-right">Allocated</th>
+              <th class="tk-th text-right">Used</th>
+              <th class="tk-th text-right">Remaining</th>
+              <th class="tk-th w-44">Consumption</th>
+              <th class="tk-th text-right">Last {{ days }}d</th>
+              <th class="tk-th text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr class="tk-row">
+                <td class="tk-td">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 shadow-pill text-[11px] font-bold text-white">
+                      {{ row.student.initials }}
+                    </span>
+                    <div class="min-w-0">
+                      <a href="{% url 'console:user_detail' row.student.pk %}"
+                         class="block truncate font-semibold text-ink-900 dark:text-white hover:text-brand-700 dark:hover:text-brand-200">{{ row.student.display_name }}</a>
+                      <p class="truncate text-[11px] text-ink-500 dark:text-ink-400">
+                        {{ row.student.email|default:row.student.username }}
+                        {% if not row.student.is_active_account %}<span class="ml-1 badge-danger">Disabled</span>{% endif %}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+                <td class="tk-td text-right font-semibold tabular-nums">{{ row.allocated|intcomma }}</td>
+                <td class="tk-td text-right tabular-nums text-ink-600 dark:text-ink-300">{{ row.consumed|intcomma }}</td>
+                <td class="tk-td text-right">
+                  <span class="font-bold tabular-nums {% if row.is_empty %}text-rose-600 dark:text-rose-400{% elif row.is_low %}text-amber-600 dark:text-amber-400{% else %}text-ink-900 dark:text-white{% endif %}"
+                       >{{ row.balance|intcomma }}</span>
+                  {% if row.is_empty %}
+                    <span class="ml-1.5 badge-danger">Empty</span>
+                  {% elif row.is_low %}
+                    <span class="ml-1.5 badge-warning">Low</span>
+                  {% endif %}
+                </td>
+                <td class="tk-td">
+                  <div class="tk-meter">
+                    <div class="tk-meter-bar {% if row.percent_used >= 90 %}bg-rose-500{% elif row.percent_used >= 70 %}bg-amber-500{% else %}bg-gradient-to-r from-brand-500 to-accent-500{% endif %}"
+                         style="width:{{ row.percent_used }}%"></div>
+                  </div>
+                  <p class="mt-1 text-[10.5px] tabular-nums text-ink-400">{{ row.percent_used }}% used</p>
+                </td>
+                <td class="tk-td text-right">
+                  <span class="tabular-nums text-ink-700 dark:text-ink-200">{{ row.period_tokens|compact_number }}</span>
+                  <p class="text-[10.5px] text-ink-400">{{ row.period_requests }} request{{ row.period_requests|pluralize }}</p>
+                </td>
+                <td class="tk-td text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    {# Allocation asks which model, so Assign opens the page that can. #}
+                    <a href="{% url 'console:ai_distribute' %}?student={{ row.student.pk }}" class="tk-chip">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-coin"/></svg> Assign
+                    </a>
+                    <button type="button" class="btn-icon h-8 w-8" data-history="{{ row.student.pk }}" aria-label="Usage history">
+                      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-history"/></svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="7" class="px-4 py-16 text-center">
+                <svg class="mx-auto h-9 w-9 text-ink-300 dark:text-ink-600" aria-hidden="true"><use href="#i-users"/></svg>
+                <p class="mt-3 text-sm font-medium text-ink-600 dark:text-ink-300">No students match those filters</p>
+                <p class="mt-1 text-xs text-ink-400">Try clearing the search or the balance filter.</p>
+              </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="px-4 pb-4">{% include "components/pagination.html" %}</div>
+    </div>
+  </section>
+
+  {# ============================================================ #}
+  {# AI MODELS                                                    #}
+  {# ============================================================ #}
+  <section data-panel="models" class="hidden space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h3 class="tk-title">Model catalogue</h3>
+        <p class="tk-sub">Availability and budget for every model students can call</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <form method="post" action="{% url 'console:models_recalculate' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-outline btn-sm">
+            <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-refresh"/></svg> Rebuild totals
+          </button>
+        </form>
+        <button type="button" class="btn-primary btn-sm" data-open-model="">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-plus"/></svg> Add model
+        </button>
+      </div>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      {% for row in models %}
+        {% if row.retired %}
+          <div class="tk-card tk-pad flex flex-col opacity-90">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h4 class="truncate text-sm font-bold text-ink-700 dark:text-ink-200">{{ row.key }}</h4>
+                  <span class="badge-neutral">Removed</span>
+                </div>
+                <p class="mt-1 text-[11px] text-ink-400">No longer in the catalogue</p>
+              </div>
+            </div>
+            <p class="mt-2 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+              Students can no longer choose this model. Its past usage is kept so the
+              totals above still add up.
+            </p>
+            <div class="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-ink-50 dark:bg-white/[.04] p-3">
+              <div>
+                <p class="tk-label">Input</p>
+                <p class="mt-1 text-sm font-bold tabular-nums text-ink-700 dark:text-ink-200">{{ row.input_tokens_total|compact_number }}</p>
+              </div>
+              <div>
+                <p class="tk-label">Output</p>
+                <p class="mt-1 text-sm font-bold tabular-nums text-ink-700 dark:text-ink-200">{{ row.output_tokens_total|compact_number }}</p>
+              </div>
+              <div>
+                <p class="tk-label">Requests</p>
+                <p class="mt-1 text-sm font-bold tabular-nums text-ink-700 dark:text-ink-200">{{ row.request_count|intcomma }}</p>
+              </div>
+            </div>
+            <p class="mt-4 border-t border-ink-200/70 dark:border-white/8 pt-3 text-[11px] tabular-nums text-ink-500 dark:text-ink-400">
+              {{ row.tokens_consumed|intcomma }} tokens spent by {{ row.students }} student{{ row.students|pluralize }}
+            </p>
+          </div>
+        {% else %}
+        {% with model=row.model %}
+        <div class="tk-card tk-pad flex flex-col">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h4 class="truncate text-sm font-bold text-ink-900 dark:text-white">{{ model.name }}</h4>
+                {% if model.is_default %}<span class="badge-brand">Default</span>{% endif %}
+                {% with badge=model.availability_badge %}
+                  <span class="{{ badge.1|tone_classes }}">{{ badge.0 }}</span>
+                {% endwith %}
+              </div>
+              <p class="mt-1 font-mono text-[11px] text-ink-400">{{ model.key }}</p>
+            </div>
+            <form method="post" action="{% url 'console:model_toggle' model.pk %}" class="shrink-0">
+              {% csrf_token %}
+              {# The button is the hit area; the track inside it is what is drawn, so a finger gets 40px. #}
+              <button type="submit" role="switch" aria-checked="{{ model.is_active|yesno:'true,false' }}"
+                      aria-label="Toggle {{ model.name }}" class="tk-switch">
+                <span class="relative block h-6 w-11 rounded-full transition-colors duration-300 {% if model.is_active %}bg-brand-600{% else %}bg-ink-300 dark:bg-white/20{% endif %}">
+                  <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-300
+                               {% if model.is_active %}left-[1.375rem]{% else %}left-0.5{% endif %}"></span>
+                </span>
+              </button>
+            </form>
+          </div>
+
+          {% if model.description %}
+            <p class="mt-2 text-xs leading-relaxed text-ink-500 dark:text-ink-400">{{ model.description }}</p>
+          {% endif %}
+
+          <div class="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-ink-50 dark:bg-white/[.04] p-3">
+            <div>
+              <p class="tk-label">Input</p>
+              <p class="mt-1 text-sm font-bold tabular-nums text-ink-900 dark:text-white">{{ model.input_tokens_total|compact_number }}</p>
+            </div>
+            <div>
+              <p class="tk-label">Output</p>
+              <p class="mt-1 text-sm font-bold tabular-nums text-ink-900 dark:text-white">{{ model.output_tokens_total|compact_number }}</p>
+            </div>
+            <div>
+              <p class="tk-label">Requests</p>
+              <p class="mt-1 text-sm font-bold tabular-nums text-ink-900 dark:text-white">{{ model.request_count|intcomma }}</p>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <div class="flex items-baseline justify-between text-xs">
+              <span class="font-semibold text-ink-600 dark:text-ink-300">
+                {% if model.is_metered %}Allocation{% else %}Consumed{% endif %}
+              </span>
+              <span class="tabular-nums text-ink-500 dark:text-ink-400">
+                {% if model.is_metered %}
+                  {{ model.tokens_consumed|intcomma }} / {{ model.token_allocation|intcomma }}
+                {% else %}
+                  {{ model.tokens_consumed|intcomma }} · unlimited
+                {% endif %}
+              </span>
+            </div>
+            <div class="tk-meter mt-2">
+              <div class="tk-meter-bar {% if model.usage_percent >= 90 %}bg-rose-500{% elif model.usage_percent >= 70 %}bg-amber-500{% else %}bg-gradient-to-r from-brand-500 to-accent-500{% endif %}"
+                   style="width:{% if model.is_metered %}{{ model.usage_percent }}{% else %}0{% endif %}%"></div>
+            </div>
+            {% if model.is_metered %}
+              <p class="mt-1.5 text-[11px] tabular-nums text-ink-500 dark:text-ink-400">{{ model.tokens_remaining|intcomma }} tokens remaining</p>
+            {% endif %}
+          </div>
+
+          <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
+            <div class="flex justify-between"><dt class="text-ink-400">Period usage</dt><dd class="font-semibold tabular-nums text-ink-700 dark:text-ink-200">{{ row.period_tokens|compact_number }}</dd></div>
+            <div class="flex justify-between"><dt class="text-ink-400">Students</dt><dd class="font-semibold tabular-nums text-ink-700 dark:text-ink-200">{{ row.students }}</dd></div>
+            <div class="flex justify-between"><dt class="text-ink-400">List cost</dt><dd class="font-semibold tabular-nums text-ink-700 dark:text-ink-200">${{ model.estimated_cost|floatformat:2 }}</dd></div>
+            <div class="flex justify-between"><dt class="text-ink-400">Failures</dt><dd class="font-semibold tabular-nums {% if model.failure_count %}text-rose-600 dark:text-rose-400{% else %}text-ink-700 dark:text-ink-200{% endif %}">{{ model.failure_count|intcomma }}</dd></div>
+            <div class="flex justify-between"><dt class="text-ink-400">Output cap</dt><dd class="font-semibold tabular-nums text-ink-700 dark:text-ink-200">{{ model.max_output_tokens|default:"default" }}</dd></div>
+            <div class="flex justify-between"><dt class="text-ink-400">Images</dt><dd class="font-semibold text-ink-700 dark:text-ink-200">{{ model.supports_vision|yesno:"Yes,No" }}</dd></div>
+          </dl>
+
+          <div class="mt-4 flex flex-wrap items-center gap-1.5 border-t border-ink-200/70 dark:border-white/8 pt-3">
+            <button type="button" class="tk-chip" data-open-allocate="{{ model.pk }}"
+                    data-name="{{ model.name }}" data-allocation="{{ model.token_allocation }}">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-coin"/></svg> Allocate
+            </button>
+            <button type="button" class="tk-chip"
+                    data-open-model="{{ model.pk }}"
+                    data-model='{"key":"{{ model.key|escapejs }}","name":"{{ model.name|escapejs }}","description":"{{ model.description|escapejs }}","provider_ref":{{ model.provider_ref_id|default:"null" }},"thinking_mode":"{{ model.thinking_mode|escapejs }}","is_active":{{ model.is_active|yesno:"true,false" }},"supports_vision":{{ model.supports_vision|yesno:"true,false" }},"max_output_tokens":{{ model.max_output_tokens }},"temperature":"{{ model.temperature }}","token_allocation":{{ model.token_allocation }},"input_cost_per_1m":"{{ model.input_cost_per_1m }}","output_cost_per_1m":"{{ model.output_cost_per_1m }}","warning_thresholds":"{{ model.warning_thresholds|escapejs }}","sort_order":{{ model.sort_order }},"default_daily_limit":{{ model.default_daily_limit }},"default_weekly_limit":{{ model.default_weekly_limit }},"default_monthly_limit":{{ model.default_monthly_limit }},"best_for":"{{ model.best_for|escapejs }}"}'>
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg> Edit
+            </button>
+            {% if not model.is_default %}
+              <form method="post" action="{% url 'console:model_default' model.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="tk-chip">
+                  <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-star"/></svg> Make default
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+        {% endwith %}
+        {% endif %}
+      {% empty %}
+        <div class="tk-card tk-pad col-span-full py-16 text-center">
+          <p class="text-sm font-medium text-ink-600 dark:text-ink-300">No models configured yet.</p>
+          <button type="button" class="btn-primary btn-sm mt-3" data-open-model="">Add your first model</button>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ============================================================ #}
+  {# TOKEN ACTIVITY                                               #}
+  {# ============================================================ #}
+  <section data-panel="activity" class="hidden space-y-4">
+    <div class="tk-card">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200/70 dark:border-white/8 p-4">
+        <div>
+          <h3 class="tk-title">Recent token activity</h3>
+          <p class="tk-sub">Every AI request, newest first — input, output and what it cost</p>
+        </div>
+        <a href="{% url 'console:usage' %}" class="btn-outline btn-sm">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chart"/></svg> Full usage log
+        </a>
+      </div>
+
+      <div class="table-wrap">
+        <table class="w-full min-w-[58rem] border-collapse">
+          <thead>
+            <tr>
+              <th class="tk-th">Student</th>
+              <th class="tk-th">Model</th>
+              <th class="tk-th text-right">Input</th>
+              <th class="tk-th text-right">Output</th>
+              <th class="tk-th text-right">Total</th>
+              <th class="tk-th text-right">Charged</th>
+              <th class="tk-th">Status</th>
+              <th class="tk-th text-right">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in activity %}
+              <tr class="tk-row">
+                <td class="tk-td">
+                  <a href="{% url 'console:user_detail' log.user_id %}" class="font-medium text-ink-800 dark:text-ink-100 hover:text-brand-700 dark:hover:text-brand-200">
+                    {{ log.user.display_name }}
+                  </a>
+                  {% if log.conversation %}
+                    <p class="max-w-[16rem] truncate text-[11px] text-ink-400">{{ log.conversation.title }}</p>
+                  {% endif %}
+                </td>
+                <td class="tk-td"><span class="font-mono text-xs text-ink-600 dark:text-ink-300">{{ log.model_key|default:log.model }}</span></td>
+                <td class="tk-td text-right tabular-nums text-ink-600 dark:text-ink-300">{{ log.input_tokens|intcomma }}</td>
+                <td class="tk-td text-right tabular-nums text-ink-600 dark:text-ink-300">
+                  {{ log.output_tokens|intcomma }}
+                  {% if log.reasoning_tokens %}
+                    <span class="ml-1 text-[10px] text-ink-400" title="Hidden reasoning tokens, included in output">
+                      ({{ log.reasoning_tokens|intcomma }} think)
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="tk-td text-right font-semibold tabular-nums text-ink-900 dark:text-white">{{ log.total_tokens|intcomma }}</td>
+                <td class="tk-td text-right tabular-nums text-ink-600 dark:text-ink-300">{{ log.tokens_charged|intcomma }}</td>
+                <td class="tk-td">
+                  {% if log.success %}
+                    <span class="badge-success">OK · {{ log.latency_ms }}ms</span>
+                  {% else %}
+                    <span class="badge-danger" title="{{ log.error_message }}">{{ log.error_code|default:"Failed" }}</span>
+                  {% endif %}
+                </td>
+                <td class="tk-td text-right">
+                  <span class="text-xs text-ink-500 dark:text-ink-400">{{ log.created_at|timeago }}</span>
+                  <p class="text-[10px] text-ink-400">{{ log.created_at|date:"d M, H:i" }}</p>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="8" class="px-4 py-16 text-center text-sm text-ink-400">No AI requests recorded yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  {# ============================================================ #}
+  {# ANALYTICS                                                    #}
+  {# ============================================================ #}
+  <section data-panel="analytics" class="hidden space-y-4">
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="tk-card tk-pad"><p class="tk-label">Last 24 hours</p><p class="tk-figure">{{ periods.today|intcomma }}</p><p class="mt-1.5 text-xs text-ink-500 dark:text-ink-400">tokens consumed</p></div>
+      <div class="tk-card tk-pad"><p class="tk-label">Last 7 days</p><p class="tk-figure">{{ periods.week|intcomma }}</p><p class="mt-1.5 text-xs text-ink-500 dark:text-ink-400">tokens consumed</p></div>
+      <div class="tk-card tk-pad"><p class="tk-label">Last 30 days</p><p class="tk-figure">{{ periods.month|intcomma }}</p><p class="mt-1.5 text-xs text-ink-500 dark:text-ink-400">tokens consumed</p></div>
+      <div class="tk-card tk-pad"><p class="tk-label">Last 90 days</p><p class="tk-figure">{{ periods.quarter|intcomma }}</p><p class="mt-1.5 text-xs text-ink-500 dark:text-ink-400">tokens consumed</p></div>
+    </div>
+
+    <div class="grid gap-4 xl:grid-cols-2">
+      <div class="tk-card tk-pad">
+        <h3 class="tk-title">Input vs output</h3>
+        <p class="tk-sub">Output tokens usually dominate the bill</p>
+        <div class="mt-4" data-chart="area" data-config='{{ split_chart }}' style="height:230px"></div>
+      </div>
+      <div class="tk-card tk-pad">
+        <h3 class="tk-title">Requests per day</h3>
+        <p class="tk-sub">Volume over the last {{ days }} days</p>
+        <div class="mt-4" data-chart="bars" data-config='{{ requests_chart }}' style="height:230px"></div>
+      </div>
+    </div>
+
+    <div class="grid gap-4 xl:grid-cols-2">
+      <div class="tk-card tk-pad">
+        <h3 class="tk-title">Usage by student</h3>
+        <p class="tk-sub">Top consumers, last {{ days }} days</p>
+        <div class="mt-4" data-chart="donut" data-config='{{ student_chart }}' style="height:250px"></div>
+      </div>
+      <div class="tk-card tk-pad">
+        <h3 class="tk-title">Token flow</h3>
+        <p class="tk-sub">Where tokens came from and went, last {{ days }} days</p>
+        <div class="mt-4 grid grid-cols-2 gap-3">
+          <div class="rounded-xl bg-emerald-500/8 p-3">
+            <p class="tk-label text-emerald-700 dark:text-emerald-300">Granted</p>
+            <p class="mt-1 text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{{ flow.granted|intcomma }}</p>
+          </div>
+          <div class="rounded-xl bg-rose-500/8 p-3">
+            <p class="tk-label text-rose-700 dark:text-rose-300">Consumed</p>
+            <p class="mt-1 text-xl font-bold tabular-nums text-rose-700 dark:text-rose-300">{{ flow.consumed|intcomma }}</p>
+          </div>
+        </div>
+        <div class="mt-4 space-y-2.5">
+          {% for item in flow.breakdown %}
+            <div>
+              <div class="flex items-baseline justify-between text-xs">
+                <span class="font-medium text-ink-700 dark:text-ink-200">{{ item.label }}</span>
+                <span class="tabular-nums text-ink-500 dark:text-ink-400">{{ item.total|intcomma }} · {{ item.count }}×</span>
+              </div>
+              <div class="tk-meter mt-1.5">
+                <div class="tk-meter-bar {% if item.credit %}bg-emerald-500{% else %}bg-rose-500{% endif %}"
+                     style="width:{{ item.total|percent_of:flow.breakdown.0.total }}%"></div>
+              </div>
+            </div>
+          {% empty %}
+            <p class="text-sm text-ink-400">Nothing moved in this period.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+{% comment %}
+  The Assign, Bulk allocate and Pool top-up dialogs used to live here. All three
+  posted to endpoints that now only redirect, because allocation has to name a
+  model: Assign links to the distribute page, bulk allocation lives on the AI
+  tokens page, and the pool card above tops up one model's supply directly.
+{% endcomment %}
+
+{# ================= Model allocation dialog ================= #}
+<div id="allocateModal" class="fixed inset-0 z-[80] hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-ink-950/45 backdrop-blur-sm animate-fade-in" data-close-modal></div>
+  <form method="post" id="allocateForm"
+        class="dialog-panel relative w-full max-w-sm animate-scale-in rounded-xl2 border border-ink-200 dark:border-white/10 bg-white dark:bg-ink-900 p-5 shadow-lift">
+    {% csrf_token %}
+    <h2 class="text-base font-bold text-ink-900 dark:text-white">Model allocation</h2>
+    <p class="mt-0.5 text-sm text-ink-500 dark:text-ink-400"><b id="allocateName" class="font-semibold text-ink-800 dark:text-ink-100"></b> stops answering once its allocation is spent.</p>
+
+    <div class="mt-4">
+      <label class="label" for="allocateAmount">Token allocation</label>
+      <input type="number" name="token_allocation" id="allocateAmount" min="0" step="10000"
+             class="tk-input font-bold tabular-nums">
+      <p class="help">Set 0 for unlimited.</p>
+    </div>
+
+    <label class="mt-3 flex items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
+      <input type="checkbox" name="reset_usage" value="1" class="checkbox"> Also reset this model's usage counters
+    </label>
+
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" class="btn-ghost" data-close-modal>Cancel</button>
+      <button type="submit" class="btn-primary">Save allocation</button>
+    </div>
+  </form>
+</div>
+
+{# ================= Model editor dialog ================= #}
+<div id="modelModal" class="fixed inset-0 z-[80] hidden items-center justify-center overflow-y-auto p-4">
+  <div class="absolute inset-0 bg-ink-950/45 backdrop-blur-sm animate-fade-in" data-close-modal></div>
+  <form method="post" id="modelForm"
+        class="dialog-panel relative my-auto w-full max-w-lg animate-scale-in rounded-xl2 border border-ink-200 dark:border-white/10 bg-white dark:bg-ink-900 p-5 shadow-lift">
+    {% csrf_token %}
+    <div class="flex items-start justify-between gap-3">
+      <h2 class="text-base font-bold text-ink-900 dark:text-white" id="modelModalTitle">Add AI model</h2>
+      <button type="button" class="btn-icon" data-close-modal aria-label="Close">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+
+    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+      <div class="sm:col-span-1">
+        <label class="label" for="mfKey">Provider model id</label>
+        <input type="text" name="key" id="mfKey" class="tk-input font-mono text-xs" required placeholder="gpt-4o-mini">
+      </div>
+      <div class="sm:col-span-1">
+        <label class="label" for="mfName">Display name</label>
+        <input type="text" name="name" id="mfName" class="tk-input" required placeholder="Atlas 4 Mini">
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label" for="mfDescription">Description</label>
+        <textarea name="description" id="mfDescription" rows="2" class="tk-input" placeholder="What is this model good for?"></textarea>
+      </div>
+      <div class="sm:col-span-2">
+        <div class="flex items-baseline justify-between gap-3">
+          <label class="label" for="mfBestFor">Best for</label>
+          <span class="text-[11px] tabular-nums text-ink-500 dark:text-ink-400" id="mfBestForCount" aria-live="polite">0 / 120</span>
+        </div>
+        <input type="text" name="best_for" id="mfBestFor" maxlength="120" class="tk-input"
+               placeholder="e.g. Quick everyday questions" aria-describedby="mfBestForHelp">
+        <p class="help" id="mfBestForHelp">One short line under the model's name in the students' model picker, saying when to choose it.</p>
+      </div>
+      <div>
+        <label class="label" for="mfProvider">Provider</label>
+        <select name="provider_ref" id="mfProvider" class="tk-input" required>
+          {% for vendor in ai_providers %}
+            <option value="{{ vendor.pk }}">{{ vendor.name }}{% if not vendor.is_active %} (switched off){% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="mfThinking">Reasoning</label>
+        <select name="thinking_mode" id="mfThinking" class="tk-input" required>
+          {% for value, label in thinking_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="help">Thinking is billed to the student as output tokens.</p>
+      </div>
+      <div>
+        <label class="label" for="mfOutput">Output budget per reply</label>
+        <input type="number" name="max_output_tokens" id="mfOutput" min="0" step="256" class="tk-input tabular-nums" value="2048">
+      </div>
+      <div>
+        <label class="label" for="mfTemperature">Temperature</label>
+        <input type="number" name="temperature" id="mfTemperature" min="0" max="2" step="0.05" class="tk-input tabular-nums" value="0.40">
+      </div>
+      <div>
+        <label class="label" for="mfAllocation">Token allocation</label>
+        <input type="number" name="token_allocation" id="mfAllocation" min="0" step="10000" class="tk-input tabular-nums" value="0">
+      </div>
+      <div>
+        <label class="label" for="mfInCost">Input cost / 1M (USD)</label>
+        <input type="number" name="input_cost_per_1m" id="mfInCost" min="0" step="0.0001" class="tk-input tabular-nums" value="0">
+      </div>
+      <div>
+        <label class="label" for="mfOutCost">Output cost / 1M (USD)</label>
+        <input type="number" name="output_cost_per_1m" id="mfOutCost" min="0" step="0.0001" class="tk-input tabular-nums" value="0">
+      </div>
+      <div>
+        <label class="label" for="mfWarn">Low-token warning points (%)</label>
+        <input type="text" name="warning_thresholds" id="mfWarn" class="tk-input"
+               placeholder="e.g. 50,25,10" value="">
+        <p class="help">Blank uses the platform default from Settings.</p>
+      </div>
+      <div class="sm:col-span-2 rounded-xl border border-brand-500/20 bg-brand-500/5 p-3.5">
+        <p class="text-xs font-semibold text-ink-700 dark:text-ink-200">Default usage limits</p>
+        <p class="help mt-0.5">Applied to tokens given without a package — admin grants, welcome bonus, referral rewards. Packages keep their own limits. 0 = no limit.</p>
+        <div class="mt-3 grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="label" for="mfDaily">Daily</label>
+            <input type="number" name="default_daily_limit" id="mfDaily" min="0" step="500" class="tk-input tabular-nums" value="9000">
+          </div>
+          <div>
+            <label class="label" for="mfWeekly">Weekly</label>
+            <input type="number" name="default_weekly_limit" id="mfWeekly" min="0" step="500" class="tk-input tabular-nums" value="35000">
+          </div>
+          <div>
+            <label class="label" for="mfMonthly">Monthly</label>
+            <input type="number" name="default_monthly_limit" id="mfMonthly" min="0" step="1000" class="tk-input tabular-nums" value="100000">
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="label" for="mfOrder">Display order</label>
+        <input type="number" name="sort_order" id="mfOrder" min="0" max="999" class="tk-input tabular-nums" value="100">
+      </div>
+      <div class="flex items-end gap-4 pb-2">
+        <label class="flex items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
+          <input type="checkbox" name="is_active" id="mfActive" value="on" class="checkbox" checked> Available
+        </label>
+        <label class="flex items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
+          <input type="checkbox" name="supports_vision" id="mfVision" value="on" class="checkbox"> Images
+        </label>
+      </div>
+    </div>
+
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" class="btn-ghost" data-close-modal>Cancel</button>
+      <button type="submit" class="btn-primary">Save model</button>
+    </div>
+  </form>
+</div>
+
+{# ================= Student history drawer ================= #}
+<div id="historyDrawer" class="fixed inset-0 z-[80] hidden">
+  <div class="absolute inset-0 bg-ink-950/45 backdrop-blur-sm animate-fade-in" data-close-modal></div>
+  <aside class="tk-drawer-panel absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-ink-200 dark:border-white/10 bg-white dark:bg-ink-900 shadow-lift">
+    <div class="flex items-start justify-between gap-3 border-b border-ink-200/70 dark:border-white/8 p-5">
+      <div class="min-w-0">
+        <h2 class="truncate text-base font-bold text-ink-900 dark:text-white" id="hdName">Student</h2>
+        <p class="truncate text-xs text-ink-500 dark:text-ink-400" id="hdMeta"></p>
+      </div>
+      <button type="button" class="btn-icon" data-close-modal aria-label="Close">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto scroll-slim p-5">
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-xl bg-ink-50 dark:bg-white/[.04] p-3">
+          <p class="tk-label">Allocated</p>
+          <p class="mt-1 text-base font-bold tabular-nums text-ink-900 dark:text-white" id="hdAllocated">0</p>
+        </div>
+        <div class="rounded-xl bg-ink-50 dark:bg-white/[.04] p-3">
+          <p class="tk-label">Used</p>
+          <p class="mt-1 text-base font-bold tabular-nums text-ink-900 dark:text-white" id="hdUsed">0</p>
+        </div>
+        <div class="rounded-xl bg-ink-50 dark:bg-white/[.04] p-3">
+          <p class="tk-label">Left</p>
+          <p class="mt-1 text-base font-bold tabular-nums text-ink-900 dark:text-white" id="hdLeft">0</p>
+        </div>
+      </div>
+
+      <h3 class="mt-6 tk-label">Usage by model</h3>
+      <div class="mt-2 space-y-2" id="hdModels"></div>
+
+      <h3 class="mt-6 tk-label">Token ledger</h3>
+      <div class="mt-2 divide-y divide-ink-200/70 dark:divide-white/8" id="hdLedger"></div>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------------- Tabs ---------------------------------------------
+     The active tab lives in the URL so a filter form, a pagination link
+     or a browser refresh all come back to where the admin was.
+     ------------------------------------------------------------------ */
+  var panels = document.querySelectorAll('[data-panel]');
+  var tabs = document.querySelectorAll('[data-tab]');
+
+  function showTab(name, push) {
+    var found = false;
+    panels.forEach(function (panel) {
+      var match = panel.dataset.panel === name;
+      panel.classList.toggle('hidden', !match);
+      if (match) { panel.classList.add('tk-panel-enter'); found = true; }
+      else { panel.classList.remove('tk-panel-enter'); }
+    });
+    if (!found) return showTab('overview', push);
+
+    tabs.forEach(function (tab) {
+      var on = tab.dataset.tab === name;
+      tab.classList.toggle('tk-tab-on', on);
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+
+    if (push && history.replaceState) {
+      var url = new URL(window.location.href);
+      url.searchParams.set('tab', name);
+      history.replaceState({}, '', url);
+    }
+    if (window.EPCCharts) window.EPCCharts.redrawAll();
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () { showTab(tab.dataset.tab, true); });
+  });
+  showTab(new URLSearchParams(window.location.search).get('tab') || '{{ tab|escapejs }}', false);
+
+  /* ---------------- Modals ---------------- */
+  function openModal(node) {
+    node.classList.remove('hidden');
+    node.classList.add(node.id === 'historyDrawer' ? 'block' : 'flex');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModals() {
+    ['allocateModal', 'modelModal', 'historyDrawer'].forEach(function (id) {
+      var node = $(id);
+      if (node) { node.classList.add('hidden'); node.classList.remove('flex', 'block'); }
+    });
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('[data-close-modal]')) closeModals();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeModals();
+  });
+
+  /* ---------------- Pool ---------------- */
+  /* The inline presets fill the field rather than submitting, so the amount is
+     still reviewed before it is added — these are large numbers and a stray
+     click should not move five million tokens. */
+  document.querySelectorAll('[data-pool-inline]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var field = $('poolInlineAmount');
+      if (!field) return;
+      field.value = chip.dataset.poolInline;
+      field.focus();
+    });
+  });
+
+  /* ---------------- Model allocation ---------------- */
+  document.addEventListener('click', function (event) {
+    var trigger = event.target.closest('[data-open-allocate]');
+    if (!trigger) return;
+    $('allocateForm').action = '/admin/models/' + trigger.dataset.openAllocate + '/allocate/';
+    $('allocateName').textContent = trigger.dataset.name || 'This model';
+    $('allocateAmount').value = trigger.dataset.allocation || 0;
+    openModal($('allocateModal'));
+  });
+
+  /* ---------------- Model editor ---------------- */
+  function countBestFor() {
+    var field = $('mfBestFor'), out = $('mfBestForCount');
+    if (field && out) out.textContent = field.value.length + ' / 120';
+  }
+  if ($('mfBestFor')) $('mfBestFor').addEventListener('input', countBestFor);
+  document.addEventListener('click', function (event) {
+    var trigger = event.target.closest('[data-open-model]');
+    if (!trigger) return;
+
+    var pk = trigger.dataset.openModel;
+    var form = $('modelForm');
+    form.action = pk ? '/admin/models/' + pk + '/save/' : '/admin/models/new/';
+    $('modelModalTitle').textContent = pk ? 'Edit AI model' : 'Add AI model';
+
+    var data = {};
+    try { data = JSON.parse(trigger.dataset.model || '{}'); } catch (e) {}
+
+    $('mfKey').value = data.key || '';
+    $('mfName').value = data.name || '';
+    $('mfDescription').value = data.description || '';
+    $('mfBestFor').value = data.best_for || '';
+    countBestFor();
+    /* A new model starts on the first vendor and with thinking off, the same
+       defaults the catalogue row has; an existing one shows what it is set to. */
+    var vendor = $('mfProvider');
+    vendor.value = data.provider_ref != null ? String(data.provider_ref) : '';
+    if (vendor.selectedIndex < 0 && vendor.options.length) vendor.selectedIndex = 0;
+    $('mfThinking').value = data.thinking_mode || 'off';
+    $('mfOutput').value = data.max_output_tokens != null ? data.max_output_tokens : 2048;
+    $('mfTemperature').value = data.temperature || '0.40';
+    $('mfAllocation').value = data.token_allocation != null ? data.token_allocation : 0;
+    $('mfInCost').value = data.input_cost_per_1m || '0';
+    $('mfOutCost').value = data.output_cost_per_1m || '0';
+    $('mfWarn').value = data.warning_thresholds || '';
+    $('mfOrder').value = data.sort_order != null ? data.sort_order : 100;
+    $('mfDaily').value = data.default_daily_limit != null ? data.default_daily_limit : 9000;
+    $('mfWeekly').value = data.default_weekly_limit != null ? data.default_weekly_limit : 35000;
+    $('mfMonthly').value = data.default_monthly_limit != null ? data.default_monthly_limit : 100000;
+    $('mfActive').checked = pk ? !!data.is_active : true;
+    $('mfVision').checked = !!data.supports_vision;
+
+    openModal($('modelModal'));
+  });
+
+  /* ---------------- Student history drawer ---------------- */
+  document.addEventListener('click', function (event) {
+    var trigger = event.target.closest('[data-history]');
+    if (!trigger) return;
+    var id = trigger.dataset.history;
+
+    $('hdName').textContent = 'Loading…';
+    $('hdMeta').textContent = '';
+    $('hdModels').innerHTML = '';
+    $('hdLedger').innerHTML = '';
+    openModal($('historyDrawer'));
+
+    fetch('/admin/tokens/student/' + id + '/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        if (!data.ok) { $('hdName').textContent = 'Could not load this student.'; return; }
+
+        $('hdName').textContent = data.student.name;
+        $('hdMeta').textContent = data.student.email || data.student.username;
+        $('hdAllocated').textContent = Number(data.tokens.allocated).toLocaleString();
+        $('hdUsed').textContent = Number(data.tokens.consumed).toLocaleString();
+        $('hdLeft').textContent = Number(data.tokens.balance).toLocaleString();
+
+        var peak = data.by_model.reduce(function (max, row) { return Math.max(max, row.tokens); }, 0) || 1;
+        $('hdModels').innerHTML = data.by_model.length
+          ? data.by_model.map(function (row) {
+              return '<div><div class="flex items-baseline justify-between text-xs">' +
+                '<span class="font-mono text-[11px] text-ink-600 dark:text-ink-300"></span>' +
+                '<span class="tabular-nums text-ink-500 dark:text-ink-400">' + row.tokens.toLocaleString() + ' · ' + row.requests + '×</span>' +
+                '</div><div class="tk-meter mt-1.5"><div class="tk-meter-bar bg-gradient-to-r from-brand-500 to-accent-500" ' +
+                'style="width:' + Math.round(row.tokens / peak * 100) + '%"></div></div></div>';
+            }).join('')
+          : '<p class="text-xs text-ink-400">No AI usage yet.</p>';
+        // Model names are data, not markup — set them as text.
+        $('hdModels').querySelectorAll('span.font-mono').forEach(function (node, index) {
+          node.textContent = data.by_model[index].model;
+        });
+
+        $('hdLedger').innerHTML = data.ledger.length
+          ? data.ledger.map(function (entry) {
+              return '<div class="flex items-start justify-between gap-3 py-2.5">' +
+                '<div class="min-w-0"><p class="text-xs font-semibold text-ink-800 dark:text-ink-100" data-type></p>' +
+                '<p class="truncate text-[11px] text-ink-500 dark:text-ink-400" data-desc></p></div>' +
+                '<div class="shrink-0 text-right"><p class="text-xs font-bold tabular-nums ' +
+                (entry.credit ? 'text-emerald-600 dark:text-emerald-400">+' : 'text-rose-600 dark:text-rose-400">−') +
+                Math.abs(entry.amount).toLocaleString() + '</p>' +
+                '<p class="text-[10px] text-ink-400" data-when></p></div></div>';
+            }).join('')
+          : '<p class="py-4 text-xs text-ink-400">No ledger entries yet.</p>';
+        $('hdLedger').querySelectorAll('[data-type]').forEach(function (node, index) {
+          node.textContent = data.ledger[index].type;
+        });
+        $('hdLedger').querySelectorAll('[data-desc]').forEach(function (node, index) {
+          var entry = data.ledger[index];
+          node.textContent = entry.description + (entry.actor ? ' · ' + entry.actor : '');
+        });
+        $('hdLedger').querySelectorAll('[data-when]').forEach(function (node, index) {
+          node.textContent = data.ledger[index].created_at;
+        });
+      })
+      .catch(function () { $('hdName').textContent = 'Could not load this student.'; });
+  });
+})();
+</script>
+{% endblock %}

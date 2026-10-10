@@ -1,0 +1,67 @@
+{% extends "base/shell_page.html" %}
+
+{% comment %}
+  One press of "Pay": the signed form for a fresh attempt, posted straight to
+  the gateway's own page, in the encoding that gateway reads (PayWay takes
+  multipart; ACLEDA's page only reads a plain form).
+
+  It submits itself; the button is the fallback without JavaScript. Nothing
+  here is stored or re-posted — pressing Pay again makes a new attempt,
+  because ABA refuses a transaction id it has seen and an ACLEDA session
+  cancels itself if posted twice.
+{% endcomment %}
+
+{% block title %}Continue to {{ provider.label }} · {{ payment.reference }}{% endblock %}
+{% block back_url %}{% url 'payments:detail' payment.reference %}{% endblock %}
+{% block back_label %}Payment{% endblock %}
+
+{% block head %}
+<style>
+  .handoff { max-width: 460px; margin: 6vh auto 0; text-align: center; }
+  .handoff-mark { width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 16px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .handoff-mark svg { width: 24px; height: 24px; }
+  .handoff h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+  .handoff p { margin: 8px 0 0; font-size: 13.5px; color: var(--ink-3); line-height: 1.55; }
+  .handoff-amount { display: block; margin-top: 14px; font-size: 28px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .handoff-actions { display: grid; gap: 10px; margin-top: 20px; }
+  .handoff-actions .btn { width: 100%; min-height: 46px; justify-content: center; }
+  .handoff-note { font-size: 12px !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="card handoff">
+  <div class="card-body">
+    <div class="handoff-mark"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
+    <h1>Taking you to {{ provider.label }}</h1>
+    <p>You will pay on the bank's own secure page, then come back here automatically.</p>
+    <b class="handoff-amount">{{ payment.pay_display }}</b>
+
+    <div class="handoff-actions">
+      <form method="post" action="{{ handoff.action }}" id="handoffForm" enctype="{{ handoff.enctype }}">
+        {% for key, value in fields %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Continue to {{ provider.label }}</button>
+      </form>
+    </div>
+    <p class="handoff-note">Reference {{ payment.reference }}. Nothing is charged until you confirm in your bank.</p>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  var form = document.getElementById('handoffForm');
+  if (!form) return;
+  /* Coming back from the bank with the Back button lands on the order, not
+     on this page: re-posting this form would reuse a single-use session. */
+  try { history.replaceState(null, '', '{% url "payments:detail" payment.reference %}'); } catch (e) {}
+  /* The prototype's submit, not the form's own property: a hidden field can
+     share the name and shadow it. */
+  HTMLFormElement.prototype.submit.call(form);
+})();
+</script>
+{% endblock %}

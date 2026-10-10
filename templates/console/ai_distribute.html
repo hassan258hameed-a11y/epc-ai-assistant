@@ -1,0 +1,420 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+Distribute tokens — student, model, amount, preview, confirm.
+
+The preview is fetched from the server rather than computed here, so the numbers
+an administrator approves in the modal are the numbers the server will actually
+apply. A browser-side calculation could disagree with a pool that moved a second
+ago, and approving the wrong figures is exactly the mistake a confirmation step
+is supposed to prevent.
+{% endcomment %}
+
+{% block title %}Distribute tokens · Console{% endblock %}
+{% block heading %}Distribute tokens{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    Pick a student, pick a model, confirm. Only that model's balance changes.
+  </p>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:ai_tokens' %}" class="btn-secondary btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-left"/></svg> All AI tokens
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+
+  <div class="space-y-5">
+
+    {# ---------- Step 1: student ---------- #}
+    <section class="card p-5">
+      <div class="flex items-center gap-3">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-500/12
+                     text-[12px] font-extrabold text-brand-600 dark:text-brand-300">1</span>
+        <h2 class="text-[15px] font-extrabold tracking-[-.02em] text-ink-900 dark:text-white">Select a student</h2>
+      </div>
+
+      <form method="get" class="mt-4 flex flex-wrap gap-2">
+        {% if selected_model %}<input type="hidden" name="model" value="{{ selected_model.key }}">{% endif %}
+        <input type="search" name="q" value="{{ search }}" placeholder="Search by name, username or e-mail"
+               class="input h-10 min-w-0 flex-1 text-sm" aria-label="Search students">
+        <button type="submit" class="btn-secondary">Search</button>
+      </form>
+
+      {% if selected_student %}
+        <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl2 border hairline bg-brand-500/[.06] p-4">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br
+                       from-brand-500 to-accent-500 text-[12px] font-extrabold text-white">
+            {{ selected_student.initials }}
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-[15px] font-extrabold text-ink-900 dark:text-white">
+              {{ selected_student.display_name }}
+            </span>
+            <span class="block truncate text-xs text-ink-500 dark:text-ink-400">
+              {{ selected_student.username }}{% if selected_student.email %} · {{ selected_student.email }}{% endif %}
+            </span>
+          </span>
+          <a href="{% url 'console:ai_distribute' %}{% if selected_model %}?model={{ selected_model.key|urlencode }}{% endif %}"
+             class="btn-secondary btn-sm">Change</a>
+        </div>
+      {% elif students %}
+        <ul class="mt-4 max-h-72 divide-y hairline overflow-y-auto rounded-xl2 border hairline">
+          {% for student in students %}
+            <li>
+              <a href="?student={{ student.pk }}{% if search %}&q={{ search|urlencode }}{% endif %}{% if selected_model %}&model={{ selected_model.key|urlencode }}{% endif %}"
+                 class="flex items-center gap-3 px-4 py-2.5 transition hover:bg-ink-50 dark:hover:bg-white/[.03]">
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-bold text-ink-900 dark:text-white">{{ student.display_name }}</span>
+                  <span class="block truncate text-[11px] text-ink-400">{{ student.username }}</span>
+                </span>
+                <svg class="h-4 w-4 shrink-0 text-ink-300" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="mt-4 text-sm text-ink-500 dark:text-ink-400">No students matched that search.</p>
+      {% endif %}
+    </section>
+
+    {# ---------- Steps 2-5: the allocation itself ---------- #}
+    {% if selected_student %}
+      <section class="card p-5">
+        <div class="flex items-center gap-3">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-500/12
+                       text-[12px] font-extrabold text-brand-600 dark:text-brand-300">2</span>
+          <h2 class="text-[15px] font-extrabold tracking-[-.02em] text-ink-900 dark:text-white">
+            Choose the model and amount
+          </h2>
+        </div>
+
+        <form method="post" action="{% url 'console:ai_distribute_apply' %}" id="grantForm" class="mt-4 space-y-4">
+          {% csrf_token %}
+          <input type="hidden" name="user_id" value="{{ selected_student.pk }}">
+          <input type="hidden" name="next" value="/admin/ai-tokens/distribute/?student={{ selected_student.pk }}">
+
+          <fieldset>
+            <legend class="stat-label">AI model</legend>
+            <p class="mt-1 text-[11.5px] text-ink-500 dark:text-ink-400">
+              Tokens are a separate currency per model. Only the balance you pick here changes.
+            </p>
+            {% comment %}
+              The model a link arrived with — a card's Distribute button, a
+              low-balance row — is the one already picked. Otherwise the first.
+            {% endcomment %}
+            <div class="mt-3 grid gap-3 sm:grid-cols-3">
+              {% for pool in pools %}
+                <label class="tk-radio relative flex cursor-pointer flex-col rounded-xl2 border hairline p-3
+                              transition hover:border-brand-300/70 has-[:checked]:border-brand-500
+                              has-[:checked]:bg-brand-500/[.06] has-[:checked]:ring-1 has-[:checked]:ring-brand-500/30">
+                  <input type="radio" name="model_id" value="{{ pool.model.pk }}" class="peer sr-only"
+                         data-name="{{ pool.model.name }}" data-pool="{{ pool.balance }}"
+                         {% if selected_model %}{% if pool.model.pk == selected_model.pk %}checked{% endif %}{% elif forloop.first %}checked{% endif %} required>
+                  <span class="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-brand-600 dark:text-brand-300">
+                    {{ pool.model.provider_name }}
+                  </span>
+                  <span class="mt-0.5 text-sm font-extrabold text-ink-900 dark:text-white">{{ pool.model.name }}</span>
+                  <span class="mt-1 text-[11.5px] tabular-nums
+                               {% if pool.is_empty %}text-rose-600 dark:text-rose-400{% else %}text-ink-500 dark:text-ink-400{% endif %}">
+                    {{ pool.balance|intcomma }} available
+                  </span>
+                  {% if not pool.model.is_active %}
+                    <span class="badge-neutral mt-2 self-start">Model off</span>
+                  {% endif %}
+                </label>
+              {% endfor %}
+            </div>
+          </fieldset>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label>
+              <span class="stat-label">Action</span>
+              <select name="action" id="grantAction" class="input mt-1 w-full">
+                <option value="add">Add tokens</option>
+                <option value="set">Assign (set balance to)</option>
+                <option value="remove">Take tokens back</option>
+              </select>
+            </label>
+            <label>
+              <span class="stat-label">Token amount</span>
+              <input type="number" name="amount" id="grantAmount" min="0" max="100000000" step="1000"
+                     placeholder="50000" class="input mt-1 w-full" required>
+            </label>
+          </div>
+
+          <label class="block">
+            <span class="stat-label">Reason / note <span class="font-normal normal-case text-ink-400">(optional)</span></span>
+            <input type="text" name="reason" maxlength="255" class="input mt-1 w-full"
+                   placeholder="e.g. Term 2 allocation">
+          </label>
+
+          <div class="flex flex-wrap items-center gap-3 border-t hairline pt-4">
+            <button type="button" id="previewBtn" class="btn-primary">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#i-check"/></svg>
+              Review &amp; confirm
+            </button>
+            <p class="text-[11.5px] text-ink-500 dark:text-ink-400">
+              You will see exactly what changes before anything is saved.
+            </p>
+          </div>
+        </form>
+      </section>
+
+      {# ---------- Manual adjustment ---------- #}
+      <details class="card p-5">
+        <summary class="cursor-pointer text-[13px] font-extrabold uppercase tracking-[.08em] text-ink-500 dark:text-ink-400">
+          Manual adjustment
+        </summary>
+        <p class="mt-2 text-xs text-ink-500 dark:text-ink-400">
+          Corrects one wallet without touching the pool — for fixing a drift, not for
+          normal allocation. The reason is written to the ledger and the audit log.
+        </p>
+        <form method="post" action="{% url 'console:ai_adjust' %}" class="mt-4 grid gap-3 sm:grid-cols-4">
+          {% csrf_token %}
+          <input type="hidden" name="user_id" value="{{ selected_student.pk }}">
+          <label class="sm:col-span-1">
+            <span class="stat-label">Model</span>
+            <select name="model_id" class="input mt-1 w-full text-xs">
+              {% for model in models %}<option value="{{ model.pk }}" {% if model.pk == selected_model.pk %}selected{% endif %}>{{ model.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>
+            <span class="stat-label">Adjustment</span>
+            <input type="number" name="delta" class="input mt-1 w-full text-xs" placeholder="-1000" required>
+          </label>
+          <label class="sm:col-span-1">
+            <span class="stat-label">Reason (required)</span>
+            <input type="text" name="reason" maxlength="255" class="input mt-1 w-full text-xs" required>
+          </label>
+          <div class="flex items-end">
+            <button type="submit" class="btn-secondary btn-sm w-full">Apply</button>
+          </div>
+        </form>
+      </details>
+    {% endif %}
+  </div>
+
+  {# ---------- Sidebar: this student's balances ---------- #}
+  <aside class="space-y-5">
+    {% if selected_student %}
+      <section class="card p-5">
+        <h2 class="text-[13px] font-extrabold uppercase tracking-[.08em] text-ink-500 dark:text-ink-400">
+          {{ selected_student.display_name }} — balances
+        </h2>
+        <ul class="mt-4 space-y-4">
+          {% for row in balances %}
+            <li>
+              <div class="flex items-baseline justify-between gap-2">
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-extrabold text-ink-900 dark:text-white">{{ row.model.name }}</span>
+                  <span class="block text-[10.5px] font-bold uppercase tracking-[.1em] text-ink-400">
+                    {{ row.model.provider_name }}
+                  </span>
+                </span>
+                <span class="shrink-0 text-right">
+                  <span class="block text-lg font-extrabold tabular-nums
+                               {% if row.balance %}text-ink-900 dark:text-white{% else %}text-ink-400{% endif %}">
+                    {{ row.balance|intcomma }}
+                  </span>
+                  <span class="block text-[11px] text-ink-400">remaining</span>
+                </span>
+              </div>
+              <div class="tk-meter mt-2">
+                <div class="tk-meter-bar {% if row.percent_used >= 90 %}bg-rose-500{% elif row.percent_used >= 70 %}bg-amber-500{% else %}bg-gradient-to-r from-brand-500 to-accent-500{% endif %}"
+                     style="width:{{ row.percent_used }}%"></div>
+              </div>
+              <p class="mt-1 text-[11px] tabular-nums text-ink-500 dark:text-ink-400">
+                {{ row.used|intcomma }} used of {{ row.allocated|intcomma }} allocated
+              </p>
+              {% if not row.usable and row.reason %}
+                {# The reason used to live only in a hover tooltip, which a finger cannot open. #}
+                <p class="mt-1 text-[11px] leading-snug text-ink-600 dark:text-ink-300">{{ row.reason }}</p>
+              {% endif %}
+              <div class="mt-2 flex items-center justify-between gap-2">
+                {% if row.usable %}
+                  <span class="badge-success">Can use</span>
+                {% else %}
+                  <span class="badge-neutral">Unavailable</span>
+                {% endif %}
+                <form method="post"
+                      action="{% url 'console:ai_toggle_access' selected_student.pk row.model.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next"
+                         value="/admin/ai-tokens/distribute/?student={{ selected_student.pk }}">
+                  <button type="submit" class="link text-[11px]">
+                    {% if row.is_enabled %}Revoke access{% else %}Grant access{% endif %}
+                  </button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    <section class="card p-5">
+      <h2 class="text-[13px] font-extrabold uppercase tracking-[.08em] text-ink-500 dark:text-ink-400">
+        Recent allocations
+      </h2>
+      <ul class="mt-3 space-y-3">
+        {% for entry in recent %}
+          <li class="text-xs">
+            <span class="block">
+              <span class="font-bold {% if entry.is_credit %}text-emerald-600 dark:text-emerald-400{% else %}text-ink-700 dark:text-ink-200{% endif %} tabular-nums">
+                {% if entry.is_credit %}+{% else %}−{% endif %}{{ entry.abs_amount|intcomma }}
+              </span>
+              <span class="font-semibold text-ink-800 dark:text-ink-100">{{ entry.ai_model.name }}</span>
+              <span class="text-ink-500 dark:text-ink-400">→ {{ entry.user.display_name }}</span>
+            </span>
+            <span class="mt-0.5 block text-ink-400">
+              {{ entry.created_at|date:"j M Y, H:i" }}
+              {% if entry.performed_by %} · {{ entry.performed_by.display_name }}{% endif %}
+            </span>
+          </li>
+        {% empty %}
+          <li class="text-xs text-ink-500 dark:text-ink-400">Nothing distributed yet.</li>
+        {% endfor %}
+      </ul>
+    </section>
+  </aside>
+</div>
+
+{# ================= Confirmation modal ================= #}
+{% comment %}
+  The dialog is laid out with `flex` only while it is open. Carrying that
+  utility permanently would defeat the `hidden` attribute and leave the dialog
+  on screen from page load, over the step it is meant to confirm.
+{% endcomment %}
+<div id="confirmModal" hidden
+     class="fixed inset-0 z-50 items-center justify-center bg-ink-950/60 p-4
+            [&:not([hidden])]:flex">
+  <div role="dialog" aria-modal="true" aria-labelledby="confirmTitle"
+       class="card dialog-panel w-full max-w-md p-0">
+    <header class="border-b hairline p-5">
+      <h2 id="confirmTitle" class="text-[17px] font-extrabold tracking-[-.025em] text-ink-900 dark:text-white">
+        Confirm distribution
+      </h2>
+      <p class="mt-1 text-xs text-ink-500 dark:text-ink-400">
+        Only this model's balance changes. Every other model is untouched.
+      </p>
+    </header>
+
+    <dl class="divide-y hairline text-sm">
+      <div class="flex items-center justify-between gap-3 px-5 py-2.5">
+        <dt class="text-ink-500 dark:text-ink-400">Student</dt>
+        <dd id="cfStudent" class="font-bold text-ink-900 dark:text-white"></dd>
+      </div>
+      <div class="flex items-center justify-between gap-3 px-5 py-2.5">
+        <dt class="text-ink-500 dark:text-ink-400">Model</dt>
+        <dd id="cfModel" class="font-bold text-ink-900 dark:text-white"></dd>
+      </div>
+      <div class="flex items-center justify-between gap-3 px-5 py-2.5">
+        <dt class="text-ink-500 dark:text-ink-400">Current balance</dt>
+        <dd id="cfCurrent" class="font-bold tabular-nums text-ink-900 dark:text-white"></dd>
+      </div>
+      <div class="flex items-center justify-between gap-3 px-5 py-2.5">
+        <dt class="text-ink-500 dark:text-ink-400" id="cfDeltaLabel">Amount to add</dt>
+        <dd id="cfDelta" class="font-bold tabular-nums text-emerald-600 dark:text-emerald-400"></dd>
+      </div>
+      <div class="flex items-center justify-between gap-3 bg-brand-500/[.06] px-5 py-3">
+        <dt class="font-bold text-ink-800 dark:text-ink-100">New student balance</dt>
+        <dd id="cfNew" class="text-lg font-extrabold tabular-nums text-brand-600 dark:text-brand-300"></dd>
+      </div>
+      <div class="flex items-center justify-between gap-3 px-5 py-2.5">
+        <dt class="text-ink-500 dark:text-ink-400" id="cfPoolLabel">Pool after distribution</dt>
+        <dd id="cfPool" class="font-bold tabular-nums text-ink-900 dark:text-white"></dd>
+      </div>
+    </dl>
+
+    <p id="cfWarning" hidden class="mx-5 mb-3 rounded-xl bg-rose-500/10 p-3 text-xs font-semibold text-rose-700 dark:text-rose-300"></p>
+
+    <footer class="flex justify-end gap-2 border-t hairline p-4">
+      <button type="button" id="cfCancel" class="btn-secondary">Cancel</button>
+      <button type="button" id="cfConfirm" class="btn-primary">Confirm distribution</button>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var form = document.getElementById('grantForm');
+  if (!form) return;
+
+  var modal = document.getElementById('confirmModal');
+  var previewBtn = document.getElementById('previewBtn');
+  var confirmBtn = document.getElementById('cfConfirm');
+  var cancelBtn = document.getElementById('cfCancel');
+  var warning = document.getElementById('cfWarning');
+  var nf = function (n) { return Number(n || 0).toLocaleString(); };
+  var set = function (id, text) { document.getElementById(id).textContent = text; };
+
+  function closeModal() {
+    modal.hidden = true;
+    previewBtn.focus();
+  }
+
+  previewBtn.addEventListener('click', function () {
+    if (!form.reportValidity()) return;
+
+    /* The preview comes from the server so the numbers being approved are the
+       numbers that will be applied — a pool can move between page load and now. */
+    var params = new URLSearchParams(new FormData(form));
+    params.delete('csrfmiddlewaretoken');
+    params.delete('next');
+
+    previewBtn.disabled = true;
+    fetch('{% url "console:ai_distribute_preview" %}?' + params.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) { alert(data.error || 'Could not preview that change.'); return; }
+
+        set('cfStudent', data.student.name);
+        set('cfModel', data.model.provider + ' — ' + data.model.name);
+        set('cfCurrent', nf(data.current_balance) + ' tokens');
+        set('cfNew', nf(data.new_balance) + ' tokens');
+        set('cfPool', nf(data.pool_after) + ' tokens');
+
+        var giving = data.delta >= 0;
+        set('cfDeltaLabel', giving ? 'Amount to add' : 'Amount to take back');
+        var deltaNode = document.getElementById('cfDelta');
+        deltaNode.textContent = (giving ? '+' : '−') + nf(Math.abs(data.delta));
+        deltaNode.className = 'font-bold tabular-nums ' + (giving
+          ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400');
+        set('cfPoolLabel', giving ? 'Pool after distribution' : 'Pool after tokens return');
+
+        warning.hidden = data.affordable;
+        if (!data.affordable) {
+          warning.textContent = 'The ' + data.model.name + ' pool is short by '
+            + nf(data.shortfall) + ' tokens. Top it up before distributing.';
+        }
+        confirmBtn.disabled = !data.affordable;
+
+        modal.hidden = false;
+        confirmBtn.focus();
+      })
+      .catch(function () { alert('Could not reach the server. Please try again.'); })
+      .finally(function () { previewBtn.disabled = false; });
+  });
+
+  confirmBtn.addEventListener('click', function () {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Saving…';
+    HTMLFormElement.prototype.submit.call(form);
+  });
+
+  cancelBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', function (event) { if (event.target === modal) closeModal(); });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !modal.hidden) closeModal();
+  });
+})();
+</script>
+{% endblock %}

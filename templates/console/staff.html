@@ -1,0 +1,337 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+{% comment %}
+  Staff & roles — owners only (AI/views/console_staff.py).
+
+  Everyone who can sign in to the console, what role each of them has, a way
+  to add one, and the matrix that says what each role opens. The matrix is
+  printed from AI/services/staff_permissions.py — the same table the
+  middleware enforces — so what an owner reads here is what actually happens.
+{% endcomment %}
+
+{% block title %}Staff &amp; roles · {{ BRAND.full_name }}{% endblock %}
+{% block heading %}Staff &amp; roles{% endblock %}
+{% block subheading %}
+  <p class="text-[11.5px] font-medium text-ink-500 dark:text-ink-400">Who runs the console, and what each role can open.</p>
+{% endblock %}
+{% block header_actions %}
+  <a href="#new-staff" class="btn-primary btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-plus"/></svg> New staff account
+  </a>
+{% endblock %}
+
+{% block head %}
+<style>
+  /* Page-local, prefixed so nothing collides with the design system. */
+  .staff-row { display: grid; gap: .9rem 1.25rem; align-items: center; padding: 1rem 1.25rem; }
+  @media (min-width: 1024px) {
+    .staff-row { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.25fr) minmax(0, 1fr) auto; }
+  }
+  .staff-row + .staff-row { border-top: 1px solid rgba(211, 218, 232, .7); }
+  .dark .staff-row + .staff-row { border-top-color: rgba(255, 255, 255, .08); }
+  .staff-row.is-off { background: rgba(91, 104, 132, .05); }
+  .dark .staff-row.is-off { background: rgba(255, 255, 255, .02); }
+  .staff-avatar {
+    display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex: 0 0 auto;
+    border-radius: .85rem; font-size: 11px; font-weight: 800; color: #fff;
+    background: linear-gradient(135deg, #2563EB, #1E3A8A);
+  }
+  .staff-row.is-off .staff-avatar { background: #9AA5BC; }
+  .dark .staff-row.is-off .staff-avatar { background: #47536C; }
+  .staff-role-form { display: flex; gap: .5rem; align-items: center; min-width: 0; }
+  .staff-role-form select { min-width: 0; flex: 1 1 auto; padding-top: .45rem; padding-bottom: .45rem; }
+  .staff-meta { font-size: 12px; line-height: 1.5; color: #5B6884; }
+  .dark .staff-meta { color: #9AA5BC; }
+
+  .staff-role-card { border-radius: 1rem; border: 1px solid rgba(211, 218, 232, .8); padding: .9rem 1rem; background: #fff; }
+  .dark .staff-role-card { border-color: rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .03); }
+
+  .staff-matrix { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  .staff-matrix th, .staff-matrix td { padding: .7rem .75rem; border-top: 1px solid rgba(211, 218, 232, .7); }
+  .dark .staff-matrix th, .dark .staff-matrix td { border-top-color: rgba(255, 255, 255, .08); }
+  .staff-matrix thead th {
+    border-top: 0; font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+    color: #5B6884; text-align: center; white-space: nowrap;
+  }
+  .dark .staff-matrix thead th { color: #9AA5BC; }
+  .staff-matrix thead th:first-child { text-align: left; }
+  /* The area stays in view while the role columns scroll on a phone. */
+  .staff-matrix tbody th, .staff-matrix thead th:first-child {
+    position: sticky; left: 0; z-index: 1; background: #fff; text-align: left; font-weight: 400;
+    min-width: 12rem; width: 38%;
+  }
+  .dark .staff-matrix tbody th, .dark .staff-matrix thead th:first-child { background: #0E1526; }
+  .staff-matrix td { text-align: center; }
+  .staff-yes { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 999px;
+               background: rgba(16, 185, 129, .12); color: #047857; }
+  .dark .staff-yes { background: rgba(52, 211, 153, .14); color: #6EE7B7; }
+  .staff-yes svg { width: 14px; height: 14px; }
+  .staff-no { color: #7A869E; font-weight: 700; }
+  .dark .staff-no { color: #8491A8; }
+
+  .staff-secret {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem .75rem;
+    border-radius: .85rem; border: 1px dashed rgba(16, 185, 129, .45); background: rgba(16, 185, 129, .06);
+  }
+  .staff-secret code { font-size: 15px; font-weight: 700; letter-spacing: .04em; overflow-wrap: anywhere; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# ---------- A new account's password, shown once ---------- #}
+  {% if handover %}
+    <section class="card p-5 sm:p-6 animate-fade-up" style="border-color: rgba(16,185,129,.35)" role="status">
+      <div class="flex flex-wrap items-start gap-4">
+        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/12 dark:text-emerald-300">
+          <svg class="h-5 w-5" aria-hidden="true"><use href="#i-check-circle"/></svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <h2 class="section-title">{{ handover.name }} can sign in as {{ handover.role }}</h2>
+          <p class="section-note mt-0.5">
+            This password is shown once. Hand it over in person or through a private channel —
+            they choose their own the first time they sign in at <span class="font-semibold">/admin/login/</span>.
+          </p>
+          <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div>
+              <dt class="stat-label">Username</dt>
+              <dd class="mt-1 font-mono text-[14px] font-bold text-ink-900 dark:text-white">{{ handover.username }}</dd>
+            </div>
+            <div>
+              <dt class="stat-label">Temporary password</dt>
+              <dd class="mt-1 staff-secret">
+                <code class="text-ink-900 dark:text-white" id="staffSecret">{{ handover.password }}</code>
+                <button type="button" class="btn-outline btn-sm ml-auto" data-copy-secret>
+                  <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-copy"/></svg> <span>Copy</span>
+                </button>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  {% if unassigned %}
+    <div class="flex flex-wrap items-center gap-3 rounded-xl2 border border-amber-500/25 bg-amber-500/8 p-4" role="status">
+      <svg class="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true"><use href="#i-alert"/></svg>
+      <p class="min-w-0 flex-1 text-sm text-ink-800 dark:text-ink-100">
+        <span class="font-bold">{{ unassigned }} administrator{{ unassigned|pluralize }} {{ unassigned|pluralize:"has,have" }} no role yet</span>
+        and can only open the overview, search and their own sign-in settings. Pick a role below.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ---------- The roles at a glance ---------- #}
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Roles">
+    {% for role in roles %}
+      <div class="staff-role-card">
+        <p class="flex items-center justify-between gap-2">
+          <span class="text-[13.5px] font-bold text-ink-900 dark:text-white">{{ role.label }}</span>
+          <span class="{% if role.count %}badge-brand{% else %}badge-neutral{% endif %}">{{ role.count }}</span>
+        </p>
+        <p class="mt-1 text-[12px] leading-relaxed text-ink-600 dark:text-ink-300">{{ role.summary }}</p>
+      </div>
+    {% endfor %}
+  </section>
+
+  {# ---------- Everyone with console access ---------- #}
+  <section class="card overflow-hidden" id="staff-list">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <div class="min-w-0">
+        <h2 class="section-title">Staff accounts</h2>
+        <p class="section-note mt-0.5">Administrators only — students never appear here. A role change applies on their next click.</p>
+      </div>
+      <span class="badge-neutral">{{ members|length }} account{{ members|length|pluralize }}</span>
+    </div>
+
+    {% for member in members %}
+      <div class="staff-row{% if not member.is_active_account %} is-off{% endif %}">
+        {# Who #}
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="staff-avatar" aria-hidden="true">{{ member.initials }}</span>
+          <div class="min-w-0">
+            <p class="flex flex-wrap items-center gap-1.5">
+              <span class="truncate text-[14px] font-bold text-ink-900 dark:text-white">{{ member.display_name }}</span>
+              {% if member.is_self %}<span class="badge-neutral">You</span>{% endif %}
+              {% if member.is_superuser %}<span class="badge-info">Superuser</span>{% endif %}
+              {% if not member.is_active_account %}<span class="badge-danger">Disabled</span>{% endif %}
+            </p>
+            <p class="staff-meta truncate">@{{ member.username }}{% if member.email %} · {{ member.email }}{% endif %}</p>
+          </div>
+        </div>
+
+        {# Role #}
+        <div class="min-w-0">
+          {% if member.is_superuser %}
+            <p class="text-[13px] font-semibold text-ink-800 dark:text-ink-100">Owner</p>
+            <p class="staff-meta">A superuser is always an owner.</p>
+          {% else %}
+            <form method="post" action="{% url 'console:staff_role' member.pk %}" class="staff-role-form">
+              {% csrf_token %}
+              <label class="sr-only" for="role-{{ member.pk }}">Role for {{ member.display_name }}</label>
+              <select name="staff_role" id="role-{{ member.pk }}" class="input text-sm"
+                      {% if member.is_last_owner %}disabled title="The last owner stays an owner"{% endif %}>
+                {% if not member.effective_role %}<option value="" selected disabled>No role yet — choose one</option>{% endif %}
+                {% for value, label in role_choices %}
+                  <option value="{{ value }}" {% if value == member.effective_role %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if not member.is_last_owner %}
+                <button type="submit" class="btn-outline btn-sm shrink-0">Save</button>
+              {% endif %}
+            </form>
+            {% if member.is_last_owner %}<p class="staff-meta mt-1">The last owner — make someone else an owner first.</p>{% endif %}
+          {% endif %}
+        </div>
+
+        {# Sign-in #}
+        <div class="min-w-0">
+          <p class="flex flex-wrap items-center gap-1.5">
+            {% if member.login_otp_enabled %}
+              <span class="badge-success" title="A one-time code is asked for after the password">Sign-in codes on</span>
+            {% else %}
+              <span class="badge-neutral">Sign-in codes off</span>
+            {% endif %}
+            {% if member.telegram_linked %}<span class="badge-info">Telegram linked</span>{% endif %}
+          </p>
+          <p class="staff-meta mt-1">
+            Last seen {% if member.last_seen_at %}{{ member.last_seen_at|timeago }}{% elif member.last_login %}{{ member.last_login|timeago }}{% else %}never{% endif %}
+          </p>
+        </div>
+
+        {# Access #}
+        <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+          {% if member.is_self %}
+            <span class="staff-meta">That's you</span>
+          {% elif member.is_last_owner %}
+            <span class="staff-meta">Stays enabled</span>
+          {% else %}
+            <form method="post" action="{% url 'console:staff_toggle' member.pk %}"
+                  onsubmit="return confirm('{% if member.is_active_account %}Disable {{ member.display_name|escapejs }}? They are signed out everywhere and cannot sign in until enabled again.{% else %}Enable {{ member.display_name|escapejs }} again?{% endif %}');">
+              {% csrf_token %}
+              {% if member.is_active_account %}
+                <button type="submit" class="btn-ghost btn-sm text-rose-700 dark:text-rose-300">Disable</button>
+              {% else %}
+                <button type="submit" class="btn-outline btn-sm">Enable</button>
+              {% endif %}
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      {% include "components/empty_state.html" with icon="i-users" title="No staff yet" body="Create the first staff account below." %}
+    {% endfor %}
+  </section>
+
+  <div class="space-y-6">
+    {# ---------- New staff account ---------- #}
+    <section class="card p-5 sm:p-6" id="new-staff">
+      <h2 class="section-title">New staff account</h2>
+      <p class="section-note mt-0.5">A temporary password is generated and shown once. They pick their own at first sign-in.</p>
+
+      <form method="post" action="{% url 'console:staff_create' %}" class="mt-5 space-y-4" data-loading-form data-loading-label="Creating…">
+        {% csrf_token %}
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <label class="label" for="staffUsername">Username</label>
+            <input type="text" name="username" id="staffUsername" class="input" required maxlength="150"
+                   autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. dara.support">
+          </div>
+          <div>
+            <label class="label" for="staffName">Full name</label>
+            <input type="text" name="full_name" id="staffName" class="input" required maxlength="150" autocomplete="off">
+          </div>
+          <div>
+            <label class="label" for="staffEmail">E-mail</label>
+            <input type="email" name="email" id="staffEmail" class="input" required maxlength="254" autocomplete="off">
+            <p class="help">Where sign-in codes and password resets go.</p>
+          </div>
+          <div>
+            <label class="label" for="staffRole">Role</label>
+            <select name="staff_role" id="staffRole" class="input">
+              {% for value, label in role_choices %}
+                <option value="{{ value }}" {% if value == "support" %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <p class="help">You can change it at any time.</p>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" class="btn-primary">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-plus"/></svg> Create staff account
+          </button>
+        </div>
+      </form>
+    </section>
+
+    {# ---------- What each role can do ---------- #}
+    <section class="card overflow-hidden" id="permissions">
+      <div class="border-b hairline px-5 py-4">
+        <h2 class="section-title">What each role can open</h2>
+        <p class="section-note mt-0.5">
+          The same table the console enforces on every page, form and download.
+          Buttons for areas a role doesn't have are hidden, too.
+        </p>
+      </div>
+      <div class="table-wrap">
+        <table class="staff-matrix">
+          <thead>
+            <tr>
+              <th scope="col">Area</th>
+              {% for role in roles %}<th scope="col">{{ role.label }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in matrix %}
+              <tr>
+                <th scope="row">
+                  <span class="block font-semibold text-ink-900 dark:text-white">{{ row.area.label }}</span>
+                  <span class="mt-0.5 block text-[11.5px] leading-snug text-ink-600 dark:text-ink-300">{{ row.area.covers }}</span>
+                </th>
+                {% for allowed in row.cells %}
+                  <td>
+                    {% if allowed %}
+                      <span class="staff-yes" title="Yes"><svg aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Yes</span></span>
+                    {% else %}
+                      <span class="staff-no" aria-hidden="true">—</span><span class="sr-only">No</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="border-t hairline px-5 py-3 text-[11.5px] leading-relaxed text-ink-500 dark:text-ink-400">
+        Two rules sit on top: only an owner can open or change another administrator's account from the student pages,
+        and only an owner can make somebody an administrator. The last owner who can sign in always stays an owner.
+      </p>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var button = document.querySelector('[data-copy-secret]');
+    var secret = document.getElementById('staffSecret');
+    if (!button || !secret) return;
+    button.addEventListener('click', function () {
+      var label = button.querySelector('span');
+      var done = function () { if (label) label.textContent = 'Copied'; };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(secret.textContent.trim()).then(done, function () {});
+      } else {
+        var range = document.createRange();
+        range.selectNodeContents(secret);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    });
+  })();
+</script>
+{% endblock %}

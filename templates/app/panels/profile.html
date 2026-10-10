@@ -1,0 +1,103 @@
+{% load ai_extras %}
+<div class="panel" data-panel-name="profile">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Account</p>
+    <h2 class="panel-title">Profile</h2>
+    <p class="panel-sub">Your details, and the password you sign in with.</p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <section class="panel-section">
+    <div class="card">
+      <div class="card-head">
+        <h3>Your details</h3>
+        <p>Shown on your account and used when we need to contact you.</p>
+      </div>
+      <form class="card-body" method="post" action="{% url 'student:profile' %}"
+            data-panel-form="profile">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="profile">
+        <div class="form-grid cols">
+          {% for field in profile_form %}
+            <div class="field {% if field.errors %}is-bad{% endif %}">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}<span class="hint">{{ field.help_text }}</span>{% endif %}
+              {% for error in field.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="btn-row" style="margin-top:16px">
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel-section">
+    <div class="card">
+      <div class="card-head">
+        <h3>Password</h3>
+        <p>You stay signed in on this device after changing it.</p>
+      </div>
+      <form class="card-body" method="post" action="{% url 'student:profile' %}"
+            data-panel-form="profile">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="password">
+        <div class="form-grid cols">
+          {% for field in password_form %}
+            <div class="field {% if field.errors %}is-bad{% endif %}">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}<span class="hint">{{ field.help_text }}</span>{% endif %}
+              {% for error in field.errors %}<span class="bad">{{ error }}</span>{% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="btn-row" style="margin-top:16px">
+          <button type="submit" class="btn">Change password</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel-section">
+    <h3 class="section-title">Your balances</h3>
+    {% include "app/panels/_wallets.html" %}
+  </section>
+
+  <section class="panel-section">
+    <div class="card">
+      <div class="card-head"><h3>Account</h3></div>
+      <div class="rows">
+        <div class="row">
+          <span class="row-main"><span class="row-title">Username</span></span>
+          <span class="row-value">{{ user.username }}</span>
+        </div>
+        <div class="row">
+          <span class="row-main"><span class="row-title">Member since</span></span>
+          <span class="row-value">{{ user.date_joined|date:"j M Y" }}</span>
+        </div>
+        <div class="row">
+          <span class="row-main"><span class="row-title">Referral code</span></span>
+          <span class="row-value">{{ user.referral_code }}</span>
+        </div>
+        {% if subscription %}
+          <div class="row">
+            <span class="row-main">
+              <span class="row-title">Current plan</span>
+              <span class="row-sub">{{ subscription.days_remaining }} days remaining</span>
+            </span>
+            <span class="badge is-ok">{{ subscription.plan.name }}</span>
+          </div>
+        {% endif %}
+      </div>
+      <div class="card-foot">
+        <a href="{% url 'auth:logout' %}" class="btn btn-sm btn-danger">
+          <svg aria-hidden="true"><use href="#i-logout"/></svg> Sign out
+        </a>
+      </div>
+    </div>
+  </section>
+</div>

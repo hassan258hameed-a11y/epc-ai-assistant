@@ -1,0 +1,35 @@
+{% if messages %}
+  <div class="pointer-events-none fixed inset-x-0 top-3 z-[80] flex flex-col items-center gap-2 px-3 sm:top-5" id="toastStack">
+    {% for message in messages %}
+      <div role="status"
+           class="toast pointer-events-auto flex w-full max-w-md animate-fade-up items-start gap-3 rounded-2xl border p-3.5 shadow-lift backdrop-blur-xl
+                  {% if 'success' in message.tags %}border-emerald-500/25 bg-emerald-50/95 text-emerald-900 dark:border-emerald-400/25 dark:bg-emerald-950/80 dark:text-emerald-100
+                  {% elif 'error' in message.tags %}border-rose-500/25 bg-rose-50/95 text-rose-900 dark:border-rose-400/25 dark:bg-rose-950/80 dark:text-rose-100
+                  {% elif 'warning' in message.tags %}border-amber-500/25 bg-amber-50/95 text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/80 dark:text-amber-100
+                  {% else %}border-brand-500/25 bg-white/95 text-ink-800 dark:border-brand-400/25 dark:bg-ink-900/90 dark:text-ink-100{% endif %}">
+        <span class="mt-0.5 shrink-0">
+          <svg class="h-5 w-5" aria-hidden="true">
+            <use href="#i-{% if 'success' in message.tags %}check-circle{% elif 'error' in message.tags %}alert{% elif 'warning' in message.tags %}alert{% else %}info{% endif %}"/>
+          </svg>
+        </span>
+        <p class="flex-1 text-sm font-medium leading-relaxed">{{ message }}</p>
+        <button type="button" class="btn-icon h-7 w-7 shrink-0" aria-label="Dismiss notification"
+                onclick="this.closest('.toast').remove()">
+          <svg class="h-4 w-4" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
+    {% endfor %}
+  </div>
+
+  <script>
+    // Auto-dismiss toasts, newest last, with a graceful fade.
+    document.querySelectorAll('#toastStack .toast').forEach(function (toast, index) {
+      setTimeout(function () {
+        toast.style.transition = 'opacity .35s ease, transform .35s ease';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-8px)';
+        setTimeout(function () { toast.remove(); }, 360);
+      }, 5200 + index * 400);
+    });
+  </script>
+{% endif %}

@@ -1,0 +1,91 @@
+{% comment %}
+Renders one bound form field with a label, help text and errors.
+  {% include "console/_form_field.html" with field=form.name %}
+
+Markup, names, ids and validation are unchanged — this is the same field the
+form has always rendered, wearing the console's design system.
+{% endcomment %}
+{% load ai_extras %}
+{% with kind=field|widget_type %}
+<div class="{{ wrapper_class|default:'' }}">
+  {% if kind == 'CheckboxInput' %}
+    {# A checkbox is a target, so it gets a full card to be pressed on. #}
+    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-ink-200/70 bg-white px-3 py-2.5
+                  transition-[border-color,background-color,transform] duration-200 ease-out
+                  hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-500/[.04]
+                  dark:border-white/8 dark:bg-white/[.03] dark:hover:border-brand-500/40">
+      <input type="checkbox" name="{{ field.name }}" id="{{ field.id_for_label }}" class="checkbox mt-0.5"
+             {% if field.value %}checked{% endif %}>
+      <span>
+        <span class="block text-[13.5px] font-semibold text-ink-800 dark:text-ink-100">{{ field.label }}</span>
+        {% if field.help_text %}
+          <span class="mt-0.5 block text-[11.5px] leading-relaxed text-ink-500 dark:text-ink-400">{{ field.help_text }}</span>
+        {% endif %}
+      </span>
+    </label>
+  {% else %}
+    <label for="{{ field.id_for_label }}" class="label">
+      {{ field.label }}
+      {% if not field.field.required %}<span class="font-medium text-ink-400">(optional)</span>{% endif %}
+    </label>
+
+    {% if kind == 'Select' or kind == 'NullBooleanSelect' %}
+      <select name="{{ field.name }}" id="{{ field.id_for_label }}"
+              class="input {% if field.errors %}input-error{% endif %}">
+        {% for value, label in field.field.choices %}
+          <option value="{{ value }}" {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+    {% elif kind == 'SelectMultiple' or kind == 'CheckboxSelectMultiple' %}
+      {% comment %}
+        A multiple-choice field had no case here at all, so it fell through to
+        the plain text input below — which rendered an empty box that could
+        never hold a selection, and submitted a string the form would discard.
+      {% endcomment %}
+      <select name="{{ field.name }}" id="{{ field.id_for_label }}" multiple
+              size="{{ field.field.widget.attrs.size|default:6 }}"
+              class="input h-auto py-2 {% if field.errors %}input-error{% endif %}">
+        {% for value, label in field.field.choices %}
+          <option value="{{ value }}" {% if value|stringformat:"s" in field.value|stringify_all %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="help">Hold Ctrl (or Cmd) to choose more than one.</p>
+
+    {% elif kind == 'DateTimeInput' or kind == 'DateInput' or kind == 'TimeInput' %}
+      {% comment %}
+        Likewise: a date or time field rendered as free text, so the browser
+        offered no picker and the value had to be typed in exactly the format
+        the form expected.
+      {% endcomment %}
+      <input type="{% if kind == 'DateTimeInput' %}datetime-local{% elif kind == 'DateInput' %}date{% else %}time{% endif %}"
+             name="{{ field.name }}" id="{{ field.id_for_label }}"
+             value="{{ field.value|default:'' }}"
+             {% if field.field.required %}required{% endif %}
+             class="input {% if field.errors %}input-error{% endif %}">
+
+    {% elif kind == 'Textarea' %}
+      <textarea name="{{ field.name }}" id="{{ field.id_for_label }}"
+                rows="{{ field.field.widget.attrs.rows|default:3 }}"
+                placeholder="{{ field.field.widget.attrs.placeholder|default:'' }}"
+                class="input resize-y leading-relaxed {% if field.errors %}input-error{% endif %}">{{ field.value|default:'' }}</textarea>
+
+    {% else %}
+      <input type="{% if kind == 'PasswordInput' %}password{% elif kind == 'EmailInput' %}email{% elif kind == 'NumberInput' %}number{% else %}text{% endif %}"
+             name="{{ field.name }}" id="{{ field.id_for_label }}"
+             value="{% if kind != 'PasswordInput' %}{{ field.value|default:'' }}{% endif %}"
+             placeholder="{{ field.field.widget.attrs.placeholder|default:'' }}"
+             {% if field.field.required %}required{% endif %}
+             class="input {% if field.errors %}input-error{% endif %}">
+    {% endif %}
+
+    {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+  {% endif %}
+
+  {% for error in field.errors %}
+    <p class="field-error animate-fade-down">
+      <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true"><use href="#i-alert"/></svg>{{ error }}
+    </p>
+  {% endfor %}
+</div>
+{% endwith %}

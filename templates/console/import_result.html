@@ -1,0 +1,144 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Import result · Console{% endblock %}
+{% block heading %}Import complete{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">{{ created|length }} account{{ created|length|pluralize }} created.</p>
+{% endblock %}
+
+{% block measure %}max-w-3xl{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  {% if created %}
+    <div class="flex items-start gap-3 rounded-xl2 border border-amber-500/25 bg-amber-500/8 p-4">
+      <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true"><use href="#i-alert"/></svg>
+      <div>
+        <p class="text-sm font-semibold text-ink-900 dark:text-white">Copy these passwords now</p>
+        <p class="mt-0.5 text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+          Passwords are stored only as hashes — this is the one and only time they can be shown. Leaving this page
+          removes them permanently.
+        </p>
+      </div>
+    </div>
+
+    <section class="card overflow-hidden reveal">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">New accounts</h2>
+        <div class="flex gap-2">
+          <button type="button" id="copyAll" class="btn-outline btn-sm">
+            <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-copy"/></svg> Copy all
+          </button>
+          <button type="button" id="downloadCsv" class="btn-primary btn-sm">
+            <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-download"/></svg> Download CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table" id="resultTable">
+          <thead>
+            <tr><th class="th">Username</th><th class="th">Name</th><th class="th">Password</th><th class="th"></th></tr>
+          </thead>
+          <tbody>
+            {% for account in created %}
+              <tr class="row group/row">
+                <td class="td font-mono text-sm font-medium" data-username>{{ account.username }}</td>
+                <td class="td text-sm">{{ account.full_name|default:"—" }}</td>
+                <td class="td">
+                  <code class="rounded-md border hairline bg-ink-50 px-2 py-1 font-mono text-xs font-semibold text-ink-800 dark:bg-white/5 dark:text-ink-100"
+                        data-password>{{ account.password }}</code>
+                </td>
+                <td class="td text-right">
+                  <button type="button" class="btn-icon h-7 w-7" data-copy-row aria-label="Copy credentials for {{ account.username }}">
+                    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-copy"/></svg>
+                  </button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <section class="card reveal">
+      {% include "components/empty_state.html" with icon="i-alert" title="Nothing was imported" body="No valid rows were found in the file. Check the column names and try again." action_url="/admin/accounts/" action_label="Back to import" %}
+    </section>
+  {% endif %}
+
+  <div class="flex flex-wrap justify-center gap-3">
+    <a href="{% url 'console:accounts' %}" class="btn-outline">Import another file</a>
+    <a href="{% url 'console:users' %}" class="btn-primary">View all students</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var table = document.getElementById('resultTable');
+  if (!table) return;
+
+  function rows() {
+    return Array.prototype.map.call(table.querySelectorAll('tbody tr'), function (row) {
+      return {
+        username: row.querySelector('[data-username]').textContent.trim(),
+        password: row.querySelector('[data-password]').textContent.trim()
+      };
+    });
+  }
+
+  function copy(text, button, label) {
+    var done = function () {
+      if (!button) return;
+      var original = button.innerHTML;
+      button.innerHTML = '<svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-check"/></svg>' + (label || '');
+      setTimeout(function () { button.innerHTML = original; }, 1600);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {});
+    } else {
+      var area = document.createElement('textarea');
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(area);
+    }
+  }
+
+  document.querySelectorAll('[data-copy-row]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var row = button.closest('tr');
+      var username = row.querySelector('[data-username]').textContent.trim();
+      var password = row.querySelector('[data-password]').textContent.trim();
+      copy(username + '  /  ' + password, button);
+    });
+  });
+
+  document.getElementById('copyAll').addEventListener('click', function () {
+    var text = rows().map(function (r) { return r.username + '\t' + r.password; }).join('\n');
+    copy(text, this, ' Copied');
+  });
+
+  // The CSV is built and downloaded entirely in the browser — the plaintext
+  // passwords are never sent back to the server.
+  document.getElementById('downloadCsv').addEventListener('click', function () {
+    var csv = 'username,password\n' + rows().map(function (r) {
+      return '"' + r.username.replace(/"/g, '""') + '","' + r.password.replace(/"/g, '""') + '"';
+    }).join('\n');
+
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'imported-accounts.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+  });
+})();
+</script>
+{% endblock %}

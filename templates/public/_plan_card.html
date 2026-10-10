@@ -1,0 +1,48 @@
+{% load ai_extras %}
+<div class="relative flex flex-col rounded-2xl border p-6 transition duration-300 hover:-translate-y-1 hover:shadow-lift
+            {% if plan.is_featured %}border-brand-500/50 bg-white shadow-glow dark:bg-[#14171E]
+            {% else %}border-ink-200/80 bg-white shadow-card dark:border-white/10 dark:bg-[#14171E]{% endif %}"
+     data-reveal>
+
+  {% if plan.is_featured %}
+    <span class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-brand-600 to-accent-500 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg">
+      Most popular
+    </span>
+  {% endif %}
+
+  <h3 class="text-lg font-bold text-ink-900 dark:text-white">{{ plan.name }}</h3>
+  {% if plan.description %}
+    <p class="mt-1.5 text-sm leading-relaxed text-ink-600 dark:text-ink-400">{{ plan.description }}</p>
+  {% endif %}
+
+  <div class="mt-5 flex items-baseline gap-1.5">
+    <span class="text-4xl font-extrabold tracking-tight text-ink-900 dark:text-white">
+      {% if plan.currency == 'USD' %}${% endif %}{{ plan.price|floatformat:"-2" }}
+    </span>
+    {% if plan.currency != 'USD' %}<span class="text-sm font-semibold text-ink-600 dark:text-ink-400">{{ plan.currency }}</span>{% endif %}
+    <span class="text-sm text-ink-600 dark:text-ink-400">/ {{ plan.duration_days }} days</span>
+  </div>
+
+  <div class="mt-4 rounded-xl border hairline bg-ink-50 px-4 py-3 dark:bg-white/[.03]">
+    <p class="text-xl font-bold text-brand-700 dark:text-brand-300">{{ plan.tokens|compact_number }} <span class="text-sm font-semibold text-ink-600 dark:text-ink-400">tokens</span></p>
+    <p class="mt-0.5 text-xs text-ink-600 dark:text-ink-400">≈ {{ plan.tokens|intcomma }} tokens included</p>
+  </div>
+
+  {% if plan.feature_list %}
+    <ul class="mt-5 flex-1 space-y-2.5">
+      {% for feature in plan.feature_list %}
+        <li class="flex items-start gap-2.5 text-sm text-ink-600 dark:text-ink-300">
+          <svg class="mt-0.5 h-4 w-4 shrink-0 text-accent-500" aria-hidden="true"><use href="#i-check"/></svg>
+          <span>{{ feature }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="flex-1"></div>
+  {% endif %}
+
+  <a href="{% if user.is_authenticated and user.is_student %}{% url 'payments:checkout' plan.slug %}{% else %}{% url 'auth:signup' %}{% endif %}"
+     class="{% if plan.is_featured %}btn-primary{% else %}btn-outline{% endif %} mt-6 w-full">
+    {% if user.is_authenticated and user.is_student %}Choose {{ plan.name }}{% else %}Get started{% endif %}
+  </a>
+</div>

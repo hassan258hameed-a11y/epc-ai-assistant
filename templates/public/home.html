@@ -1,0 +1,789 @@
+{% extends "base/public.html" %}
+{% load ai_extras %}
+
+{% comment %}
+The landing page — the Claude Design "Landing Page", on the real catalogue.
+
+Seven movements: a hero with a chat that answers itself, a marquee of
+subjects, six feature cards, three steps, the plans with a switcher that
+recommends by how much you study, the questions, and the closing call.
+
+Everything that can be true is: the plans, their prices, token counts and
+perks come from the catalogue, the free-token figure from settings, the
+payment methods from the model, and "typical reply" is the median of real
+answers rather than a claim. The chat in the hero is a scripted demo and is
+the only invented content on the page.
+{% endcomment %}
+
+{% block title %}{{ BRAND.full_name }} — {{ BRAND.tagline }}{% endblock %}
+
+{% block head %}
+<style>
+  /* Motion: the design's keyframes, named apart so nothing else can retime them. */
+  @keyframes lpFadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  @keyframes lpPop { 0% { opacity: 0; transform: scale(.9); } 60% { transform: scale(1.03); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes lpRing { 0% { transform: scale(.6); opacity: .5; } 70% { transform: scale(2.6); opacity: 0; } 100% { transform: scale(2.6); opacity: 0; } }
+  @keyframes lpDotB { 0%, 80%, 100% { transform: translateY(0); opacity: .35; } 40% { transform: translateY(-4px); opacity: 1; } }
+  @keyframes lpBlink { 0%, 48% { opacity: 1; } 49%, 100% { opacity: 0; } }
+  @keyframes lpFloatA { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(30px, -26px); } }
+  @keyframes lpFloatB { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-34px, 24px); } }
+  @keyframes lpFloatC { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(18px, 18px) scale(1.06); } }
+  @keyframes lpMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @keyframes lpMarqueeR { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+  @keyframes lpBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  @keyframes lpGrad { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+  .lp-page { position: relative; overflow-x: clip; background: #F4F7FC; color: var(--ink); }
+  .lp-page ::selection { background: rgba(37,99,235,.18); }
+  .lp-page [data-reveal] { opacity: 0; transform: translateY(26px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .lp-page [data-reveal].is-in { opacity: 1; transform: none; }
+  .lp-num { font-variant-numeric: tabular-nums; }
+
+  /* ---- hero ------------------------------------------------------------ */
+  .lp-hero { position: relative; padding: clamp(34px,5vw,74px) clamp(16px,4vw,56px) clamp(20px,3vw,40px); overflow: hidden; }
+  .lp-orb { position: absolute; border-radius: 50%; pointer-events: none; }
+  .lp-orb.a { left: -160px; top: -140px; width: 560px; height: 560px; filter: blur(96px); opacity: .5;  background: radial-gradient(circle, rgba(37,99,235,.32), transparent 70%); }
+  .lp-orb.b { right: -190px; top: -60px; width: 520px; height: 520px; filter: blur(104px); opacity: .4;  background: radial-gradient(circle, rgba(225,29,72,.26), transparent 70%); }
+  .lp-orb.c { left: 38%; bottom: -180px; width: 420px; height: 420px; filter: blur(110px); opacity: .34;  background: radial-gradient(circle, rgba(124,58,237,.24), transparent 70%); }
+  .lp-hero-in { position: relative; display: flex; flex-wrap: wrap; gap: clamp(24px,3.4vw,56px); align-items: center; max-width: 1360px; margin: 0 auto; }
+  .lp-hero-copy { flex: 1 1 clamp(300px, calc(48% - 28px), 660px); min-width: 0; }
+  .lp-badge { display: inline-flex; align-items: center; gap: 9px; padding: 6px 14px 6px 10px; border-radius: 99px; background: rgba(255,255,255,.86); border: 1px solid #DCE5F5; box-shadow: 0 8px 20px -14px rgba(20,35,70,.5); }
+  .lp-badge span.dot { position: relative; display: grid; place-items: center; width: 7px; height: 7px; flex: 0 0 auto; }
+  .lp-badge span.dot b, .lp-badge span.dot em { display: block; width: 7px; height: 7px; border-radius: 50%; background: #E11D48; }
+  .lp-badge span.dot em { position: absolute; animation: lpRing 2.4s ease-out 3 both; }
+  .lp-badge span.txt { font-size: 12px; font-weight: 600; letter-spacing: .01em; color: var(--body); }
+  .lp-h1 { margin: 18px 0 0; font-size: clamp(42px,6.4vw,82px); font-weight: 600; letter-spacing: -.045em; line-height: .98; }
+  .lp-h1 .serif { letter-spacing: -.02em; background: linear-gradient(100deg, #2563EB, #7C3AED 42%, #E11D48); background-size: 220% 100%; animation: lpGrad 9s ease-in-out 2 both; -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lp-lede { margin: 20px 0 0; font-size: clamp(15.5px,1.3vw,18.5px); line-height: 1.62; color: var(--mid); max-width: 50ch; text-wrap: pretty; }
+  .lp-actions { display: flex; flex-wrap: wrap; gap: 11px; margin-top: 26px; }
+  .lp-btn-lg { position: relative; overflow: hidden; height: 54px; padding: 0 26px; display: flex; align-items: center; gap: 10px; border-radius: 16px; background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; font-size: 15.5px; font-weight: 600; box-shadow: 0 20px 40px -16px rgba(37,99,235,.95); transition: transform .28s cubic-bezier(.2,.7,.2,1), box-shadow .28s, filter .28s; }
+  .lp-btn-lg:hover { transform: translateY(-3px) scale(1.015); filter: saturate(1.14); color: #fff; }
+  .lp-btn-lg span.sheen { position: absolute; top: 0; left: 0; width: 58px; height: 100%; background: linear-gradient(90deg, rgba(255,255,255,.44), transparent); opacity: 0; animation: lpSheen 4.6s cubic-bezier(.4,0,.2,1) 3 both; pointer-events: none; }
+  .lp-btn-ghost { height: 54px; padding: 0 22px; display: flex; align-items: center; gap: 9px; border-radius: 16px; background: #fff; border: 1px solid #DFE6F2; color: var(--body); font-size: 15px; font-weight: 600; transition: transform .28s cubic-bezier(.2,.7,.2,1), border-color .28s, box-shadow .28s, color .28s; }
+  .lp-btn-ghost:hover { transform: translateY(-3px); border-color: var(--blue); box-shadow: 0 18px 34px -22px rgba(20,35,70,.6); color: var(--blue-ink); }
+  .lp-gift { display: flex; align-items: center; gap: 9px; margin-top: 18px; font-size: 13.5px; color: var(--mid); }
+  .lp-gift i { width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center; flex: 0 0 auto; background: linear-gradient(135deg, #FDE68A, #F59E0B); }
+  .lp-gift b { font-weight: 700; color: var(--ink); }
+  .lp-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; padding-top: 26px; border-top: 1px solid #E3E9F4; }
+  .lp-stat { flex: 1 1 118px; min-width: 104px; padding: 13px 15px; border-radius: 16px; background: rgba(255,255,255,.78); border: 1px solid #E3E9F4; backdrop-filter: blur(6px); transition: transform .3s cubic-bezier(.2,.7,.2,1), border-color .3s, box-shadow .3s; }
+  .lp-stat:hover { transform: translateY(-4px); border-color: rgba(37,99,235,.35); box-shadow: 0 18px 32px -24px rgba(20,35,70,.6); }
+  .lp-stat b { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .13em; color: var(--mute); }
+  .lp-stat strong { display: block; font-size: clamp(23px,2.2vw,28px); font-weight: 600; letter-spacing: -.038em; line-height: 1; margin-top: 7px; background: linear-gradient(120deg, #0B1222, #2563EB); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lp-stat small { display: block; font-size: 11px; color: var(--mute); margin-top: 4px; }
+
+  /* ---- hero demo ------------------------------------------------------- */
+  .lp-demo-wrap { flex: 1 1 clamp(300px, calc(52% - 28px), 700px); min-width: 0; }
+  .lp-demo { border-radius: 24px; overflow: hidden; transition: background .5s, border-color .5s, box-shadow .5s; background: #fff; border: 1px solid var(--hair); box-shadow: 0 40px 80px -44px rgba(20,35,70,.55); }
+  .lp-demo-head { display: flex; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid var(--hair); transition: border-color .5s; }
+  .lp-lights { display: flex; gap: 6px; flex: 0 0 auto; }
+  .lp-lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .lp-demo-title { font-size: 12.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .5s; color: var(--ink); }
+  .lp-demo-chip { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 99px; flex: 0 0 auto; transition: background .5s, color .5s; background: #EAF1FE; color: var(--blue-ink); font-variant-numeric: tabular-nums; }
+  .lp-demo-body { padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; min-height: 330px; }
+  .lp-ask { max-width: 82%; padding: 13px 17px; border-radius: 18px 18px 4px 18px; background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; font-size: 14.5px; font-weight: 500; line-height: 1.45; box-shadow: 0 14px 28px -16px rgba(37,99,235,.9); animation: lpPop .42s cubic-bezier(.3,1.2,.4,1) both; }
+  .lp-reply { display: flex; gap: 11px; align-items: flex-start; }
+  .lp-avatar { width: 32px; height: 32px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; background: linear-gradient(135deg, #A78BFA, #6D28D9); box-shadow: 0 8px 18px -10px rgba(109,40,217,.9); }
+  .lp-think { display: flex; align-items: center; gap: 9px; height: 32px; }
+  .lp-think i { display: flex; gap: 4px; }
+  .lp-think i b { width: 6px; height: 6px; border-radius: 50%; background: #6D28D9; display: block; animation: lpDotB 1.15s ease-in-out infinite; }
+  .lp-think i b:nth-child(2) { animation-delay: .14s; } .lp-think i b:nth-child(3) { animation-delay: .28s; }
+  .lp-think span { font-size: 12.5px; font-weight: 500; transition: color .5s; color: var(--soft); }
+  .lp-think[hidden], .lp-formula[hidden], .lp-tags[hidden], .lp-caret[hidden] { display: none; }
+  .lp-answer { font-size: 14.5px; line-height: 1.62; transition: color .5s; color: var(--ink); text-wrap: pretty; }
+  .lp-caret { display: inline-block; width: 2px; height: 1.05em; background: #6D28D9; vertical-align: -2px; margin-left: 2px; animation: lpBlink 1s step-end infinite; }
+  .lp-formula { margin-top: 11px; padding: 12px 14px; border-radius: 13px; font-size: 13px; overflow-x: auto; animation: lpFadeUp .4s cubic-bezier(.2,.7,.2,1) both; transition: background .5s, color .5s; background: #F4F7FC; color: var(--body); }
+  .lp-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+  .lp-tags span { font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 99px; animation: lpPop .4s cubic-bezier(.3,1.2,.4,1) both; transition: background .5s, color .5s, border-color .5s; background: #F4F7FC; color: var(--mid); border: 1px solid var(--hair); }
+  .lp-demo-foot { padding: 12px 14px 16px; }
+  .lp-input { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 14px; border-radius: 16px; transition: background .5s, border-color .5s; background: #F8FAFD; border: 1px solid var(--hair); }
+  .lp-input span.ph { flex: 1 1 auto; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .5s; color: var(--soft); }
+  .lp-send { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto; background: linear-gradient(135deg, #2563EB, #1D4ED8); box-shadow: 0 10px 20px -10px rgba(37,99,235,.9); transition: transform .28s cubic-bezier(.3,1.3,.4,1); }
+  .lp-input:hover .lp-send { transform: scale(1.08) rotate(-8deg); }
+  .lp-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+  .lp-picker button { font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 99px; transition: background .26s, color .26s, border-color .26s, transform .26s cubic-bezier(.2,.7,.2,1); background: #F4F7FC; color: var(--mid); border: 1px solid var(--hair); }
+  .lp-picker button:hover { transform: translateY(-2px); }
+  .lp-picker button.is-on { background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; border-color: transparent; }
+
+  /* ---- marquee --------------------------------------------------------- */
+  .lp-marq-sec { padding: clamp(14px,2vw,26px) 0 clamp(24px,3vw,40px); overflow: hidden; }
+  .lp-marq-head { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 14px; font-size: 10px; font-weight: 700; letter-spacing: .18em; color: var(--soft); }
+  .lp-marq { position: relative; mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent); }
+  .lp-marq-row { display: flex; width: max-content; gap: 10px; }
+  .lp-marq-row { will-change: transform; }
+  .lp-marq-row.is-paused { animation-play-state: paused; }
+  .lp-marq-row.a { animation: lpMarquee 38s linear infinite; }
+  .lp-marq-row.b { margin-top: 10px; animation: lpMarqueeR 44s linear infinite; }
+  .lp-marq-row span { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 99px; background: #fff; border: 1px solid var(--line); font-size: 13px; font-weight: 500; white-space: nowrap; color: var(--body); }
+  .lp-marq-row.b span { background: rgba(255,255,255,.6); color: var(--mid); }
+  .lp-marq-row span i { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; display: block; }
+
+  /* ---- shared section furniture ---------------------------------------- */
+  .lp-sec { padding: clamp(30px,4.4vw,70px) clamp(16px,4vw,56px); }
+  .lp-sec-head { text-align: center; margin: 0 auto; }
+  .lp-eyebrow { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .16em; padding: 6px 14px; border-radius: 99px; background: rgba(37,99,235,.1); color: var(--blue-ink); }
+  .lp-eyebrow.rose { background: rgba(225,29,72,.1); color: #9F1239; }
+  .lp-eyebrow.violet { background: rgba(124,58,237,.1); color: #6D28D9; }
+  .lp-h2 { margin: 16px 0 0; font-size: clamp(30px,4vw,52px); font-weight: 600; letter-spacing: -.042em; line-height: 1.04; }
+  .lp-sec-lede { margin: 15px 0 0; font-size: clamp(14.5px,1.15vw,16.5px); line-height: 1.6; color: var(--mid); text-wrap: pretty; }
+
+  /* ---- features -------------------------------------------------------- */
+  .lp-feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 282px), 1fr)); gap: clamp(12px,1.2vw,18px); margin-top: clamp(24px,3vw,44px); }
+  .lp-feat { position: relative; overflow: hidden; border-radius: 22px; padding: 22px; background: #fff; border: 1px solid var(--hair); box-shadow: 0 1px 2px rgba(20,35,70,.05); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .34s cubic-bezier(.2,.7,.2,1), box-shadow .34s, border-color .34s; }
+  .lp-page .lp-feat:hover { transform: translateY(-6px); box-shadow: 0 32px 56px -34px rgba(20,35,70,.55); border-color: var(--f-line); }
+  .lp-feat .glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .34s; background: radial-gradient(240px circle at var(--mx,50%) var(--my,50%), var(--f-glow), transparent 68%); }
+  .lp-feat:hover .glow { opacity: 1; }
+  .lp-feat .bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; transform-origin: left; transform: scaleX(0); transition: transform .42s cubic-bezier(.2,.7,.2,1); background: linear-gradient(135deg, var(--f1), var(--f2)); }
+  .lp-feat:hover .bar { transform: scaleX(1); }
+  .lp-feat .n { position: absolute; top: 12px; right: 20px; font-size: 64px; font-weight: 700; letter-spacing: -.05em; line-height: 1; color: #F1F4FA; pointer-events: none; font-variant-numeric: tabular-nums; }
+  .lp-feat .ic { position: relative; width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; background: linear-gradient(135deg, var(--f1), var(--f2)); box-shadow: 0 12px 24px -12px var(--f-shadow); transition: transform .38s cubic-bezier(.3,1.3,.4,1); }
+  .lp-feat:hover .ic { transform: rotate(-8deg) scale(1.08); }
+  .lp-feat h3 { position: relative; font-size: 17.5px; font-weight: 600; letter-spacing: -.024em; margin: 16px 0 0; }
+  .lp-feat p { position: relative; margin: 8px 0 0; font-size: 13.8px; line-height: 1.6; color: var(--mid); text-wrap: pretty; }
+
+  /* ---- how it works ---------------------------------------------------- */
+  .lp-how { background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.72), rgba(255,255,255,0)); }
+  .lp-steps { position: relative; display: flex; flex-wrap: wrap; gap: clamp(12px,1.2vw,18px); margin-top: clamp(24px,3vw,44px); }
+  .lp-step { flex: 1 1 clamp(240px, calc(33.333% - 12px), 420px); min-width: 0; position: relative; overflow: hidden; border-radius: 22px; padding: 22px; cursor: default; transition: transform .34s cubic-bezier(.2,.7,.2,1), box-shadow .34s, border-color .34s, background .34s; background: rgba(255,255,255,.66); border: 1px solid var(--hair); box-shadow: 0 1px 2px rgba(20,35,70,.05); }
+  .lp-step.is-on { background: #fff; border-color: rgba(37,99,235,.34); box-shadow: 0 30px 54px -34px rgba(20,35,70,.6); transform: translateY(-6px); }
+  .lp-step .bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; transform-origin: left; transform: scaleX(0); transition: transform .5s cubic-bezier(.2,.7,.2,1); background: linear-gradient(90deg, #3B82F6, #7C3AED); }
+  .lp-step.is-on .bar { transform: scaleX(1); }
+  .lp-step .n { width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; font-size: 17px; font-weight: 700; flex: 0 0 auto; transition: background .34s, color .34s, box-shadow .34s, transform .38s cubic-bezier(.3,1.3,.4,1); background: #F2F5FB; color: var(--mute); }
+  .lp-step.is-on .n { background: linear-gradient(135deg, #2563EB, #6D28D9); color: #fff; box-shadow: 0 14px 26px -12px rgba(59,130,246,.95); transform: rotate(-6deg) scale(1.06); }
+  .lp-step h3 { font-size: 17.5px; font-weight: 600; letter-spacing: -.024em; min-width: 0; margin: 0; }
+  .lp-step p { margin: 13px 0 0; font-size: 13.8px; line-height: 1.6; color: var(--mid); text-wrap: pretty; }
+  .lp-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+  .lp-chips span { font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 99px; background: #F2F5FB; border: 1px solid var(--hair); color: var(--mid); }
+
+  /* ---- plans ----------------------------------------------------------- */
+  .lp-intensity { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+  .lp-intensity > span { font-size: 12px; font-weight: 600; color: var(--mute); }
+  .lp-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: 14px; background: #fff; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(20,35,70,.05); }
+  .lp-seg-pill { position: absolute; top: 4px; bottom: 4px; border-radius: 10px; transition: left .42s cubic-bezier(.5,1.3,.4,1), width .42s; background: #1D4ED8; box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 8px 18px -10px rgba(37,99,235,.9); width: calc((100% - 8px) / 3); left: calc(4px + var(--i, 1) * (100% - 8px) / 3); }
+  .lp-seg button { position: relative; z-index: 1; min-width: 0; border: 0; background: transparent; border-radius: 10px; padding: 9px 18px; font-size: 12.5px; font-weight: 600; white-space: nowrap; transition: color .28s, background-color 0s; color: var(--mute); }
+  .lp-seg button.is-on { color: #fff; background-color: #1D4ED8; box-shadow: inset 0 1px 0 rgba(255,255,255,.16); transition: color .28s, background-color 0s .4s, box-shadow 0s .4s; }
+  .lp-plans { display: flex; flex-wrap: wrap; gap: clamp(12px,1.2vw,18px); margin-top: clamp(20px,2.4vw,32px); align-items: stretch; }
+  .lp-plan { flex: 1 1 clamp(260px, calc(33.333% - 12px), 440px); min-width: 0; position: relative; display: flex; flex-direction: column; border-radius: 24px; padding: 24px; background: #fff; border: 1px solid var(--hair); box-shadow: 0 1px 2px rgba(20,35,70,.05); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .36s cubic-bezier(.2,.7,.2,1), box-shadow .36s, border-color .36s, background .36s; }
+  .lp-page .lp-plan:hover { transform: translateY(-8px); box-shadow: 0 40px 66px -38px rgba(20,35,70,.6); }
+  .lp-page .lp-plan.is-rec { background: linear-gradient(160deg, #FFFFFF 0%, #F8FBFF 52%, rgba(96,165,250,.16) 100%); border-color: rgba(37,99,235,.4); box-shadow: 0 40px 70px -38px rgba(37,99,235,.6); transform: translateY(-6px); }
+  .lp-page .lp-plan.is-rec:hover { transform: translateY(-8px); }
+  .lp-ribbon { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; letter-spacing: .1em; padding: 6px 14px; border-radius: 99px; white-space: nowrap; background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; box-shadow: 0 10px 22px -10px rgba(37,99,235,.95); }
+  .lp-plan.is-rec .lp-ribbon { display: flex; animation: lpPop .44s cubic-bezier(.3,1.25,.4,1) both; }
+  .lp-plan .tag { font-size: 12px; font-weight: 700; letter-spacing: .11em; transition: color .3s; color: var(--soft); }
+  .lp-plan.is-rec .tag { color: var(--blue-ink); }
+  .lp-plan .tag .rec { display: none; } .lp-plan.is-rec .tag .rec { display: inline; } .lp-plan.is-rec .tag .own { display: none; }
+  .lp-plan h3 { font-size: 21px; font-weight: 600; letter-spacing: -.028em; margin: 9px 0 0; }
+  .lp-plan .blurb { font-size: 13px; color: var(--mid); margin-top: 5px; }
+  .lp-price { display: flex; align-items: baseline; gap: 8px; margin-top: 18px; }
+  .lp-price b { font-size: clamp(38px,3.6vw,46px); font-weight: 600; letter-spacing: -.048em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .lp-price span { font-size: 13px; color: var(--mute); }
+  .lp-meter { margin-top: 16px; padding: 14px; border-radius: 16px; transition: background .3s, border-color .3s; background: #F6F8FC; border: 1px solid #EDF1F8; }
+  .lp-plan.is-rec .lp-meter { background: rgba(37,99,235,.07); border-color: rgba(37,99,235,.2); }
+  .lp-meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .lp-meter-top b { font-size: 19px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; transition: color .3s; color: var(--ink); }
+  .lp-plan.is-rec .lp-meter-top b { color: var(--blue-ink); }
+  .lp-meter-top span { font-size: 11.5px; font-weight: 600; color: var(--mute); white-space: nowrap; }
+  .lp-meter-track { height: 7px; border-radius: 99px; background: rgba(11,18,34,.07); margin-top: 10px; overflow: hidden; }
+  .lp-meter-track i { display: block; height: 100%; border-radius: 99px; min-width: 6px; width: 0; transition: width 1s cubic-bezier(.2,.7,.2,1), background .3s; background: linear-gradient(90deg, #CBD5E6, #94A3BE); }
+  .lp-plan.is-rec .lp-meter-track i { background: linear-gradient(90deg, #60A5FA, #1D4ED8); }
+  .lp-perks { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; flex: 1 1 auto; }
+  .lp-perks > div { display: flex; align-items: flex-start; gap: 9px; }
+  .lp-perks i { width: 18px; height: 18px; border-radius: 6px; display: grid; place-items: center; flex: 0 0 auto; margin-top: 1px; transition: background .3s, color .3s; background: #F2F5FB; color: var(--mute); }
+  .lp-plan.is-rec .lp-perks i { background: rgba(37,99,235,.12); color: var(--blue-ink); }
+  .lp-perks span { font-size: 13.5px; line-height: 1.5; color: var(--body); }
+  .lp-plan-cta { position: relative; overflow: hidden; height: 48px; margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 14px; font-size: 14px; font-weight: 600; transition: transform .26s cubic-bezier(.2,.7,.2,1), box-shadow .26s, filter .26s, background .3s, color .3s; background: #fff; color: var(--body); border: 1px solid #DFE6F2; }
+  .lp-plan-cta:hover { transform: translateY(-2px); filter: saturate(1.1); }
+  .lp-plan.is-rec .lp-plan-cta { background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; border-color: transparent; box-shadow: 0 18px 34px -14px rgba(37,99,235,.95); }
+  .lp-plan-cta .sheen { display: none; position: absolute; top: 0; left: 0; width: 50px; height: 100%; background: linear-gradient(90deg, rgba(255,255,255,.42), transparent); opacity: 0; animation: lpSheen 5s cubic-bezier(.4,0,.2,1) 3 both; pointer-events: none; }
+  .lp-plan.is-rec .lp-plan-cta .sheen { display: block; }
+  .lp-compare { display: flex; justify-content: center; margin-top: 22px; }
+  .lp-compare a { height: 44px; padding: 0 20px; display: flex; align-items: center; gap: 8px; border-radius: 13px; background: #fff; border: 1px solid #DFE6F2; font-size: 13.5px; font-weight: 600; color: var(--body); transition: transform .26s, border-color .26s, box-shadow .26s, color .26s; }
+  .lp-compare a:hover { transform: translateY(-2px); border-color: var(--blue); color: var(--blue-ink); box-shadow: 0 16px 30px -22px rgba(20,35,70,.6); }
+
+  /* ---- faq -------------------------------------------------------------- */
+  .lp-faqs { display: flex; flex-direction: column; gap: 9px; margin-top: clamp(22px,2.6vw,36px); }
+  .lp-faq { border-radius: 18px; overflow: hidden; background: #fff; border: 1px solid var(--hair); box-shadow: 0 1px 2px rgba(20,35,70,.04); transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .3s cubic-bezier(.2,.7,.2,1), border-color .3s, box-shadow .3s; }
+  .lp-page .lp-faq.is-open { border-color: rgba(37,99,235,.34); box-shadow: 0 26px 46px -32px rgba(20,35,70,.55); transform: translateY(-2px); }
+  .lp-faq button { width: 100%; display: flex; align-items: center; gap: 14px; padding: 17px 19px; border: 0; background: transparent; text-align: left; transition: background .22s; }
+  .lp-faq button:hover { background: #F7FAFE; }
+  .lp-faq button > span { flex: 1 1 auto; min-width: 0; font-size: 15.5px; font-weight: 600; letter-spacing: -.018em; transition: color .26s; color: var(--ink); }
+  .lp-faq.is-open button > span { color: var(--blue-ink); }
+  .lp-faq .chev { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto; transition: background .28s, color .28s, transform .34s cubic-bezier(.4,0,.2,1); background: #F2F5FB; color: var(--mute); }
+  .lp-faq.is-open .chev { background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; transform: rotate(180deg); }
+  .lp-faq-body { padding: 0 19px 19px; animation: lpFadeUp .32s cubic-bezier(.2,.7,.2,1) both; }
+  .lp-faq-body[hidden] { display: none; }
+  .lp-faq-body p { margin: 0; padding-top: 14px; border-top: 1px solid #F1F5FA; font-size: 14px; line-height: 1.68; color: var(--mid); text-wrap: pretty; }
+
+  /* ---- closing call ----------------------------------------------------- */
+  .lp-cta-sec { position: relative; overflow: hidden; padding: clamp(44px,6vw,96px) clamp(16px,4vw,56px); background: linear-gradient(150deg, #0B1222 0%, #111B34 46%, #2A1020 100%); }
+  .lp-cta-sec .lp-orb.a { left: 12%; top: -140px; width: 460px; height: 460px; filter: blur(100px); opacity: .5;  background: radial-gradient(circle, rgba(59,130,246,.5), transparent 70%); }
+  .lp-cta-sec .lp-orb.b { right: 8%; bottom: -180px; top: auto; width: 440px; height: 440px; filter: blur(104px); opacity: .42;  background: radial-gradient(circle, rgba(225,29,72,.44), transparent 70%); }
+  .lp-cta-in { position: relative; max-width: 760px; margin: 0 auto; text-align: center; }
+  .lp-cta-mark { display: inline-grid; place-items: center; width: 60px; height: 60px; border-radius: 20px; background: linear-gradient(135deg, #60A5FA, #2563EB); box-shadow: 0 18px 40px -16px rgba(37,99,235,.95); animation: lpBob 4s ease-in-out 3 both; }
+  .lp-cta-in h2 { margin: 22px 0 0; font-size: clamp(30px,4.4vw,56px); font-weight: 600; letter-spacing: -.045em; line-height: 1.02; color: #fff; }
+  .lp-cta-in h2 .serif { background: linear-gradient(100deg, #93C5FD, #F9A8D4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lp-cta-in p { margin: 16px 0 0; font-size: clamp(14.5px,1.2vw,17px); line-height: 1.6; color: #A9B6CE; }
+  .lp-cta-row { display: flex; flex-wrap: wrap; gap: 11px; justify-content: center; margin-top: 28px; }
+  .lp-cta-row .lp-btn-lg { box-shadow: 0 24px 46px -18px rgba(37,99,235,1); }
+  .lp-cta-row .lp-btn-lg span.sheen { animation-duration: 4.4s; }
+  .lp-btn-glass { height: 54px; padding: 0 24px; display: flex; align-items: center; border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); color: #E8EDF7; font-size: 15px; font-weight: 600; backdrop-filter: blur(6px); transition: transform .28s, background .28s, border-color .28s, color .28s; }
+  .lp-btn-glass:hover { transform: translateY(-3px); background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.34); color: #fff; }
+
+  /* ---- dark: the design is light; these keep it legible ----------------- */
+  .dark .lp-page { background: #0B0E14; }
+  .dark .lp-page .lp-demo, .dark .lp-page .lp-feat, .dark .lp-page .lp-plan, .dark .lp-page .lp-faq, .dark .lp-page .lp-marq-row span, .dark .lp-page .lp-btn-ghost, .dark .lp-page .lp-seg, .dark .lp-page .lp-compare a, .dark .lp-page .lp-plan-cta { background: #14171E; border-color: #262B34; }
+  .dark .lp-page .lp-stat, .dark .lp-page .lp-badge { background: rgba(20,23,30,.78); border-color: #262B34; }
+  .dark .lp-page .lp-stat strong { background: linear-gradient(120deg, #E8EDF7, #60A5FA); -webkit-background-clip: text; background-clip: text; }
+  .dark .lp-page .lp-step { background: rgba(20,23,30,.66); border-color: #262B34; }
+  .dark .lp-page .lp-step.is-on { background: #14171E; border-color: rgba(37,99,235,.4); }
+  .dark .lp-page .lp-step .n, .dark .lp-page .lp-chips span, .dark .lp-page .lp-perks i, .dark .lp-page .lp-faq .chev, .dark .lp-page .lp-picker button, .dark .lp-page .lp-tags span, .dark .lp-page .lp-formula { background: #1A1E26; }
+  .dark .lp-page .lp-meter { background: #1A1E26; border-color: #262B34; }
+  .dark .lp-page .lp-plan.is-rec { background: linear-gradient(160deg, #141B2C 0%, #131A2A 52%, rgba(37,99,235,.18) 100%); }
+  .dark .lp-page .lp-input { background: #1A1E26; } .dark .lp-page .lp-demo-chip { background: rgba(59,130,246,.2); color: #93C5FD; }
+  .dark .lp-page .lp-feat .n { color: #1A1E26; }
+  .dark .lp-page .lp-how { background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.03), rgba(255,255,255,0)); }
+  .dark .lp-page .lp-faq button:hover { background: rgba(255,255,255,.04); }
+  .dark .lp-page .lp-stats { border-top-color: #1F242C; } .dark .lp-page .lp-meter-track { background: rgba(255,255,255,.08); }
+  .dark .lp-page .lp-faq-body p { border-top-color: #1F242C; }
+  .dark .lp-page .lp-eyebrow { background: rgba(96,165,250,.14); color: #93C5FD; }
+  .dark .lp-page .lp-eyebrow.rose { background: rgba(251,113,133,.14); color: #FDA4AF; }
+  .dark .lp-page .lp-eyebrow.violet { background: rgba(167,139,250,.14); color: #C4B5FD; }
+  .dark .lp-page .lp-picker button.is-on, .dark .lp-page .lp-faq.is-open .chev, .dark .lp-page .lp-plan.is-rec .lp-plan-cta { background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; border-color: transparent; }
+  .dark .lp-page .lp-step.is-on .n { background: linear-gradient(135deg, #2563EB, #6D28D9); color: #fff; }
+  .dark .lp-page .lp-plan.is-rec { border-color: rgba(96,165,250,.45); }
+  .dark .lp-page .lp-plan.is-rec .lp-meter { background: rgba(59,130,246,.10); border-color: rgba(96,165,250,.22); }
+  .dark .lp-page .lp-plan.is-rec .lp-perks i { background: rgba(96,165,250,.16); color: #93C5FD; }
+  .dark .lp-page .lp-marq-row.b span { background: rgba(20,23,30,.6); }
+
+  /* Touch: the demo's topic chips and the period switch were 31-37px. */
+  @media (pointer: coarse) {
+    .lp-picker button { min-height: 44px; padding: 6px 14px; }
+    .lp-seg button { min-height: 44px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<script type="application/json" id="lp-demos">[
+  {"topic":"Physics · Chapter 4","tokens":1284,
+   "q":"Why does a heavier object not fall faster in a vacuum?",
+   "think":"working through the forces",
+   "a":"A heavier object feels more gravitational force, but it also carries more inertia resisting that force — the two cancel out exactly.",
+   "f":"a = F / m = (m · g) / m = g",
+   "tags":["Step-by-step","Formula shown","Real example"]},
+  {"topic":"Calculus · Derivatives","tokens":986,
+   "q":"How do I differentiate x·sin(x)?",
+   "think":"picking the right rule",
+   "a":"This is a product of two functions, so use the product rule: differentiate each part and keep the other intact.",
+   "f":"d/dx [x · sin x] = sin x + x · cos x",
+   "tags":["Product rule","Worked example","Practice set"]},
+  {"topic":"Essay · Thesis help","tokens":1512,
+   "q":"Is my thesis statement too broad?",
+   "think":"reading your argument",
+   "a":"It is — it claims something about an entire century. Narrow it to one mechanism and one period, and the essay gets an argument it can actually defend.",
+   "f":null,
+   "tags":["Tighter draft","Outline","Sources to cite"]}
+]</script>
+
+<div class="lp lp-page" id="lp">
+
+  {# ================= HERO ================= #}
+  <section id="top" class="lp-hero">
+    <span class="lp-orb a" aria-hidden="true"></span>
+    <span class="lp-orb b" aria-hidden="true"></span>
+    <span class="lp-orb c" aria-hidden="true"></span>
+
+    <div class="lp-hero-in">
+      <div class="lp-hero-copy">
+        <div class="lp-badge" data-reveal>
+          <span class="dot"><b></b><em></em></span>
+          <span class="txt">Built for {{ BRAND.org }} students</span>
+        </div>
+
+        <h1 class="lp-h1" data-reveal data-delay=".08s">
+          Study help that<br>
+          <span class="serif">actually explains</span>
+        </h1>
+
+        <p class="lp-lede" data-reveal data-delay=".16s">
+          {{ BRAND.full_name }} works through homework, breaks down research and answers questions in plain
+          language — step by step, any hour of the night.
+        </p>
+
+        <div class="lp-actions" data-reveal data-delay=".24s">
+          {% if user.is_authenticated %}
+            <a href="{% url 'student:chat' %}" class="lp-btn-lg">
+              <span class="sheen"></span><span>Open the assistant</span>
+              <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+            </a>
+          {% else %}
+            <a href="{% url 'auth:signup' %}" class="lp-btn-lg">
+              <span class="sheen"></span><span>Open the assistant</span>
+              <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+            </a>
+          {% endif %}
+          <a href="#how" class="lp-btn-ghost">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.4a5.6 5.6 0 1 0 0 11.2A5.6 5.6 0 0 0 8 2.4M6.6 5.8l4 2.2-4 2.2z"/></svg>
+            <span>See how it works</span>
+          </a>
+        </div>
+
+        {% if free_trial_tokens %}
+          <div class="lp-gift" data-reveal data-delay=".3s">
+            <i><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 7.2h10.4v5.6H2.8zM8 7.2v5.6M2.8 7.2h10.4M5.6 7.2a1.7 1.7 0 1 1 2.4-1.3 1.7 1.7 0 1 1 2.4 1.3"/></svg></i>
+            <span><b>{{ free_trial_tokens|intcomma }} free {% if free_trial_model %}{{ free_trial_model }} {% endif %}tokens</b> when you verify your account. No card needed.</span>
+          </div>
+        {% endif %}
+
+        <div class="lp-stats" data-reveal data-delay=".36s">
+          <div class="lp-stat"><b>AVAILABLE</b><strong>24/7</strong><small>no office hours</small></div>
+          <div class="lp-stat"><b>SUBJECTS</b><strong>All</strong><small>school to university</small></div>
+          <div class="lp-stat"><b>TYPICAL REPLY</b><strong>{{ hero_reply.value }}</strong><small>{{ hero_reply.sub }}</small></div>
+        </div>
+      </div>
+
+      {# --- the assistant, answering itself --- #}
+      <div class="lp-demo-wrap" data-reveal data-delay=".14s">
+        <div class="lp-demo">
+          <div class="lp-demo-head">
+            <span class="lp-lights"><i style="background:#F87171"></i><i style="background:#FBBF24"></i><i style="background:#34D399"></i></span>
+            <span class="lp-demo-title" id="lpDemoTitle">Physics · Chapter 4</span>
+            <span style="flex:1 1 10px"></span>
+            <span class="lp-demo-chip"><span id="lpDemoTokens">1,284</span> tokens</span>
+          </div>
+
+          <div class="lp-demo-body">
+            <div style="display:flex;justify-content:flex-end">
+              <div class="lp-ask" id="lpAsk">Why does a heavier object not fall faster in a vacuum?</div>
+            </div>
+            <div class="lp-reply">
+              <span class="lp-avatar">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.4 9.4 6.6 13.6 8 9.4 9.4 8 13.6 6.6 9.4 2.4 8 6.6 6.6z"/></svg>
+              </span>
+              <div style="min-width:0;flex:1 1 auto">
+                <div class="lp-think" id="lpThink"><i><b></b><b></b><b></b></i><span id="lpThinkLabel">working through the forces</span></div>
+                <div class="lp-answer"><span id="lpAnswer"></span><span class="lp-caret" id="lpCaret" hidden></span></div>
+                <div class="lp-formula mono" id="lpFormula" hidden></div>
+                <div class="lp-tags" id="lpTags" hidden></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lp-demo-foot">
+            <div class="lp-input">
+              <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;color:var(--soft)" aria-hidden="true"><path d="M2.6 3.8h10.8v8.4H2.6zM2.6 10l3-2.8 2.4 1.8 2.6-3.2 2.8 3"/></svg>
+              <span class="ph">Ask a follow-up, or attach a photo of the question…</span>
+              <span class="lp-send">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 8.4 13.4 3.2 9.8 13.4 7.8 9.2z"/></svg>
+              </span>
+            </div>
+            <div class="lp-picker" id="lpPicker"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ================= SUBJECT MARQUEE ================= #}
+  <section class="lp-marq-sec">
+    <div class="lp-marq-head">EVERY SUBJECT, EVERY NIGHT</div>
+    <div class="lp-marq">
+      <div class="lp-marq-row a">
+        {% for pass in "12" %}
+          <span><i style="background:#2563EB"></i>Physics</span><span><i style="background:#7C3AED"></i>Calculus</span>
+          <span><i style="background:#059669"></i>Chemistry</span><span><i style="background:#0EA5E9"></i>Biology</span>
+          <span><i style="background:#D97706"></i>History</span><span><i style="background:#DB2777"></i>Literature</span>
+          <span><i style="background:#E11D48"></i>Economics</span><span><i style="background:#4F46E5"></i>Statistics</span>
+          <span><i style="background:#0891B2"></i>Algebra</span><span><i style="background:#65A30D"></i>Geography</span>
+        {% endfor %}
+      </div>
+      <div class="lp-marq-row b">
+        {% for pass in "12" %}
+          <span><i style="background:#DB2777"></i>Essay outlines</span><span><i style="background:#059669"></i>Lab reports</span>
+          <span><i style="background:#2563EB"></i>Exam revision</span><span><i style="background:#7C3AED"></i>Study plans</span>
+          <span><i style="background:#D97706"></i>Note summaries</span><span><i style="background:#0EA5E9"></i>Presentations</span>
+          <span><i style="background:#E11D48"></i>Research questions</span><span><i style="background:#4F46E5"></i>Reading lists</span>
+          <span><i style="background:#0891B2"></i>Citations</span><span><i style="background:#65A30D"></i>Practice problems</span>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ================= FEATURES ================= #}
+  <section id="features" class="lp-sec">
+    <div style="max-width:1360px;margin:0 auto">
+      <div class="lp-sec-head" style="max-width:60ch">
+        <span class="lp-eyebrow" data-reveal>WHAT YOU GET</span>
+        <h2 class="lp-h2" data-reveal data-delay=".07s">One assistant for <span class="serif">every subject</span></h2>
+        <p class="lp-sec-lede" data-reveal data-delay=".12s">Not a search box that hands you an answer — a tutor that shows the working, so the next question gets easier.</p>
+      </div>
+
+      <div class="lp-feat-grid" id="lpFeatures">
+        <div class="lp-feat" data-reveal style="--f1:#60A5FA;--f2:#2563EB;--f-glow:#60A5FA26;--f-line:#2563EB55;--f-shadow:#2563EBaa;transition-delay:0s">
+          <span class="glow"></span><span class="bar"></span><span class="n" aria-hidden="true">01</span>
+          <span class="ic"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 4.6h5.2a1.4 1.4 0 0 1 1.4 1.4v9.4a1.4 1.4 0 0 0-1.4-1.4H3.4zM16.6 4.6h-5.2a1.4 1.4 0 0 0-1.4 1.4v9.4a1.4 1.4 0 0 1 1.4-1.4h5.2z"/></svg></span>
+          <h3>Homework, explained</h3>
+          <p>Ask about any topic and get a worked explanation with the reasoning laid out, not just the final line.</p>
+        </div>
+        <div class="lp-feat" data-reveal style="--f1:#F472B6;--f2:#DB2777;--f-glow:#F472B626;--f-line:#DB277755;--f-shadow:#DB2777aa;transition-delay:.07s">
+          <span class="glow"></span><span class="bar"></span><span class="n" aria-hidden="true">02</span>
+          <span class="ic"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 5h14.4v10H2.8zM2.8 12l4-3.6 3 2.3 3.4-4L17.2 10"/></svg></span>
+          <h3>Snap a question</h3>
+          <p>Photograph a textbook page or a handwritten problem and ask about it directly.</p>
+        </div>
+        <div class="lp-feat" data-reveal style="--f1:#A78BFA;--f2:#6D28D9;--f-glow:#A78BFA26;--f-line:#6D28D955;--f-shadow:#6D28D9aa;transition-delay:.14s">
+          <span class="glow"></span><span class="bar"></span><span class="n" aria-hidden="true">03</span>
+          <span class="ic"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2.6h7l3 3v11.8H5zM12 2.6v3h3M7.6 10h4.8M7.6 13h3.2"/></svg></span>
+          <h3>Research &amp; writing</h3>
+          <p>Outline an essay, tighten an argument, or summarise dense reading into notes you can revise from.</p>
+        </div>
+        <div class="lp-feat" data-reveal style="--f1:#34D399;--f2:#059669;--f-glow:#34D39926;--f-line:#05966955;--f-shadow:#059669aa;transition-delay:0s">
+          <span class="glow"></span><span class="bar"></span><span class="n" aria-hidden="true">04</span>
+          <span class="ic"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2a6.8 6.8 0 1 0 6.8 6.8M10 6v4l2.8 2M16.8 3.2v3.4h-3.4"/></svg></span>
+          <h3>Everything saved</h3>
+          <p>Every conversation stays organised, searchable and ready to pick up again before an exam.</p>
+        </div>
+        <div class="lp-feat" data-reveal style="--f1:#FBBF24;--f2:#D97706;--f-glow:#FBBF2426;--f-line:#D9770655;--f-shadow:#D97706aa;transition-delay:.07s">
+          <span class="glow"></span><span class="bar"></span><span class="n" aria-hidden="true">05</span>
+          <span class="ic"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4c3.6 0 6.5 1.2 6.5 2.7S13.6 8.8 10 8.8 3.5 7.6 3.5 6.1 6.4 3.4 10 3.4M3.5 6.1v8c0 1.5 2.9 2.7 6.5 2.7s6.5-1.2 6.5-2.7v-8M3.5 10.1c0 1.5 2.9 2.7 6.5 2.7s6.5-1.2 6.5-2.7"/></svg></span>
+          <h3>Transparent tokens</h3>
+          <p>See exactly what each answer costs and what you have left. No surprise charges, ever.</p>
+        </div>
+        <div class="lp-feat" data-reveal style="--f1:#FB7185;--f2:#E11D48;--f-glow:#FB718526;--f-line:#E11D4855;--f-shadow:#E11D48aa;transition-delay:.14s">
+          <span class="glow"></span><span class="bar"></span><span class="n" aria-hidden="true">06</span>
+          <span class="ic"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.8a7.2 7.2 0 1 0 0 14.4 7.2 7.2 0 0 0 0-14.4M10 6.2V10l2.8 1.8"/></svg></span>
+          <h3>Any hour, any day</h3>
+          <p>No queue and no office hours — ask at 2am the night before a deadline and get a straight answer.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ================= HOW IT WORKS ================= #}
+  <section id="how" class="lp-sec lp-how">
+    <div style="max-width:1200px;margin:0 auto">
+      <div class="lp-sec-head" style="max-width:56ch">
+        <span class="lp-eyebrow rose" data-reveal>HOW IT WORKS</span>
+        <h2 class="lp-h2" data-reveal data-delay=".07s">Three steps to your <span class="serif">first answer</span></h2>
+      </div>
+      <div class="lp-steps" id="lpSteps" data-reveal data-delay=".1s">
+        {% for step in steps %}
+          <div class="lp-step{% if forloop.first %} is-on{% endif %}" data-step="{{ forloop.counter0 }}">
+            <span class="bar"></span>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="n">{{ forloop.counter }}</span>
+              <h3>{{ step.title }}</h3>
+            </div>
+            <p>{{ step.body }}</p>
+            <div class="lp-chips">{% for chip in step.chips %}<span>{{ chip }}</span>{% endfor %}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ================= PLANS ================= #}
+  <section id="plans" class="lp-sec">
+    <div style="max-width:1360px;margin:0 auto">
+      <div class="lp-sec-head" style="max-width:56ch">
+        <span class="lp-eyebrow" data-reveal>PLANS</span>
+        <h2 class="lp-h2" data-reveal data-delay=".07s">Pay for <span class="serif">what you use</span></h2>
+        <p class="lp-sec-lede" data-reveal data-delay=".12s">Tokens never expire while your plan is active.</p>
+      </div>
+
+      {% if plan_cards %}
+        <div class="lp-intensity" data-reveal data-delay=".16s">
+          <span>How much do you study?</span>
+          <div class="lp-seg" id="lpSeg" style="--i:1">
+            <div class="lp-seg-pill"></div>
+            {% for level in intensities %}
+              <button type="button" data-fit="{{ level|lower }}" class="{% if level == 'Regular' %}is-on{% endif %}">{{ level }}</button>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="lp-plans" id="lpPlans">
+          {% for card in plan_cards %}
+            <div class="lp-plan{% if card.fit_key == 'regular' %} is-rec{% endif %}" data-fit="{{ card.fit_key }}" data-reveal
+                 style="transition-delay:{{ card.delay }}">
+              <span class="lp-ribbon">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.4 9.4 6.6 13.6 8 9.4 9.4 8 13.6 6.6 9.4 2.4 8 6.6 6.6z"/></svg>{{ card.ribbon }}
+              </span>
+              <div class="tag"><span class="rec">RECOMMENDED FOR YOU</span><span class="own">{{ card.tag }}</span></div>
+              <h3>{{ card.plan.name }}</h3>
+              {% if card.plan.description %}<div class="blurb">{{ card.plan.description }}</div>{% endif %}
+              <div class="lp-price"><b>{{ card.price }}</b><span>/ {{ card.plan.duration_days }} days</span></div>
+              <div class="lp-meter">
+                <div class="lp-meter-top">
+                  <b>{{ card.plan.tokens|compact_number }} tokens</b>
+                  <span>&asymp; {{ card.questions }} questions</span>
+                </div>
+                <div class="lp-meter-track"><i data-width="{{ card.meter }}"></i></div>
+              </div>
+              <div class="lp-perks">
+                {% for perk in card.perks %}
+                  <div>
+                    <i><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 8.4 6.6 11.4l5.8-6.8"/></svg></i>
+                    <span>{{ perk }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+              <a class="lp-plan-cta" href="{% if user.is_authenticated and user.is_student %}{% url 'payments:checkout' card.plan.slug %}{% else %}{% url 'auth:signup' %}{% endif %}">
+                <span class="sheen"></span>
+                <span>{% if user.is_authenticated and user.is_student %}Choose this plan{% else %}Get started{% endif %}</span>
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="lp-compare" data-reveal>
+          <a href="{% url 'public:plans' %}">Compare every plan
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+          </a>
+        </div>
+      {% else %}
+        <div class="lp-compare" data-reveal style="margin-top:28px">
+          <a href="{% url 'auth:signup' %}">Create an account to get started
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ================= FAQ ================= #}
+  <section id="faq" class="lp-sec">
+    <div style="max-width:860px;margin:0 auto">
+      <div class="lp-sec-head">
+        <span class="lp-eyebrow violet" data-reveal>FAQ</span>
+        <h2 class="lp-h2" data-reveal data-delay=".07s">Questions, <span class="serif">answered</span></h2>
+      </div>
+      <div class="lp-faqs" id="lpFaqs">
+        {% for faq in faqs %}
+          <div class="lp-faq{% if forloop.first %} is-open{% endif %}" data-reveal style="transition-delay:{% cycle '0s' '.05s' '.10s' '.15s' '.20s' '.25s' %}">
+            <button type="button" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}">
+              <span>{{ faq.q }}</span>
+              <span class="chev"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.2 8 10.2l4-4"/></svg></span>
+            </button>
+            <div class="lp-faq-body"{% if not forloop.first %} hidden{% endif %}><p>{{ faq.a }}</p></div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ================= CLOSING CALL ================= #}
+  <section class="lp-cta-sec">
+    <span class="lp-orb a" aria-hidden="true"></span>
+    <span class="lp-orb b" aria-hidden="true"></span>
+    <div class="lp-cta-in">
+      <span class="lp-cta-mark" data-reveal>
+        <svg width="27" height="27" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 4.6h5.2a1.4 1.4 0 0 1 1.4 1.4v9.4a1.4 1.4 0 0 0-1.4-1.4H3.4zM16.6 4.6h-5.2a1.4 1.4 0 0 0-1.4 1.4v9.4a1.4 1.4 0 0 1 1.4-1.4h5.2z"/></svg>
+      </span>
+      <h2 data-reveal data-delay=".07s">Your next study session <span class="serif">starts here</span></h2>
+      <p data-reveal data-delay=".12s">Join the {{ BRAND.org }} students already using the assistant to get unstuck faster.</p>
+      <div class="lp-cta-row" data-reveal data-delay=".18s">
+        <a href="{% if user.is_authenticated %}{% url 'student:chat' %}{% else %}{% url 'auth:signup' %}{% endif %}" class="lp-btn-lg">
+          <span class="sheen"></span><span>Open the assistant</span>
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+        </a>
+        <a href="#plans" class="lp-btn-glass">See the plans</a>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var root = $('lp');
+
+  /* ---- reveal on scroll, with a fallback so nothing can stay invisible */
+  (function () {
+    var els = [].slice.call(root.querySelectorAll('[data-reveal]'));
+    els.forEach(function (el) { var d = el.getAttribute('data-delay'); if (d) el.style.transitionDelay = d; });
+    var show = function (el) { el.classList.add('is-in'); };
+    var fallback = setTimeout(function () { els.forEach(show); }, 1600);
+    if (!('IntersectionObserver' in window)) { els.forEach(show); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { show(e.target); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
+    els.forEach(function (el) { io.observe(el); });
+    window.addEventListener('load', function () { clearTimeout(fallback); setTimeout(function () { els.forEach(show); }, 1600); });
+  })();
+
+  /* ---- the hero chat answers itself, then moves to the next question */
+  (function () {
+    var DEMOS = JSON.parse($('lp-demos').textContent);
+    var title = $('lpDemoTitle'), tokens = $('lpDemoTokens'), ask = $('lpAsk');
+    var think = $('lpThink'), thinkLabel = $('lpThinkLabel'), answer = $('lpAnswer');
+    var caret = $('lpCaret'), formula = $('lpFormula'), tags = $('lpTags'), picker = $('lpPicker');
+    var current = 0, tt = null, typer = null, nextT = null;
+    /* Asked for less motion: no typing, no carousel. The answer is shown
+       whole and the topic buttons still switch between the three. */
+    var calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) &&
+               document.documentElement.getAttribute('data-motion') !== 'full';
+    /* The demo only plays while someone can see it: scrolled away or in a
+       background tab it waits, instead of re-laying-out text sixty times a
+       second for nobody. */
+    var onScreen = true, waiting = false;
+    var stage = answer.closest('section') || answer.parentNode;
+    function resume() {
+      if (waiting && onScreen && !document.hidden) { waiting = false; play((current + 1) % DEMOS.length); }
+    }
+    if ('IntersectionObserver' in window && stage) {
+      new IntersectionObserver(function (entries) {
+        onScreen = entries[entries.length - 1].isIntersecting;
+        resume();
+      }).observe(stage);
+    }
+    document.addEventListener('visibilitychange', resume);
+
+    DEMOS.forEach(function (d, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = d.topic.split(' · ')[0];
+      b.addEventListener('click', function () { play(i); });
+      picker.appendChild(b);
+    });
+
+    function paintPicker() {
+      Array.prototype.forEach.call(picker.children, function (b, i) { b.classList.toggle('is-on', i === current); });
+    }
+
+    function play(i) {
+      clearTimeout(tt); cancelAnimationFrame(typer); clearTimeout(nextT);
+      current = i;
+      var d = DEMOS[i];
+      title.textContent = d.topic;
+      tokens.textContent = d.tokens.toLocaleString('en-US');
+      ask.textContent = d.q;
+      ask.style.animation = 'none'; void ask.offsetWidth; ask.style.animation = '';
+      thinkLabel.textContent = d.think;
+      think.hidden = false; caret.hidden = true; formula.hidden = true; tags.hidden = true;
+      answer.textContent = '';
+      paintPicker();
+
+      function finish() {
+        think.hidden = true;
+        answer.textContent = d.a;
+        caret.hidden = true;
+        if (d.f) { formula.textContent = d.f; formula.hidden = false; }
+        tags.innerHTML = '';
+        d.tags.forEach(function (t, k) {
+          var s = document.createElement('span');
+          s.textContent = t; s.style.animationDelay = (k * 0.07).toFixed(2) + 's';
+          tags.appendChild(s);
+        });
+        tags.hidden = false;
+      }
+      if (calm) { finish(); return; }
+
+      tt = setTimeout(function () {
+        think.hidden = true; caret.hidden = false;
+        var n = 0;
+        /* Typed on the display's own frames rather than a 16ms timer, so each
+           step lands on a frame instead of between two. */
+        typer = requestAnimationFrame(function step() {
+          n += 2;
+          if (n >= d.a.length) {
+            finish();
+            nextT = setTimeout(function () {
+              if (!onScreen || document.hidden) { waiting = true; return; }
+              play((current + 1) % DEMOS.length);
+            }, 5200);
+          } else {
+            answer.textContent = d.a.slice(0, n);
+            typer = requestAnimationFrame(step);
+          }
+        });
+      }, 1100);
+    }
+    play(0);
+  })();
+
+  /* ---- the logo strip only scrolls while it is on screen */
+  (function () {
+    var rows = document.querySelectorAll('.lp-marq-row');
+    if (!rows.length || !('IntersectionObserver' in window)) return;
+    new IntersectionObserver(function (entries) {
+      var visible = entries[entries.length - 1].isIntersecting;
+      Array.prototype.forEach.call(rows, function (row) { row.classList.toggle('is-paused', !visible); });
+    }).observe(rows[0].parentNode);
+  })();
+
+  /* ---- feature cards: the glow follows the pointer */
+  (function () {
+    var grid = $('lpFeatures');
+    if (!grid) return;
+    grid.addEventListener('mousemove', function (e) {
+      var card = e.target.closest('.lp-feat'); if (!card) return;
+      var r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      card.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    });
+    grid.addEventListener('mouseout', function (e) {
+      var card = e.target.closest('.lp-feat'); if (!card) return;
+      card.style.removeProperty('--mx'); card.style.removeProperty('--my');
+    });
+  })();
+
+  /* ---- steps: whichever you point at is the one being explained */
+  (function () {
+    var steps = $('lpSteps');
+    if (!steps) return;
+    function pick(e) {
+      var card = e.target.closest('.lp-step'); if (!card) return;
+      Array.prototype.forEach.call(steps.querySelectorAll('.lp-step'), function (s) { s.classList.toggle('is-on', s === card); });
+    }
+    steps.addEventListener('mouseover', pick);
+    steps.addEventListener('click', pick);
+  })();
+
+  /* ---- plans: the switcher recommends by how much you study */
+  (function () {
+    var seg = $('lpSeg'), plans = $('lpPlans');
+    if (!seg || !plans) return;
+    var buttons = [].slice.call(seg.querySelectorAll('button'));
+    seg.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-fit]'); if (!btn) return;
+      var fit = btn.getAttribute('data-fit');
+      seg.style.setProperty('--i', buttons.indexOf(btn));
+      buttons.forEach(function (b) { b.classList.toggle('is-on', b === btn); });
+      Array.prototype.forEach.call(plans.querySelectorAll('.lp-plan'), function (card) {
+        card.classList.toggle('is-rec', card.getAttribute('data-fit') === fit);
+      });
+    });
+    // The token meters grow in once the cards have arrived.
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.lp-meter-track i[data-width]'), function (bar) {
+        bar.style.width = bar.getAttribute('data-width') + '%';
+      });
+    }); });
+  })();
+
+  /* ---- faq: one open at a time */
+  (function () {
+    var list = $('lpFaqs');
+    if (!list) return;
+    list.addEventListener('click', function (e) {
+      var btn = e.target.closest('button'); if (!btn) return;
+      var item = btn.parentNode, open = item.classList.contains('is-open');
+      Array.prototype.forEach.call(list.querySelectorAll('.lp-faq'), function (f) {
+        f.classList.remove('is-open');
+        f.querySelector('button').setAttribute('aria-expanded', 'false');
+        f.querySelector('.lp-faq-body').hidden = true;
+      });
+      if (!open) {
+        item.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        item.querySelector('.lp-faq-body').hidden = false;
+      }
+    });
+  })();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,505 @@
+{% load static ai_extras %}<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <title>{% block title %}Console · {{ BRAND.full_name }}{% endblock %}</title>
+  <meta name="robots" content="noindex, nofollow">
+  {% include "base/console_design.html" %}
+  {% block head %}{% endblock %}
+</head>
+<body class="min-h-full bg-ink-50 dark:bg-ink-950">
+{% include "components/icons.html" %}
+{% include "components/console_icons.html" %}
+{% include "components/messages.html" %}
+
+{# The ambient field behind everything. Fixed, painted once, never scrolls. #}
+<div class="pointer-events-none fixed inset-0 -z-10 mesh opacity-70 dark:opacity-40" aria-hidden="true"></div>
+
+<div class="flex min-h-screen">
+
+  {# ================= Console sidebar (desktop) ================= #}
+  <aside id="consoleRail"
+         class="fixed inset-y-0 left-0 z-40 hidden w-[var(--shell)] flex-col border-r hairline
+                bg-white/[.97] transition-[width] duration-300 ease-out
+                dark:bg-ink-900/[.97] lg:flex">
+    <div class="flex h-16 shrink-0 items-center gap-2 px-5 shell-hide-collapsed">
+      <a href="{% url 'console:dashboard' %}" aria-label="Console home"
+         class="transition-transform duration-300 ease-out hover:scale-[1.03]">
+        {% include "components/logo.html" with size=30 %}
+      </a>
+    </div>
+    <div class="hidden h-16 shrink-0 items-center justify-center shell-show-collapsed">
+      <a href="{% url 'console:dashboard' %}" aria-label="Console home"
+         class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500/12 text-brand-600 dark:text-brand-300">
+        <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-shield"/></svg>
+      </a>
+    </div>
+
+    <div class="mx-3 mb-1 flex items-center gap-2 rounded-xl bg-brand-500/8 px-2.5 py-1.5 shell-hide-collapsed
+                ring-1 ring-inset ring-brand-500/12">
+      <svg style="width:13px;height:13px" class="text-brand-600 dark:text-brand-300" aria-hidden="true"><use href="#i-shield"/></svg>
+      <span class="text-[10px] font-extrabold uppercase tracking-[.12em] text-brand-700 dark:text-brand-300">Admin console</span>
+      <span class="ml-auto flex h-1.5 w-1.5 rounded-full bg-emerald-500" title="Online"></span>
+    </div>
+
+    <nav class="flex-1 space-y-0.5 overflow-y-auto scroll-slim px-3 py-2" aria-label="Console">
+      {% include "components/console_nav.html" %}
+    </nav>
+
+    <div class="shrink-0 border-t hairline p-3">
+      <div class="flex items-center gap-3 rounded-xl p-2 shell-hide-collapsed">
+        <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br
+                     from-brand-600 to-brand-800 text-[11px] font-extrabold text-white shadow-pill">
+          {{ user.initials }}
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-[13.5px] font-bold text-ink-800 dark:text-ink-100">{{ user.display_name }}</span>
+          <span class="block truncate text-[11px] font-medium text-ink-500 dark:text-ink-400">{{ console_role_label|default:"Administrator" }}</span>
+        </span>
+      </div>
+      <form method="post" action="{% url 'auth:logout' %}" data-no-busy>
+        {% csrf_token %}
+        <button type="submit" class="nav-link w-full text-left" title="Sign out">
+          <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-logout"/></svg>
+          <span class="nav-label">Sign out</span>
+        </button>
+      </form>
+    </div>
+  </aside>
+
+  {# ================= Mobile drawer ================= #}
+  <div id="consoleDrawer" class="fixed inset-0 z-50 hidden xl:hidden">
+    <div class="absolute inset-0 bg-ink-950/60 backdrop-blur-sm animate-fade-in" data-drawer-close></div>
+    <aside class="absolute inset-y-0 left-0 flex w-[17rem] max-w-[87vw] animate-slide-left flex-col
+                  border-r hairline bg-white shadow-float dark:bg-ink-900">
+      <div class="flex h-16 shrink-0 items-center justify-between px-4">
+        <a href="{% url 'console:dashboard' %}">{% include "components/logo.html" with size=28 %}</a>
+        <button type="button" class="btn-icon" data-drawer-close aria-label="Close menu">
+          <svg class="h-5 w-5" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div class="mx-3 mb-1 flex items-center gap-2 rounded-xl bg-brand-500/8 px-2.5 py-1.5 ring-1 ring-inset ring-brand-500/12">
+        <svg style="width:13px;height:13px" class="text-brand-600 dark:text-brand-300" aria-hidden="true"><use href="#i-shield"/></svg>
+        <span class="text-[10px] font-extrabold uppercase tracking-[.12em] text-brand-700 dark:text-brand-300">Admin console</span>
+      </div>
+      <nav class="flex-1 space-y-0.5 overflow-y-auto scroll-slim px-3 py-2" aria-label="Console mobile">
+        {% include "components/console_nav.html" %}
+      </nav>
+      <div class="shrink-0 border-t hairline p-3">
+        <form method="post" action="{% url 'auth:logout' %}" data-no-busy>
+          {% csrf_token %}
+          <button type="submit" class="nav-link w-full text-left">
+            <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-logout"/></svg>
+            <span class="nav-label">Sign out</span>
+          </button>
+        </form>
+      </div>
+    </aside>
+  </div>
+
+  {# ================= Main column ================= #}
+  <div class="flex min-w-0 flex-1 flex-col transition-[padding] duration-300 ease-out lg:pl-[var(--shell)]">
+
+    <header class="sticky top-0 z-30 border-b hairline bg-white/[.96] dark:bg-ink-950/[.96]">
+      <div class="console-topbar flex min-h-16 items-center gap-3 px-4 py-2.5 sm:px-6">
+
+        <button type="button" class="btn-icon xl:hidden" data-drawer-open aria-label="Open menu">
+          <svg class="h-5 w-5" aria-hidden="true"><use href="#i-menu"/></svg>
+        </button>
+        <button type="button" class="btn-icon hidden xl:inline-flex" data-shell-toggle aria-label="Collapse sidebar">
+          <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-panel-left"/></svg>
+        </button>
+
+        <div class="min-w-0 flex-1">
+          <nav class="flex items-center gap-1.5 text-[12px] font-semibold text-ink-500 dark:text-ink-400" aria-label="Breadcrumb">
+            <a href="{% url 'console:dashboard' %}" class="crumb-root">Console</a>
+            {% comment %}
+              The current page. Filled from the masthead's own <h1> by the
+              console script, and removed outright when a page has no masthead,
+              so the bar never ends on a dangling chevron. It is aria-hidden
+              because the real heading is that <h1>, not this copy of it.
+            {% endcomment %}
+            <span data-crumb-current class="hidden min-w-0 items-center gap-1.5" aria-hidden="true">
+              <svg style="width:13px;height:13px" class="shrink-0 opacity-60" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              <span data-crumb-text class="truncate text-ink-700 dark:text-ink-200"></span>
+            </span>
+          </nav>
+        </div>
+
+        {% block topbar %}{% endblock %}
+
+        {# Quick jump — the console's pages, and a search across students, payments, tickets and more. #}
+        <button type="button" data-jump-open
+                class="hidden items-center gap-2 rounded-xl border border-ink-200 bg-white/70 px-3 py-2 text-[12.5px]
+                       font-medium text-ink-500 transition-[border-color,color,transform] duration-200 ease-out
+                       hover:-translate-y-0.5 hover:border-brand-300 hover:text-ink-700
+                       dark:border-white/10 dark:bg-white/[.04] dark:text-ink-400 dark:hover:border-brand-500/40
+                       dark:hover:text-ink-200 lg:inline-flex">
+          <svg style="width:15px;height:15px" aria-hidden="true"><use href="#i-search"/></svg>
+          <span class="pr-6">Search or jump to…</span>
+          <span class="kbd">⌘</span><span class="kbd">K</span>
+        </button>
+        <button type="button" data-jump-open class="btn-icon lg:hidden" aria-label="Jump to page">
+          <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-search"/></svg>
+        </button>
+
+        {% comment %}
+          The bell. Its dot means "something is waiting on you", so it opens
+          the list of what — open tickets, failing health checks, payments to
+          confirm — each linking to where it is dealt with, rather than taking
+          you to Announcements, which the dot never meant.
+
+          Each row is drawn only for a role that can open where it leads, and
+          the dot only counts what this administrator could act on — a
+          content editor is not summoned by a payment they cannot confirm.
+        {% endcomment %}
+        <div class="relative" data-attention>
+          <button type="button" class="btn-icon relative" data-attention-toggle aria-haspopup="true"
+                  aria-expanded="false" aria-controls="attentionMenu"
+                  aria-label="{% if console_can.support and open_ticket_count or console_can.operations and health_alert_count or console_can.finance and pending_payment_count %}Needs your attention{% else %}Nothing needs your attention{% endif %}">
+            <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-bell"/></svg>
+            {% if console_can.support and open_ticket_count or console_can.operations and health_alert_count or console_can.finance and pending_payment_count %}
+              <span class="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-ink-950" aria-hidden="true"></span>
+            {% endif %}
+          </button>
+          <div id="attentionMenu" class="attention-menu" hidden>
+            <p class="px-3 pb-1.5 pt-2 text-[10.5px] font-extrabold uppercase tracking-[.12em] text-ink-500 dark:text-ink-400">Needs your attention</p>
+            {% if console_can.support %}
+            <a href="{% url 'console:tickets' %}?status=open" class="attention-row">
+              <svg aria-hidden="true"><use href="#i-inbox"/></svg>
+              <span class="min-w-0 flex-1">Support tickets</span>
+              {% if open_ticket_count %}<span class="badge-danger">{{ open_ticket_count }} open</span>{% else %}<span class="text-xs text-ink-500 dark:text-ink-400">None open</span>{% endif %}
+            </a>
+            {% endif %}
+            {% if console_can.operations %}
+            <a href="{% url 'console:health' %}" class="attention-row">
+              <svg aria-hidden="true"><use href="#i-activity"/></svg>
+              <span class="min-w-0 flex-1">System health</span>
+              {% if health_alert_count %}<span class="badge-danger">{{ health_alert_count }} failing</span>{% else %}<span class="text-xs text-ink-500 dark:text-ink-400">All clear</span>{% endif %}
+            </a>
+            {% endif %}
+            {% if console_can.finance %}
+            <a href="{% url 'console:payments' %}?status=pending" class="attention-row">
+              <svg aria-hidden="true"><use href="#i-receipt"/></svg>
+              <span class="min-w-0 flex-1">Payments to confirm</span>
+              {% if pending_payment_count %}<span class="badge-warning">{{ pending_payment_count }}</span>{% else %}<span class="text-xs text-ink-500 dark:text-ink-400">Nothing waiting</span>{% endif %}
+            </a>
+            {% endif %}
+            {% if console_can.students %}
+            <a href="{% url 'console:low_tokens' %}" class="attention-row">
+              <svg aria-hidden="true"><use href="#i-alert"/></svg>
+              <span class="min-w-0 flex-1">Students running low</span>
+              {% if low_token_count %}<span class="badge-warning">{{ low_token_count }}</span>{% else %}<span class="text-xs text-ink-500 dark:text-ink-400">Nobody</span>{% endif %}
+            </a>
+            {% endif %}
+            {% if not console_can.support and not console_can.operations and not console_can.finance and not console_can.students %}
+            <p class="px-3 pb-2 pt-1 text-[13px] text-ink-500 dark:text-ink-400">Nothing is waiting on your role.</p>
+            {% endif %}
+            {% if console_can.content %}
+            <div class="my-1 border-t hairline"></div>
+            <a href="{% url 'console:notifications' %}" class="attention-row">
+              <svg aria-hidden="true"><use href="#i-bell"/></svg>
+              <span class="min-w-0 flex-1">Announcements</span>
+              <svg aria-hidden="true" class="opacity-60"><use href="#i-chevron-right"/></svg>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% comment %}
+          Windows, macOS and iOS all have a setting that asks pages to stop
+          animating, and this console obeys it — which is why on a machine
+          with "Animation effects" turned off nothing here moves.
+
+          That is the right default; for some people motion on a screen causes
+          real nausea. But it is a default, not a verdict, so there is a way
+          to say otherwise. Off means "follow my system", and the choice is
+          shared with the student app because it is one person's preference
+          about one browser, not a setting per area of the product.
+        {% endcomment %}
+        <button type="button" id="motionToggle" class="btn-icon" aria-pressed="false"
+                title="Animations" aria-label="Animations: follow the system">
+          <svg style="width:18px;height:18px" aria-hidden="true"><use href="#i-sparkles"/></svg>
+        </button>
+
+        <button type="button" data-theme-toggle class="btn-icon" aria-label="Toggle dark mode">
+          <svg style="width:18px;height:18px" class="dark:hidden" aria-hidden="true"><use href="#i-moon"/></svg>
+          <svg style="width:18px;height:18px" class="hidden dark:block" aria-hidden="true"><use href="#i-sun"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="page-shell flex-1 px-4 py-6 sm:px-6 lg:px-8">
+     {% comment %}
+       One column for the masthead and the content it introduces. A page that
+       wants a narrower measure - a form, a detail view - names it once here
+       rather than centring its own content and leaving the title behind.
+     {% endcomment %}
+     <div class="mx-auto w-full {% block measure %}{% endblock %}{% if model_scope and not model_scope.is_all %} scope-one{% endif %}">
+      {% comment %}
+        The masthead. A page that overrides `page_head` with nothing opts out —
+        the dashboard does, because its hero already introduces the page and two
+        introductions is one too many.
+      {% endcomment %}
+      {% block page_head %}
+        {% comment %}
+          Every page gets the dashboard's masthead - the same card, the same
+          light from the right - so moving between pages never feels like
+          moving between products. The date is the eyebrow because it is the
+          one thing that is true on every page and needs no context to read.
+        {% endcomment %}
+        <header class="page-head">
+          <div class="min-w-0">
+            <p class="hero-date">{% now "l, j F Y" %}</p>
+            <h1 class="page-title" data-page-title>{% block heading %}Dashboard{% endblock %}</h1>
+            <div class="page-lede">{% block subheading %}{% endblock %}</div>
+          </div>
+          <div class="page-head-actions">{% block header_actions %}{% endblock %}</div>
+        </header>
+      {% endblock %}
+
+      {% comment %}
+        The selector sits between the masthead and the content because that is
+        what it does: it says which model the content below belongs to. Pages
+        that are not model-specific never render it - the registry in
+        AI/services/model_scope.py decides, not the page.
+      {% endcomment %}
+      {% if show_model_scope %}{% include "console/_model_scope.html" %}{% endif %}
+
+      {% block content %}{% endblock %}
+     </div>
+    </main>
+  </div>
+</div>
+
+{# ================= Quick jump palette ================= #}
+<div id="consoleJump" class="fixed inset-0 z-[70] hidden" role="dialog" aria-modal="true" aria-label="Jump to page">
+  <div class="absolute inset-0 bg-ink-950/50 backdrop-blur-sm animate-fade-in" data-jump-close></div>
+  <div class="absolute inset-x-0 top-[max(1rem,min(12vh,6rem))] mx-auto w-full max-w-lg animate-scale-in px-4">
+    <div class="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl3 border border-ink-200/80 bg-white shadow-float dark:border-white/10 dark:bg-ink-900">
+      <div class="flex items-center gap-3 border-b hairline px-4">
+        <svg style="width:17px;height:17px" class="shrink-0 text-ink-400" aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="text" id="consoleJumpInput" autocomplete="off" placeholder="Search students, payments, tickets… or jump to a page"
+               class="w-full border-0 bg-transparent py-4 text-sm font-medium text-ink-900 outline-none
+                      placeholder:text-ink-400 dark:text-white">
+        <button type="button" class="kbd" data-jump-close>esc</button>
+      </div>
+      <ul id="consoleJumpList" class="max-h-[min(46vh,28rem)] min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain scroll-slim p-2"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* Theme ------------------------------------------------------------- */
+  document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var isDark = document.documentElement.classList.toggle('dark');
+      try {
+        localStorage.setItem('lumen-theme', isDark ? 'dark' : 'light');
+        localStorage.setItem('epcai-theme', isDark ? 'dark' : 'light');
+      } catch (e) {}
+      if (window.EPCCharts) window.EPCCharts.redrawAll();
+    });
+  });
+
+  /* Motion ------------------------------------------------------------
+     Two states, not three: follow the system, or always animate. There is
+     deliberately no "never" — anyone who wants that already has it at the
+     operating system, and asking them to set it twice would be worse. */
+  (function () {
+    var button = document.getElementById('motionToggle');
+    if (!button) return;
+    function paint(full) {
+      if (full) document.documentElement.setAttribute('data-motion', 'full');
+      else document.documentElement.removeAttribute('data-motion');
+      button.setAttribute('aria-pressed', full ? 'true' : 'false');
+      button.setAttribute('aria-label', full ? 'Animations: always on' : 'Animations: follow the system');
+      button.classList.toggle('is-on', full);
+    }
+    var stored = null;
+    try { stored = localStorage.getItem('motion'); } catch (e) {}
+    paint(stored === 'full');
+    button.addEventListener('click', function () {
+      var full = document.documentElement.getAttribute('data-motion') !== 'full';
+      paint(full);
+      try { localStorage.setItem('motion', full ? 'full' : 'system'); } catch (e) {}
+    });
+  })();
+
+  /* What needs attention: the bell's menu ------------------------------ */
+  (function () {
+    var host = document.querySelector('[data-attention]');
+    if (!host) return;
+    var toggle = host.querySelector('[data-attention-toggle]');
+    var menu = document.getElementById('attentionMenu');
+    function set(open) {
+      menu.hidden = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    toggle.addEventListener('click', function (event) { event.stopPropagation(); set(menu.hidden); });
+    document.addEventListener('click', function (event) { if (!host.contains(event.target)) set(false); });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !menu.hidden) { set(false); toggle.focus(); }
+    });
+  })();
+
+  /* Mobile drawer ----------------------------------------------------- */
+  (function () {
+    var drawer = document.getElementById('consoleDrawer');
+    if (!drawer) return;
+    var open = function () { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; };
+    var close = function () { drawer.classList.add('hidden'); document.body.style.overflow = ''; };
+    document.querySelectorAll('[data-drawer-open]').forEach(function (el) { el.addEventListener('click', open); });
+    document.querySelectorAll('[data-drawer-close]').forEach(function (el) { el.addEventListener('click', close); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  })();
+
+  /* Sidebar collapse — remembered between visits ---------------------- */
+  (function () {
+    var root = document.documentElement;
+    try { if (localStorage.getItem('epcai-console-rail') === 'collapsed') root.classList.add('shell-collapsed'); } catch (e) {}
+    document.querySelectorAll('[data-shell-toggle]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var collapsed = root.classList.toggle('shell-collapsed');
+        button.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        try { localStorage.setItem('epcai-console-rail', collapsed ? 'collapsed' : 'open'); } catch (e) {}
+        if (window.EPCCharts) setTimeout(window.EPCCharts.redrawAll, 320);
+      });
+    });
+  })();
+
+  /* Quick jump -------------------------------------------------------- */
+  (function () {
+    var modal = document.getElementById('consoleJump');
+    var input = document.getElementById('consoleJumpInput');
+    var list  = document.getElementById('consoleJumpList');
+    if (!modal || !input || !list) return;
+
+    // The palette is built from the sidebar itself, so it can never drift
+    // out of step with the navigation.
+    var entries = [];
+    document.querySelectorAll('#consoleRail nav a[href]').forEach(function (link) {
+      var label = (link.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!label) return;
+      var use = link.querySelector('use');
+      entries.push({
+        label: label,
+        href: link.getAttribute('href'),
+        icon: use ? use.getAttribute('href') : '#i-chevron-right'
+      });
+    });
+
+    var cursor = 0, shown = [], found = [], lastQuery = '', timer = null, pending = null;
+
+    function esc(text) {
+      return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function heading(label) {
+      return '<li class="px-3 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[.12em] text-ink-400">' + esc(label) + '</li>';
+    }
+
+    function row(href, icon, title, sub) {
+      return '<li><a href="' + esc(href) + '" class="jump-row flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-medium text-ink-700 dark:text-ink-200">' +
+        '<svg style="width:16px;height:16px" class="shrink-0 text-ink-400"><use href="' + esc(icon) + '"/></svg>' +
+        '<span class="min-w-0 flex-1"><span class="block truncate">' + esc(title) + '</span>' +
+        (sub ? '<span class="block truncate text-[11.5px] font-normal text-ink-400">' + esc(sub) + '</span>' : '') +
+        '</span></a></li>';
+    }
+
+    /* Pages first — they answer instantly — then whatever the server found,
+       grouped. Arrow keys walk every row in one list. */
+    function paint(q, searching) {
+      var html = '';
+      if (shown.length) {
+        if (q) html += heading('Pages');
+        shown.forEach(function (item) { html += row(item.href, item.icon, item.label, ''); });
+      }
+      found.forEach(function (group) {
+        html += heading(group.label);
+        group.items.forEach(function (item) { html += row(item.url, item.icon, item.title, item.sub); });
+      });
+      if (searching) html += '<li class="px-3 py-3 text-center text-xs text-ink-400">Searching…</li>';
+      if (!html) {
+        html = '<li class="px-3 py-8 text-center text-sm text-ink-400">' +
+          (q.length >= 2 ? 'Nothing matches “' + esc(q) + '”.' : 'Nothing matches that.') + '</li>';
+      }
+      list.innerHTML = html;
+      cursor = 0;
+      var first = list.querySelector('.jump-row');
+      if (first) first.classList.add('is-cursor');
+    }
+
+    function render(query) {
+      var q = query.trim();
+      var lower = q.toLowerCase();
+      shown = entries.filter(function (item) { return !lower || item.label.toLowerCase().indexOf(lower) !== -1; });
+      if (q !== lastQuery) found = [];
+      lastQuery = q;
+      clearTimeout(timer);
+      if (pending) { pending.abort(); pending = null; }
+      if (q.length < 2) { paint(q, false); return; }
+      paint(q, true);
+      timer = setTimeout(function () {
+        pending = new AbortController();
+        fetch('{% url "console:search" %}?q=' + encodeURIComponent(q), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', signal: pending.signal
+        }).then(function (r) { return r.json(); }).then(function (data) {
+          pending = null;
+          if (q !== lastQuery) return;
+          found = (data && data.groups) || [];
+          paint(q, false);
+        }).catch(function (error) {
+          if (error && error.name === 'AbortError') return;
+          pending = null;
+          paint(q, false);
+        });
+      }, 180);
+    }
+
+    function move(step) {
+      var rows = list.querySelectorAll('.jump-row');
+      if (!rows.length) return;
+      rows[cursor].classList.remove('is-cursor');
+      cursor = (cursor + step + rows.length) % rows.length;
+      rows[cursor].classList.add('is-cursor');
+      rows[cursor].scrollIntoView({ block: 'nearest' });
+    }
+
+    function open() {
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      input.value = '';
+      render('');
+      setTimeout(function () { input.focus(); }, 30);
+    }
+    function close() { modal.classList.add('hidden'); document.body.style.overflow = ''; }
+
+    document.querySelectorAll('[data-jump-open]').forEach(function (el) { el.addEventListener('click', open); });
+    document.querySelectorAll('[data-jump-close]').forEach(function (el) { el.addEventListener('click', close); });
+    input.addEventListener('input', function () { render(input.value); });
+
+    modal.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown') { event.preventDefault(); move(1); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); move(-1); }
+      else if (event.key === 'Enter') {
+        var rows = list.querySelectorAll('.jump-row');
+        if (rows[cursor]) { event.preventDefault(); window.location.href = rows[cursor].getAttribute('href'); }
+      } else if (event.key === 'Escape') { close(); }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        modal.classList.contains('hidden') ? open() : close();
+      }
+    });
+  })();
+</script>
+
+{% include "components/charts.html" %}
+{% block scripts %}{% endblock %}
+{% include "components/settle_motion.html" %}
+</body>
+</html>

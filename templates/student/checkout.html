@@ -1,0 +1,341 @@
+{% extends "base/shell_page.html" %}
+{% load ai_extras %}
+
+{% block title %}Checkout · {{ plan.name }} · {{ BRAND.full_name }}{% endblock %}
+{% block back_url %}{% url 'student:pricing' %}{% endblock %}
+{% block back_label %}Pricing{% endblock %}
+
+{% block head %}
+<style>
+  .checkout { display: grid; gap: 18px; align-items: start; }
+  @media (min-width: 900px) { .checkout { grid-template-columns: 1.4fr 1fr; } }
+
+  /* One method per row, the whole row selectable. A radio you have to hit
+     exactly is a radio people miss on a phone. */
+  .method {
+    display: flex; gap: 13px; align-items: flex-start;
+    padding: 14px; border-radius: var(--r);
+    border: 1px solid var(--border); background: var(--surface);
+    cursor: pointer; transition: border-color var(--fast), background var(--fast);
+  }
+  .method:hover { border-color: var(--border-firm); }
+  .method:has(:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .method input { position: absolute; opacity: 0; pointer-events: none; }
+  .method-icon {
+    width: 38px; height: 38px; border-radius: var(--r-sm); flex: none;
+    display: grid; place-items: center;
+    background: var(--surface-2); color: var(--ink-2);
+  }
+  .method:has(:checked) .method-icon { background: var(--accent); color: #fff; }
+  .method-body { min-width: 0; flex: 1; }
+  .method-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
+  .method-desc { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+  .method-tick {
+    width: 19px; height: 19px; border-radius: 50%; flex: none; margin-top: 2px;
+    border: 2px solid var(--border-firm);
+    display: grid; place-items: center; color: transparent;
+    transition: border-color var(--fast), background var(--fast), color var(--fast);
+  }
+  .method:has(:checked) .method-tick { border-color: var(--accent); background: var(--accent); color: #fff; }
+  .method-tick svg { width: 11px; height: 11px; }
+  .method-price { display: block; margin-top: 8px; font-size: 15px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .method-price small { font-size: 11.5px; font-weight: 500; color: var(--ink-3); letter-spacing: 0; }
+  .method-how { display: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px dashed var(--border); list-style: none; font-size: 12px; line-height: 1.5; color: var(--ink-2); }
+  .method:has(:checked) .method-how { display: grid; gap: 5px; }
+  .method-how li { display: flex; gap: 8px; }
+  .method-how .n { width: 16px; height: 16px; border-radius: 50%; flex: none; margin-top: 1px; display: grid; place-items: center; background: var(--surface); color: var(--accent-lo); font-size: 9.5px; font-weight: 700; border: 1px solid var(--accent-mid); }
+  .method-logo { font-size: 10px; font-weight: 800; letter-spacing: .02em; line-height: 1; }
+  .method-icon.is-aba { background: #005D7E; color: #fff; }
+  .method-icon.is-acleda { background: #0B3C8C; color: #fff; }
+  .method-icon .method-logo.is-small { font-size: 9px; letter-spacing: .02em; }
+  .method-icon.is-binance { background: #F0B90B; color: #1E2026; }
+  .method:has(:checked) .method-icon.is-aba,
+  .method:has(:checked) .method-icon.is-acleda,
+  .method:has(:checked) .method-icon.is-binance { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  .summary dl { margin: 0; display: grid; gap: 10px; }
+  .summary .line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+  .summary dt { color: var(--ink-3); margin: 0; }
+  .summary dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .summary .total {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-soft);
+  }
+  .summary .total b { font-size: 26px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .fine { margin: 12px 2px 0; font-size: 11.5px; line-height: 1.6; color: var(--ink-3); }
+  .fine a { color: var(--accent); font-weight: 600; }
+
+  /* Promo code: one field and a button, and the answer right under it. */
+  .promo { margin-top: 16px; }
+  .promo label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 7px; }
+  .promo-row { display: flex; gap: 8px; }
+  .promo-row input {
+    flex: 1 1 auto; min-width: 0; height: 42px; padding: 0 13px; border-radius: var(--r-sm);
+    border: 1px solid var(--border); background: var(--surface); color: inherit;
+    font-size: 13.5px; letter-spacing: .06em; text-transform: uppercase; outline: none;
+    transition: border-color var(--fast), box-shadow var(--fast);
+  }
+  .promo-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .promo-row .btn { height: 42px; flex: none; }
+  .promo-msg { margin: 8px 2px 0; font-size: 12px; min-height: 1em; }
+  .promo-msg.is-ok { color: var(--ok); font-weight: 600; }
+  .promo-msg.is-bad { color: var(--danger); }
+  .promo.is-applied input { border-color: var(--ok); background: var(--ok-soft); }
+  .summary .line.is-discount dd { color: var(--ok); }
+  .summary .line.is-discount { animation: promoIn .45s cubic-bezier(.2,.7,.2,1) both; }
+  .total .was { font-size: 14px; color: var(--ink-4); text-decoration: line-through; margin-right: 8px; font-weight: 500; }
+  .total b.is-new { animation: promoPop .5s cubic-bezier(.2,.7,.2,1) both; color: var(--ok); }
+  @keyframes promoIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  @keyframes promoPop { 0% { transform: scale(.9); opacity: .4; } 60% { transform: scale(1.06); } 100% { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .summary .line.is-discount, .total b.is-new { animation: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="panel-head">
+  <p class="panel-eyebrow">Checkout</p>
+  <h2 class="panel-title">{{ plan.name }}</h2>
+  <p class="panel-sub">Choose how you would like to pay. Tokens are credited as soon as the payment is confirmed.</p>
+</header>
+
+<div class="checkout">
+  <form method="post" data-loading-form>
+    {% csrf_token %}
+    <div class="card">
+      <div class="card-head">
+        <h3>Payment method</h3>
+        <p>Your tokens are credited as soon as payment is confirmed.</p>
+      </div>
+      <div class="card-body">
+        {% if options %}
+        <div class="grid" role="radiogroup" aria-label="Payment method">
+          {% for option in options %}
+            {% with provider=option.provider %}
+            <label class="method" data-method data-currency="{{ option.currency }}" data-rate="{{ option.rate|default_if_none:'' }}" data-charge="{{ option.charge }}">
+              <input type="radio" name="method" value="{{ option.key }}"
+                     {% if form.method.value == option.key or not form.method.value and forloop.first %}checked{% endif %} required>
+              <span class="method-icon {% if option.key == 'aba_payway' %}is-aba{% elif option.key == 'acleda_khqr' or option.key == 'acleda_xpay' %}is-acleda{% else %}is-binance{% endif %}">
+                {% if option.key == 'aba_payway' %}<span class="method-logo">ABA</span>
+                {% elif option.key == 'acleda_xpay' %}<span class="method-logo is-small">ACLEDA</span>
+                {% elif option.key == 'acleda_khqr' %}<svg aria-hidden="true"><use href="#i-qr"/></svg>
+                {% else %}<svg aria-hidden="true"><use href="#i-coin"/></svg>{% endif %}
+              </span>
+              <span class="method-body">
+                <span class="method-name">
+                  {{ provider.label }}
+                  {% if option.automatic %}
+                    <span class="badge is-ok">Instant</span>
+                  {% else %}
+                    <span class="badge">Confirmed by our team</span>
+                  {% endif %}
+                </span>
+                <span class="method-desc">{{ provider.description }}</span>
+                <span class="method-price" data-method-price>{{ option.charge }}{% if option.currency == 'KHR' %} <small>≈ ${{ plan.price|floatformat:"2" }}</small>{% elif option.currency == 'USDT' %} <small>USDT on Binance</small>{% endif %}</span>
+                {% if provider.steps %}
+                  <ol class="method-how">
+                    {% for step in provider.steps %}<li><span class="n">{{ forloop.counter }}</span><span>{{ step }}</span></li>{% endfor %}
+                  </ol>
+                {% endif %}
+              </span>
+              <span class="method-tick"><svg aria-hidden="true"><use href="#i-check"/></svg></span>
+            </label>
+            {% endwith %}
+          {% endfor %}
+        </div>
+        {% if charges_riel %}<p class="fine" style="margin-top:10px">Riel prices use today's rate of ៛{{ khr_rate|floatformat:"0"|intcomma }} per $1, rounded up to ៛100. The exact amount is fixed on the next screen.</p>{% endif %}
+        {% else %}
+          <div class="empty" style="padding:26px 16px">Online payment is not available right now. Please contact support to buy this plan.</div>
+        {% endif %}
+
+        <div class="promo" data-promo data-check-url="{% url 'payments:promo_check' plan.slug %}">
+          <label for="promoInput">Promo code <span style="font-weight:400;color:var(--ink-4)">(optional)</span></label>
+          <div class="promo-row">
+            <input type="text" id="promoInput" name="promo_code" maxlength="32" autocomplete="off"
+                   value="{{ form.promo_code.value|default:'' }}" placeholder="e.g. WELCOME20">
+            <button type="button" class="btn" data-promo-apply>Apply</button>
+          </div>
+          <p class="promo-msg" data-promo-msg role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="field" style="margin-top:16px">
+          <label for="id_note">Note <span style="font-weight:400;color:var(--ink-4)">(optional)</span></label>
+          <input type="text" name="note" id="id_note" maxlength="255"
+                 placeholder="Anything we should know about this payment">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%;height:44px;margin-top:18px"
+                data-submit data-loading-label="Preparing checkout…"{% if not options %} disabled{% endif %}>
+          Continue to payment
+          <svg aria-hidden="true"><use href="#i-arrow-right"/></svg>
+        </button>
+
+        <p class="fine" style="display:flex;gap:8px;align-items:flex-start">
+          <svg aria-hidden="true" style="width:14px;height:14px;flex:none;margin-top:2px;color:var(--accent)"><use href="#i-shield"/></svg>
+          <span>Payments are verified on our servers before any tokens are credited.
+                We never see your card or wallet credentials.</span>
+        </p>
+      </div>
+    </div>
+  </form>
+
+  <aside class="summary">
+    <div class="card">
+      <div class="card-head">
+        <h3>Order summary</h3>
+      </div>
+      <div class="card-body">
+        <p style="margin:0;font-size:15px;font-weight:600">{{ plan.name }}</p>
+        {% if plan.description %}
+          <p style="margin:4px 0 0;font-size:12.5px;color:var(--ink-3);line-height:1.55">{{ plan.description }}</p>
+        {% endif %}
+
+        <dl style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft)">
+          <div class="line"><dt>Tokens</dt><dd>{{ plan.tokens|intcomma }}</dd></div>
+          {% if plan.ai_model %}
+            <div class="line"><dt>Model</dt><dd>{{ plan.ai_model.name }}</dd></div>
+          {% endif %}
+          <div class="line"><dt>Rate</dt><dd>${{ plan.price_per_million }} / 1M</dd></div>
+          <div class="line is-discount" data-promo-line hidden><dt data-promo-label>Discount</dt><dd data-promo-amount></dd></div>
+        </dl>
+
+        <div class="total">
+          <span style="font-size:13px;font-weight:600;color:var(--ink-2)">Total</span>
+          <span><span class="was" data-promo-was hidden>${{ plan.price|floatformat:"2" }}</span><b data-total>{% if plan.currency == 'USD' %}${% endif %}{{ plan.price|floatformat:"-2" }}{% if plan.currency != 'USD' %} <span style="font-size:13px">{{ plan.currency }}</span>{% endif %}</b></span>
+        </div>
+        {% if options %}
+          <div class="line" style="display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:13px">
+            <span style="color:var(--ink-3)">You pay with <span data-pay-method>{{ options.0.provider.label }}</span></span>
+            <b style="font-variant-numeric:tabular-nums" data-pay-charge>{{ options.0.charge }}</b>
+          </div>
+        {% endif %}
+
+        {% if plan.feature_list %}
+          <ul class="plan-features" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-soft)">
+            {% for feature in plan.feature_list %}
+              <li><svg aria-hidden="true"><use href="#i-check"/></svg> <span>{{ feature }}</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="fine">
+      By continuing you agree to our
+      <a href="{% url 'public:terms' %}">Terms</a> and
+      <a href="{% url 'public:refund_policy' %}">Refund policy</a>.
+    </p>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* A payment button that can be pressed twice is a payment that can be made
+     twice, so the first press takes it out of service. */
+  document.querySelectorAll('form[data-loading-form]').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      var button = form.querySelector('[data-submit]');
+      if (!button || button.dataset.busy) return;
+      button.dataset.busy = '1';
+      button.disabled = true;
+      button.textContent = button.dataset.loadingLabel || 'Please wait…';
+    });
+  });
+
+  /* What the chosen method charges, in its own currency. Display only: the
+     amount is fixed by the server when the order is created. */
+  var currentUsd = null;
+  function paintCharge() {
+    var picked = document.querySelector('[data-method] input:checked');
+    var out = document.querySelector('[data-pay-charge]');
+    if (!picked || !out) return;
+    var row = picked.closest('[data-method]');
+    document.querySelector('[data-pay-method]').textContent = row.querySelector('.method-name').firstChild.textContent.trim();
+    if (currentUsd === null) { out.textContent = row.dataset.charge; return; }
+    var rate = parseFloat(row.dataset.rate);
+    if (row.dataset.currency === 'KHR' && rate) {
+      var riel = Math.ceil(currentUsd * rate / 100) * 100;
+      out.textContent = '\u17DB' + riel.toLocaleString('en-US');
+    } else if (row.dataset.currency === 'USDT') {
+      out.textContent = currentUsd.toFixed(2) + ' USDT';
+    } else {
+      out.textContent = '$' + currentUsd.toFixed(2);
+    }
+  }
+  document.querySelectorAll('[data-method] input').forEach(function (input) {
+    input.addEventListener('change', paintCharge);
+  });
+  paintCharge();
+
+  /* Promo code preview. The server answers with the new total or the reason
+     the code cannot apply; the code is checked again when the order is
+     placed, so nothing here decides what is charged. */
+  (function () {
+    var box = document.querySelector('[data-promo]');
+    if (!box) return;
+    var input = box.querySelector('input');
+    var apply = box.querySelector('[data-promo-apply]');
+    var msg = box.querySelector('[data-promo-msg]');
+    var line = document.querySelector('[data-promo-line]');
+    var total = document.querySelector('[data-total]');
+    var was = document.querySelector('[data-promo-was]');
+    var original = total.innerHTML;
+
+    function reset() {
+      currentUsd = null; paintCharge();
+      box.classList.remove('is-applied');
+      line.hidden = true;
+      was.hidden = true;
+      total.classList.remove('is-new');
+      total.innerHTML = original;
+      apply.textContent = 'Apply';
+    }
+
+    function check() {
+      var code = (input.value || '').trim();
+      if (!code) { reset(); msg.textContent = ''; msg.className = 'promo-msg'; return; }
+      apply.disabled = true;
+      apply.textContent = 'Checking…';
+      fetch(box.dataset.checkUrl + '?code=' + encodeURIComponent(code), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin'
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          apply.disabled = false;
+          if (!data.ok) {
+            reset();
+            msg.textContent = data.error || 'That promo code is not valid.';
+            msg.className = 'promo-msg is-bad';
+            return;
+          }
+          box.classList.add('is-applied');
+          apply.textContent = 'Applied';
+          msg.textContent = data.label + ' applied — you save $' + data.discount + '.';
+          msg.className = 'promo-msg is-ok';
+          line.querySelector('[data-promo-label]').textContent = 'Promo ' + data.code;
+          line.querySelector('[data-promo-amount]').textContent = '−$' + data.discount;
+          line.hidden = false;
+          was.hidden = false;
+          total.textContent = '$' + data.total;
+          currentUsd = parseFloat(data.total); paintCharge();
+          total.classList.remove('is-new'); void total.offsetWidth; total.classList.add('is-new');
+        })
+        .catch(function () {
+          apply.disabled = false;
+          apply.textContent = 'Apply';
+          msg.textContent = 'Could not check that code. Please try again.';
+          msg.className = 'promo-msg is-bad';
+        });
+    }
+
+    apply.addEventListener('click', check);
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') { event.preventDefault(); check(); }
+    });
+    input.addEventListener('input', function () {
+      if (box.classList.contains('is-applied')) { reset(); msg.textContent = ''; }
+    });
+    if (input.value) check();
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,246 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Answer quality — what students said about the replies, per model.
+
+  A model nobody has rated shows "No ratings" rather than 0%: "no opinion yet"
+  and "everybody disliked it" must never look the same. The list below the
+  table is every thumbs-down in the window, each linking to the conversation
+  it came from, because a complaint is only useful next to what caused it.
+{% endcomment %}
+
+{% block title %}Answer quality · Console{% endblock %}
+{% block heading %}Answer quality{% endblock %}
+{% block subheading %}
+  <p>How helpful students found each model's answers over the last {{ days }} days, from the thumbs on every reply.</p>
+{% endblock %}
+
+{% block head %}
+<style>
+  .aq-bar { position: relative; height: 8px; border-radius: 99px; overflow: hidden; background: rgba(225, 29, 72, .16); min-width: 120px; }
+  .aq-bar > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, #34D399, #059669); transform-origin: left; animation: aqGrow .9s cubic-bezier(.2,.7,.2,1) both; }
+  .aq-bar.is-empty { background: rgba(100, 116, 139, .14); }
+  @keyframes aqGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .aq-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .aq-reason { display: grid; grid-template-columns: 110px 1fr 44px; align-items: center; gap: 10px; font-size: 12.5px; }
+  .aq-reason-track { height: 7px; border-radius: 99px; background: rgba(100, 116, 139, .14); overflow: hidden; }
+  .aq-reason-track > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #FB7185, #E11D48); transform-origin: left; animation: aqGrow .9s cubic-bezier(.2,.7,.2,1) .15s both; }
+  @media (prefers-reduced-motion: reduce) { .aq-bar > i, .aq-reason-track > i { animation: none; } }
+  /* The review popover: a <details>, so it works without script and closes
+     like any disclosure. */
+  .aq-review { position: relative; display: inline-block; }
+  .aq-review > summary { list-style: none; cursor: pointer; }
+  .aq-review > summary::-webkit-details-marker { display: none; }
+  .aq-review-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 280px; padding: 12px; border-radius: 14px; text-align: left; }
+  .aq-status { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+  .aq-status label { position: relative; }
+  .aq-status input { position: absolute; opacity: 0; }
+  .aq-status span { display: block; padding: 6px 4px; border-radius: 9px; text-align: center; font-size: 11.5px; font-weight: 600; cursor: pointer; border: 1px solid rgba(100, 116, 139, .25); }
+  .aq-status input:checked + span { border-color: #2563EB; background: rgba(37, 99, 235, .1); color: #1D4ED8; }
+  .dark .aq-status input:checked + span { color: #93C5FD; }
+  .aq-status input:focus-visible + span { outline: 2px solid #2563EB; outline-offset: 1px; }
+  /* On a phone the table scrolls sideways, which would clip a floating
+     popover; there it opens in place instead, under its button. */
+  @media (max-width: 640px) {
+    .aq-review[open] .aq-review-pop { position: static; width: min(280px, calc(100vw - 4rem)); margin-top: 6px; }
+  }
+  @media (pointer: coarse) { .aq-status span { padding: 11px 4px; } a.aq-reason { min-height: 40px; } }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  <div class="flex flex-wrap items-center gap-1.5">
+    {% for value, label in range_options %}
+      <a href="{% qs request range=value page='' %}" class="chip{% if days|stringformat:'s' == value %} chip-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% if report.score is not None %}
+      {% with value=report.score|stringformat:"s"|add:"%" %}
+        {% include "console/_kpi.html" with variant="brand" icon="i-thumb-up" label="Helpful" value=value foot="of all rated answers" %}
+      {% endwith %}
+    {% else %}
+      {% include "console/_kpi.html" with variant="brand" icon="i-thumb-up" label="Helpful" value="—" foot="no ratings yet" %}
+    {% endif %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-check-circle" label="Thumbs up" value=report.up|intcomma foot="answers marked helpful" %}
+    {% include "console/_kpi.html" with variant="violet" icon="i-thumb-down" label="Thumbs down" value=report.down|intcomma foot="answers marked not helpful" %}
+    {% include "console/_kpi.html" with variant="plain" icon="i-inbox" label="To review" value=review_counts.open|intcomma foot="thumbs-down not looked at yet" url="?status=open#complaints" %}
+  </section>
+
+  <div class="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+    <section class="card overflow-hidden reveal">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">By model</h2>
+        <span class="text-[11px] text-ink-500 dark:text-ink-400">Last {{ days }} days</span>
+      </div>
+      <div class="table-wrap">
+        <table class="table min-w-[640px]">
+          <thead>
+            <tr>
+              <th class="th">Model</th>
+              <th class="th">Helpful</th>
+              <th class="th text-right">Up</th>
+              <th class="th text-right">Down</th>
+              <th class="th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report.rows %}
+              <tr class="row">
+                <td class="td">
+                  <span class="flex items-center gap-2.5">
+                    <span class="aq-dot" style="background:linear-gradient(140deg, {{ row.tone.from }}, {{ row.tone.to }})" aria-hidden="true"></span>
+                    <span class="text-sm font-semibold text-ink-900 dark:text-white">{{ row.name }}</span>
+                  </span>
+                </td>
+                <td class="td">
+                  {% if row.score is not None %}
+                    <div class="flex items-center gap-2.5">
+                      <div class="aq-bar"><i style="width:{{ row.score }}%"></i></div>
+                      <span class="text-xs font-bold tabular-nums {% if row.score >= 80 %}text-emerald-600 dark:text-emerald-400{% elif row.score >= 60 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ row.score }}%</span>
+                    </div>
+                  {% else %}
+                    <div class="flex items-center gap-2.5">
+                      <div class="aq-bar is-empty"></div>
+                      <span class="text-xs text-ink-400">No ratings</span>
+                    </div>
+                  {% endif %}
+                </td>
+                <td class="td text-right tabular-nums text-emerald-600 dark:text-emerald-400">{{ row.up|intcomma }}</td>
+                <td class="td text-right tabular-nums text-rose-600 dark:text-rose-400">{{ row.down|intcomma }}</td>
+                <td class="td text-right">
+                  {% if row.down %}
+                    <a href="{% qs request model=row.key page='' %}#complaints" class="btn-ghost btn-sm">See complaints</a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card p-5 reveal">
+      <h2 class="section-title">Why answers missed</h2>
+      <p class="section-note mt-0.5">The reason students picked after a thumbs-down.</p>
+      {% if report.reasons %}
+        <div class="mt-5 space-y-3">
+          {% for reason in report.reasons %}
+            <a href="{% qs request reason=reason.key page='' %}#complaints" class="aq-reason group">
+              <span class="font-semibold text-ink-700 group-hover:text-ink-900 dark:text-ink-200 dark:group-hover:text-white">{{ reason.label }}</span>
+              <span class="aq-reason-track"><i style="width:{{ reason.percent }}%"></i></span>
+              <span class="text-right tabular-nums text-ink-500 dark:text-ink-400">{{ reason.count }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-check-circle" title="No reasons given" body="No thumbs-down in this window came with a reason." %}
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card overflow-hidden reveal" id="complaints">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <div>
+        <h2 class="section-title">Answers marked not helpful</h2>
+        <div class="mt-2 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Review status">
+          {% for value, label in status_choices %}
+            <a href="{% qs request status=value page='' %}#complaints" class="chip{% if status_filter == value %} chip-active{% endif %}">{{ label }} <span class="ml-1 tabular-nums opacity-70">{{ review_counts|get_item:value }}</span></a>
+          {% endfor %}
+          <a href="{% qs request status='all' page='' %}#complaints" class="chip{% if status_filter == 'all' %} chip-active{% endif %}">All <span class="ml-1 tabular-nums opacity-70">{{ review_counts.all }}</span></a>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <a href="{% qs request model='' reason='' page='' %}#complaints" class="chip{% if not model_filter and not reason_filter %} chip-active{% endif %}">All models</a>
+        {% for row in rated_models %}
+          {% if row.down %}
+            <a href="{% qs request model=row.key page='' %}#complaints" class="chip{% if model_filter == row.key %} chip-active{% endif %}">{{ row.name }}</a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% if negatives %}
+      <div class="table-wrap">
+        <table class="table min-w-[1020px]">
+          <thead>
+            <tr>
+              <th class="th">Student</th>
+              <th class="th">Model</th>
+              <th class="th">Reason</th>
+              <th class="th">Answer</th>
+              <th class="th">Review</th>
+              <th class="th">When</th>
+              <th class="th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in negatives %}
+              <tr class="row">
+                <td class="td">
+                  {# Content editors see who complained; opening the student is for roles with Students. #}
+                  {% if console_can.students and not item.user.is_admin_user or console_is_owner %}<a href="{% url 'console:user_detail' item.user.pk %}" class="flex items-center gap-3">{% else %}<span class="flex items-center gap-3">{% endif %}
+                    {% with av=item.user|avatar_tone %}<span class="student-mark" aria-hidden="true" style="background: linear-gradient(140deg, {{ av.from }}, {{ av.to }})">{{ item.user.initials }}</span>{% endwith %}
+                    <span class="block truncate text-sm font-semibold text-ink-900 dark:text-white">{{ item.user.display_name|truncatechars:24 }}</span>
+                  {% if console_can.students and not item.user.is_admin_user or console_is_owner %}</a>{% else %}</span>{% endif %}
+                </td>
+                <td class="td text-xs">{% if item.ai_model %}{{ item.ai_model.name }}{% else %}{{ item.model_key }}{% endif %}</td>
+                <td class="td text-xs">
+                  {% if item.reason %}<span class="badge-danger">{{ item.get_reason_display }}</span>{% else %}<span class="text-ink-400">No reason</span>{% endif %}
+                </td>
+                <td class="td max-w-[340px] text-xs text-ink-600 dark:text-ink-300">
+                  <span class="line-clamp-2">{{ item.message.content|truncatechars:180 }}</span>
+                  {% if item.comment %}<span class="mt-1 block italic text-ink-500">“{{ item.comment|truncatechars:120 }}”</span>{% endif %}
+                </td>
+                <td class="td max-w-[200px] text-xs">
+                  <span class="{% if item.status == 'resolved' %}badge-success{% elif item.status == 'reviewed' %}badge-info{% else %}badge-warning{% endif %}">{{ item.get_status_display }}</span>
+                  {% if item.admin_note %}<span class="mt-1 block text-ink-500 dark:text-ink-400" title="{{ item.admin_note }}">{{ item.admin_note|truncatechars:70 }}</span>{% endif %}
+                  {% if item.reviewed_by %}<span class="mt-0.5 block text-[11px] text-ink-400">by {{ item.reviewed_by.display_name }} · {{ item.reviewed_at|timeago }}</span>{% endif %}
+                </td>
+                <td class="td text-xs text-ink-500 dark:text-ink-400">{{ item.updated_at|timeago }}</td>
+                <td class="td text-right whitespace-nowrap">
+                  <details class="aq-review">
+                    <summary class="btn-ghost btn-sm" aria-label="Review this complaint">
+                      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-check-circle"/></svg> Review
+                    </summary>
+                    <form method="post" action="{% url 'console:feedback_review' item.pk %}" class="aq-review-pop card shadow-float">
+                      {% csrf_token %}
+                      <input type="hidden" name="back" value="{{ request.get_full_path }}#complaints">
+                      <div class="aq-status" role="radiogroup" aria-label="Status">
+                        {% for value, label in status_choices %}
+                          <label><input type="radio" name="status" value="{{ value }}" {% if item.status == value %}checked{% endif %}><span>{{ label }}</span></label>
+                        {% endfor %}
+                      </div>
+                      <textarea name="note" rows="3" maxlength="500" class="input w-full text-xs" placeholder="What was wrong, and what was done (optional)">{{ item.admin_note }}</textarea>
+                      <div class="mt-2 flex justify-end">
+                        <button type="submit" class="btn-primary btn-sm">Save</button>
+                      </div>
+                    </form>
+                  </details>
+                  {% if console_can.support %}
+                  <a href="{% url 'console:conversation_detail' item.message.conversation_id %}" class="btn-icon h-7 w-7" title="Open conversation" aria-label="Open the conversation">
+                    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-eye"/></svg>
+                  </a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% if status_filter == 'open' %}
+        {% include "components/empty_state.html" with icon="i-check-circle" title="Nothing to review" body="Every thumbs-down in this window has been looked at." %}
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-thumb-up" title="No complaints" body="No answer in this window matches these filters." %}
+      {% endif %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

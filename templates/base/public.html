@@ -1,0 +1,357 @@
+{% load static ai_extras %}<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <title>{% block title %}{{ BRAND.full_name }}{% endblock %}</title>
+  <meta name="description" content="{% block description %}{{ BRAND.tagline }}{% endblock %}">
+  {% include "base/design.html" %}
+  {% comment %}
+    The marketing shell is drawn in the landing page's own faces — Instrument
+    Sans, with Instrument Serif for the italic phrases. Scoped to `.lp` so the
+    app's Inter still owns everything behind the sign-in.
+  {% endcomment %}
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    @keyframes lpSheen { 0% { transform: translateX(-130%) skewX(-18deg); opacity: 1; } 96% { transform: translateX(420%) skewX(-18deg); opacity: 1; } 100% { transform: translateX(420%) skewX(-18deg); opacity: 0; } }
+
+    /* --soft is the quietest text on the page (column heads, the footer
+       line, the marquee label); at #7A879E it read 3.4:1 on the light ground. */
+    .lp { --ink: #0B1222; --body: #26314A; --mid: #46536E; --mute: #5B6884; --soft: #5F6B82; --line: #E4E9F3; --hair: #E7ECF6; --blue: #2563EB; --blue-ink: #1D4ED8; --panel: #FFFFFF; --focus: #2563EB; }
+    .lp, .lp a, .lp button, .lp input { font-family: 'Instrument Sans', 'Helvetica Neue', Helvetica, sans-serif; }
+    .lp .serif { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-weight: 400; }
+    .lp .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .lp svg { display: block; }
+    .lp button { cursor: pointer; }
+    /* Keyboard focus is an outline: most controls here carry a shadow of
+       their own, which would paint straight over a ring. */
+    .lp :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+    /* ---- scroll progress ---------------------------------------------- */
+    .lp-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 95; pointer-events: none; }
+    .lp-progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #60A5FA, #2563EB 55%, #E11D48); transition: width .12s linear; box-shadow: 0 0 12px rgba(37,99,235,.5); }
+
+    /* ---- header --------------------------------------------------------- */
+    /* One row at every width. Solid rather than blurred: a blurred sticky
+       bar is recomputed on every frame of the scrolling page beneath it. */
+    .lp-header { position: sticky; top: 0; z-index: 80; display: flex; align-items: center; gap: clamp(8px, 1.4vw, 22px); padding: 12px clamp(16px, 4vw, 56px); background: rgba(244,247,252,.96); border-bottom: 1px solid var(--line); }
+    .lp-grow { flex: 1 1 8px; min-width: 0; }
+    .lp-brand { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 0 1 auto; border-radius: 13px; }
+    .lp-brand > span:last-child { min-width: 0; }
+    .lp-mark { width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; flex: 0 0 auto; background: linear-gradient(135deg, #60A5FA, #2563EB); box-shadow: 0 10px 22px -10px rgba(37,99,235,.75); transition: transform .3s cubic-bezier(.3,1.3,.4,1); }
+    .lp-brand:hover .lp-mark { transform: rotate(-6deg) scale(1.06); }
+    .lp-brand b { display: block; font-size: 15.5px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; color: var(--ink); white-space: nowrap; }
+    .lp-brand small { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: .18em; color: var(--mute); margin-top: 1px; white-space: nowrap; }
+    .lp-menu, .lp-tools { display: contents; }
+    .lp-nav { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+    .lp-nav a { position: relative; padding: 9px 14px; border-radius: 11px; font-size: 13.5px; font-weight: 500; color: var(--mid); white-space: nowrap; transition: color .24s, background .24s; }
+    .lp-nav a:hover { background: rgba(37,99,235,.08); color: var(--blue-ink); }
+    .lp-nav a i { position: absolute; left: 14px; right: 14px; bottom: 5px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, #2563EB, #E11D48); transform-origin: left; transform: scaleX(0); transition: transform .32s cubic-bezier(.3,1.2,.4,1); }
+    .lp-nav a.is-on { color: var(--blue-ink); font-weight: 600; }
+    .lp-nav a.is-on i { transform: scaleX(1); }
+    .lp-icon-btn { width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid #E1E7F2; border-radius: 12px; background: #fff; display: grid; place-items: center; color: var(--mute); transition: background .24s, color .24s, border-color .24s, transform .3s cubic-bezier(.3,1.3,.4,1); }
+    .lp-icon-btn:hover { border-color: var(--blue); color: var(--blue-ink); transform: rotate(-16deg) scale(1.07); }
+    .lp-icon-btn[aria-pressed="true"] { color: var(--blue-ink); border-color: var(--blue); }
+    .lp-icon-btn svg { width: 17px; height: 17px; }
+    /* Which icon the theme button shows. Written out rather than left to
+       `hidden dark:block`: `.lp svg { display: block }` outranks `.hidden`,
+       so the light theme drew the moon and the sun on top of each other. */
+    .lp .lp-sun, .lp .lp-to-light { display: none; }
+    .dark .lp .lp-sun { display: block; }
+    .dark .lp .lp-moon, .dark .lp .lp-to-dark { display: none; }
+    .dark .lp .lp-to-light { display: inline; }
+    .lp-tool-label { display: none; }
+    .lp-cta { position: relative; overflow: hidden; height: 40px; padding: 0 19px; display: flex; align-items: center; gap: 8px; border-radius: 13px; background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #fff; font-size: 13.5px; font-weight: 600; white-space: nowrap; flex: 0 0 auto; box-shadow: 0 12px 26px -12px rgba(37,99,235,.9); transition: transform .26s cubic-bezier(.2,.7,.2,1), box-shadow .26s, filter .26s; }
+    .lp-cta:hover { transform: translateY(-2px); filter: saturate(1.12); color: #fff; }
+    .lp-cta svg { width: 14px; height: 14px; }
+    .lp-cta-short { display: none; }
+    /* A welcome, not a screensaver: three sweeps, then the button rests. */
+    .lp-sheen { position: absolute; top: 0; left: 0; width: 46px; height: 100%; background: linear-gradient(90deg, rgba(255,255,255,.45), transparent); opacity: 0; animation: lpSheen 5.5s cubic-bezier(.4,0,.2,1) 3 both; pointer-events: none; }
+    .lp-signin { padding: 9px 12px; border-radius: 11px; font-size: 13.5px; font-weight: 600; color: var(--body); white-space: nowrap; flex: 0 0 auto; transition: color .24s, background .24s; }
+    .lp-signin:hover { background: rgba(37,99,235,.08); color: var(--blue-ink); }
+    .lp-menu-btn { display: none; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border: 1px solid #E1E7F2; border-radius: 12px; background: #fff; color: var(--body); transition: border-color .2s, color .2s; }
+    .lp-menu-btn:hover { border-color: var(--blue); color: var(--blue-ink); }
+    .lp-menu-btn svg { width: 18px; height: 18px; }
+    .lp-menu-btn .lp-x { display: none; }
+    .lp-header.is-open .lp-menu-btn .lp-bars { display: none; }
+    .lp-header.is-open .lp-menu-btn .lp-x { display: block; }
+
+    /* Tablet and landscape phone: the four section links fold into a menu;
+       sign-in, the two switches and the call to action stay on the bar. */
+    @media (max-width: 1099px) {
+      .lp-menu-btn { display: grid; }
+      .lp-nav { display: none; position: absolute; top: calc(100% + 8px); right: clamp(16px, 4vw, 56px); width: min(300px, calc(100vw - 32px)); flex-direction: column; align-items: stretch; gap: 2px; padding: 8px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 30px 60px -30px rgba(20,35,70,.5); }
+      .lp-header.is-open .lp-nav { display: flex; }
+      .lp-nav a { display: flex; align-items: center; min-height: 46px; padding: 10px 14px; font-size: 15px; }
+      .lp-nav a i { display: none; }
+      .lp-nav a.is-on { background: rgba(37,99,235,.08); }
+    }
+    /* Phone: everything but the brand and the call to action goes in the menu. */
+    @media (max-width: 639px) {
+      .lp-menu { display: none; position: absolute; top: calc(100% + 8px); left: 12px; right: 12px; flex-direction: column; gap: 10px; padding: 10px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 30px 60px -30px rgba(20,35,70,.55); max-height: calc(100dvh - 90px); overflow-y: auto; }
+      .lp-header.is-open .lp-menu { display: flex; }
+      .lp-menu .lp-nav { display: flex; position: static; width: auto; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: none; }
+      .lp-tools { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+      .lp-tools .lp-signin { flex: 1 1 100%; display: flex; align-items: center; justify-content: center; min-height: 46px; border: 1px solid var(--line); border-radius: 13px; font-size: 15px; }
+      .lp-tools .lp-icon-btn { flex: 1 1 0; width: auto; height: 46px; display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 14px; font-weight: 600; color: var(--body); }
+      .lp-tools .lp-icon-btn:hover { transform: none; }
+      .lp-tool-label { display: inline; }
+      .lp-header { gap: 8px; }
+    }
+    @media (max-width: 399px) {
+      .lp-cta { padding: 0 14px; }
+      .lp-cta svg { display: none; }
+      .lp-cta-long { display: none; }
+      .lp-cta-short { display: inline; }
+    }
+
+    /* ---- footer --------------------------------------------------------- */
+    .lp-footer { padding: clamp(30px, 3.4vw, 52px) clamp(16px, 4vw, 56px) 26px; background: #fff; border-top: 1px solid var(--line); }
+    .lp-footer-in { max-width: 1360px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: clamp(20px, 3vw, 56px); }
+    .lp-foot-brand { flex: 1 1 clamp(240px, 32%, 400px); min-width: 0; }
+    .lp-foot-mark { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto; background: linear-gradient(135deg, #60A5FA, #2563EB); box-shadow: 0 10px 22px -12px rgba(37,99,235,.8); }
+    .lp-foot-brand p { margin: 14px 0 0; font-size: 13.5px; line-height: 1.62; color: var(--mid); max-width: 38ch; text-wrap: pretty; }
+    .lp-foot-col { flex: 1 1 clamp(140px, 18%, 220px); min-width: 0; }
+    .lp-foot-col > div:first-child { font-size: 10px; font-weight: 700; letter-spacing: .16em; color: var(--soft); }
+    .lp-foot-links { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 14px; }
+    .lp-foot-links a { font-size: 13.5px; color: var(--mid); font-weight: 500; transition: color .2s, transform .2s; display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+    .lp-foot-links a:hover { color: var(--blue-ink); transform: translateX(3px); }
+    .lp-foot-bar { max-width: 1360px; margin: 26px auto 0; padding-top: 18px; border-top: 1px solid #EEF1F8; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--soft); }
+
+    /* ---- touch: every control at least 44px where a thumb has to land ---- */
+    @media (pointer: coarse) {
+      .lp-icon-btn, .lp-menu-btn { width: 44px; height: 44px; }
+      .lp-cta { height: 44px; }
+      .lp-signin { display: flex; align-items: center; min-height: 44px; }
+      .lp-brand { min-height: 44px; }
+      .lp-nav a { display: flex; align-items: center; min-height: 44px; }
+      .lp-foot-links { gap: 0; margin-top: 6px; }
+      .lp-foot-links a { display: flex; align-items: center; min-height: 44px; }
+    }
+
+    /* ---- dark: the design is light; these keep it legible --------------- */
+    .dark .lp { --ink: #F2F4F8; --body: #D6DAE3; --mid: #A8B0BD; --mute: #98A2B0; --soft: #8A94A5; --line: #1F242C; --hair: #262B34; --blue: #3B82F6; --blue-ink: #93C5FD; --panel: #14171E; --focus: #93C5FD; }
+    .dark .lp-header { background: rgba(11,14,20,.96); }
+    .dark .lp-icon-btn, .dark .lp-menu-btn { background: #14171E; border-color: #262B34; }
+    .dark .lp-nav a:hover, .dark .lp-signin:hover { background: rgba(147,197,253,.08); }
+    .dark .lp-nav a.is-on { background: rgba(147,197,253,.08); }
+    .dark .lp-nav { box-shadow: 0 30px 60px -24px rgba(0,0,0,.8); }
+    .dark .lp-menu { box-shadow: 0 30px 60px -24px rgba(0,0,0,.8); }
+    .dark .lp-footer { background: #0B0E14; }
+    /* The plans, policy and shared pages are drawn with the warm ink scale
+       of the shared design system; in the dark theme they take the landing
+       page's cool near-black instead, so no seam shows at the footer. */
+    html.dark body { background-color: #0B0E14; }
+    html.dark main .card { background-color: #14171E; border-color: #262B34; }
+    .dark .lp-foot-bar { border-top-color: #1F242C; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="flex min-h-full flex-col">
+{% include "components/icons.html" %}
+{% include "components/messages.html" %}
+
+<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
+  Skip to content
+</a>
+
+{% block navbar %}
+{% comment %}
+  The marketing header: brand, four anchors whose underline slides in on the
+  section you are reading, the two switches and one call to action. It stays
+  one row at every width — below 1100px the anchors fold into a menu, and on
+  a phone the switches and sign-in go in there with them.
+{% endcomment %}
+<div class="lp lp-progress" aria-hidden="true"><i id="lpProgress"></i></div>
+
+<header class="lp lp-header" id="siteHeader">
+  <a href="{% url 'public:home' %}" class="lp-brand" aria-label="{{ BRAND.full_name }} home">
+    <span class="lp-mark">
+      <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 4.6h5.2a1.4 1.4 0 0 1 1.4 1.4v9.4a1.4 1.4 0 0 0-1.4-1.4H3.4zM16.6 4.6h-5.2a1.4 1.4 0 0 0-1.4 1.4v9.4a1.4 1.4 0 0 1 1.4-1.4h5.2z"/></svg>
+    </span>
+    <span><b>{{ BRAND.name }}</b><small>{{ BRAND.org|upper }} PLATFORM</small></span>
+  </a>
+  <div class="lp-grow"></div>
+  <div class="lp-menu" id="lpMenu">
+    <nav class="lp-nav" aria-label="Main" id="lpNav">
+      <a href="{% url 'public:home' %}#features" data-section="features"><span>Features</span><i></i></a>
+      <a href="{% url 'public:plans' %}" data-section="plans"><span>Plans</span><i></i></a>
+      <a href="{% url 'public:home' %}#how" data-section="how"><span>How it works</span><i></i></a>
+      <a href="{% url 'public:home' %}#faq" data-section="faq"><span>FAQ</span><i></i></a>
+    </nav>
+    <div class="lp-tools">
+      {% if not user.is_authenticated %}
+        <a href="{% url 'auth:login' %}" class="lp-signin">Sign in</a>
+      {% endif %}
+      {% comment %}
+        Windows, macOS and iOS all have a setting that asks pages to stop
+        animating, and this site obeys it — which is why on a machine with
+        "Animation effects" turned off this page sits still. That is the right
+        default; for some people motion on a screen causes real nausea. But it
+        is a default, not a verdict, so here is the way to say otherwise. The
+        choice is one person's preference about one browser, so it is the same
+        switch the app and the console carry.
+      {% endcomment %}
+      <button type="button" id="lpMotion" class="lp-icon-btn" aria-pressed="false"
+              title="Animations" aria-label="Animations: follow the system">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.4 9.4 6.6 13.6 8 9.4 9.4 8 13.6 6.6 9.4 2.4 8 6.6 6.6z"/></svg>
+        <span class="lp-tool-label" aria-hidden="true">Animations</span>
+      </button>
+      <button type="button" data-theme-toggle class="lp-icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lp-moon" aria-hidden="true"><path d="M13.4 9.8A5.6 5.6 0 0 1 6.2 2.6a5.8 5.8 0 1 0 7.2 7.2z"/></svg>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lp-sun" aria-hidden="true"><path d="M8 2.4v1.6M8 12v1.6M2.4 8h1.6M12 8h1.6M4.2 4.2l1.1 1.1M10.7 10.7l1.1 1.1M11.8 4.2l-1.1 1.1M5.3 10.7l-1.1 1.1M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8"/></svg>
+        <span class="lp-tool-label" aria-hidden="true"><span class="lp-to-dark">Dark mode</span><span class="lp-to-light">Light mode</span></span>
+      </button>
+    </div>
+  </div>
+  {% if user.is_authenticated %}
+    <a href="{% if user.is_admin_user %}{% url 'console:dashboard' %}{% else %}{% url 'student:dashboard' %}{% endif %}" class="lp-cta">
+      <span class="lp-sheen"></span><span class="lp-cta-long">Open dashboard</span><span class="lp-cta-short">Dashboard</span>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+    </a>
+  {% else %}
+    <a href="{% url 'auth:signup' %}" class="lp-cta">
+      <span class="lp-sheen"></span><span>Get started</span>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h9M8.6 4.6 12 8l-3.4 3.4"/></svg>
+    </a>
+  {% endif %}
+  <button type="button" class="lp-menu-btn" id="lpMenuBtn" aria-expanded="false" aria-controls="lpMenu" aria-label="Open menu">
+    <svg class="lp-bars" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M2.6 4.4h10.8M2.6 8h10.8M2.6 11.6h10.8"/></svg>
+    <svg class="lp-x" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3.8 3.8l8.4 8.4M12.2 3.8l-8.4 8.4"/></svg>
+  </button>
+</header>
+{% endblock %}
+
+<main id="main" class="flex-1">
+  {% block content %}{% endblock %}
+</main>
+
+{% block footer %}
+<footer class="lp lp-footer">
+  <div class="lp-footer-in">
+    <div class="lp-foot-brand">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="lp-foot-mark">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 4.6h5.2a1.4 1.4 0 0 1 1.4 1.4v9.4a1.4 1.4 0 0 0-1.4-1.4H3.4zM16.6 4.6h-5.2a1.4 1.4 0 0 0-1.4 1.4v9.4a1.4 1.4 0 0 1 1.4-1.4h5.2z"/></svg>
+        </span>
+        <span>
+          <span style="display:block;font-size:15px;font-weight:700;letter-spacing:-.02em;line-height:1.15">{{ BRAND.name }}</span>
+          <span style="display:block;font-size:9.5px;font-weight:600;letter-spacing:.18em;color:var(--mute);margin-top:1px">{{ BRAND.org|upper }} PLATFORM</span>
+        </span>
+      </div>
+      <p>{{ BRAND.tagline }} Built for students who want clear explanations, not just answers.</p>
+    </div>
+    <div class="lp-foot-col">
+      <div>PRODUCT</div>
+      <div class="lp-foot-links">
+        <a href="{% url 'public:plans' %}">Plans &amp; pricing</a>
+        <a href="{% url 'public:home' %}#features">Features</a>
+        <a href="{% url 'auth:signup' %}">Create account</a>
+      </div>
+    </div>
+    <div class="lp-foot-col">
+      <div>LEGAL</div>
+      <div class="lp-foot-links">
+        <a href="{% url 'public:refund_policy' %}">Refund policy</a>
+        <a href="{% url 'public:privacy' %}">Privacy policy</a>
+        <a href="{% url 'public:terms' %}">Terms of service</a>
+      </div>
+    </div>
+    <div class="lp-foot-col">
+      <div>SUPPORT</div>
+      <div class="lp-foot-links">
+        <a href="mailto:{{ BRAND.support_email }}">{{ BRAND.support_email }}</a>
+        {% if user.is_authenticated %}
+          <a href="{% if user.is_admin_user %}{% url 'console:dashboard' %}{% else %}{% url 'student:dashboard' %}{% endif %}">Dashboard</a>
+          <a href="{% if user.is_admin_user %}{% url 'console:tickets' %}{% else %}{% url 'student:tickets' %}{% endif %}">Help centre</a>
+        {% else %}
+          <a href="{% url 'auth:login' %}">Sign in</a>
+          <a href="{% url 'auth:login' %}?next={% url 'student:tickets' %}">Help centre</a>
+        {% endif %}
+        {% if BRAND.support_telegram %}<a href="https://t.me/{{ BRAND.support_telegram|cut:'@' }}">{{ BRAND.support_telegram }}</a>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="lp-foot-bar">
+    <span>© {% now "Y" %} {{ BRAND.full_name }}. All rights reserved.</span>
+    <span>Made for {{ BRAND.org }} students.</span>
+  </div>
+</footer>
+{% endblock %}
+
+<script>
+  // Theme toggle — one choice for the whole product (see public/_theme_boot.html).
+  document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+    button.addEventListener('click', function () { window.epcTheme.toggle(); });
+  });
+
+  // Animations: on, or as the system asks. Shared with the app and console.
+  (function () {
+    var button = document.getElementById('lpMotion');
+    if (!button) return;
+    function paint(full) {
+      if (full) document.documentElement.setAttribute('data-motion', 'full');
+      else document.documentElement.removeAttribute('data-motion');
+      button.setAttribute('aria-pressed', full ? 'true' : 'false');
+      button.setAttribute('aria-label', full ? 'Animations: always on' : 'Animations: follow the system');
+    }
+    var stored = null;
+    try { stored = localStorage.getItem('motion'); } catch (e) {}
+    paint(stored === 'full');
+    button.addEventListener('click', function () {
+      var full = document.documentElement.getAttribute('data-motion') !== 'full';
+      paint(full);
+      try { localStorage.setItem('motion', full ? 'full' : 'system'); } catch (e) {}
+    });
+  })();
+
+  // The folded menu: opens from the button, closes on a link, Escape, a tap
+  // outside, or the window growing back past the point where it folds.
+  (function () {
+    var header = document.getElementById('siteHeader');
+    var button = document.getElementById('lpMenuBtn');
+    if (!header || !button) return;
+    function setOpen(open) {
+      header.classList.toggle('is-open', open);
+      button.setAttribute('aria-expanded', open ? 'true' : 'false');
+      button.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    }
+    button.addEventListener('click', function () { setOpen(!header.classList.contains('is-open')); });
+    document.getElementById('lpMenu').addEventListener('click', function (event) {
+      if (event.target.closest('a')) setOpen(false);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && header.classList.contains('is-open')) { setOpen(false); button.focus(); }
+    });
+    document.addEventListener('click', function (event) {
+      if (header.classList.contains('is-open') && !header.contains(event.target)) setOpen(false);
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth >= 1100 && header.classList.contains('is-open')) setOpen(false);
+    }, { passive: true });
+  })();
+
+  // The bar across the top follows how far down the page you are, and the
+  // nav underlines whichever section you are reading.
+  (function () {
+    var bar = document.getElementById('lpProgress');
+    var links = [].slice.call(document.querySelectorAll('#lpNav a[data-section]'));
+    if (!bar) return;
+    function paint() {
+      var doc = document.scrollingElement || document.documentElement;
+      var max = doc.scrollHeight - doc.clientHeight;
+      bar.style.width = (max > 0 ? Math.min(100, Math.max(0, (doc.scrollTop / max) * 100)) : 0) + '%';
+      var current = 'top';
+      ['features', 'how', 'plans', 'faq'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= doc.clientHeight * 0.42) current = id;
+      });
+      links.forEach(function (a) { a.classList.toggle('is-on', a.getAttribute('data-section') === current); });
+    }
+    paint();
+    window.addEventListener('scroll', paint, { passive: true });
+    window.addEventListener('resize', paint, { passive: true });
+  })();
+</script>
+{% block scripts %}{% endblock %}
+{% include "components/settle_motion.html" %}
+</body>
+</html>

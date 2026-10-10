@@ -1,0 +1,239 @@
+{% extends "base/shell_page.html" %}
+{% load ai_extras %}
+
+{% block title %}Receipt {{ payment.reference }} · {{ BRAND.full_name }}{% endblock %}
+{% block back_url %}{% url 'student:billing' %}{% endblock %}
+{% block back_label %}Billing{% endblock %}
+
+{% block head %}
+<style>
+/* ---------------------------------------------------------------- screen */
+.receipt { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
+.receipt-head {
+  padding: 22px 24px;
+  background: var(--ink); color: var(--surface);
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px;
+}
+.receipt-head .org { margin: 10px 0 0; font-size: 11.5px; opacity: .7; }
+.receipt-head .mark { display: flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 600; }
+.receipt-head .mark svg { width: 24px; height: 24px; }
+.receipt-stamp {
+  display: inline-flex; align-items: center; padding: 4px 11px; border-radius: 99px;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  border: 1px solid currentColor;
+}
+.receipt-ref { margin: 9px 0 0; font-family: var(--mono); font-size: 11.5px; opacity: .8; }
+
+.receipt-body { padding: 24px; }
+.meta { display: grid; gap: 20px; }
+@media (min-width: 560px) { .meta { grid-template-columns: 1fr 1fr; } }
+.meta dt, .field-label {
+  margin: 0; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--ink-4);
+}
+.meta dd { margin: 6px 0 0; font-size: 13.5px; color: var(--ink); }
+.meta dd .sub { display: block; font-size: 12px; color: var(--ink-3); }
+
+.lines { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 13.5px; }
+.lines th {
+  padding: 10px 14px; text-align: left; background: var(--surface-2);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-3);
+  border: 1px solid var(--border);
+}
+.lines th:last-child, .lines td:last-child { text-align: right; }
+.lines td { padding: 14px; border: 1px solid var(--border); vertical-align: top; }
+.lines .total td { font-weight: 700; background: var(--surface-2); }
+.lines .total td:last-child { font-size: 17px; font-variant-numeric: tabular-nums; }
+
+.receipt-foot {
+  margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-soft);
+  text-align: center; font-size: 12px; color: var(--ink-3);
+}
+.print-only { display: none; }
+
+/* ----------------------------------------------------------------- print
+   The screen version is a page in an app; the printed one has to stand on
+   its own as a document, because it will be filed, e-mailed and handed to an
+   accounts office. So: real A4 margins, flat ink on white — printers cannot
+   be relied on to render a background — and none of the app around it. */
+@media print {
+  @page { size: A4; margin: 16mm 14mm; }
+  html, body { background: #fff !important; color: #111 !important; font-size: 11pt; }
+  .page-bar, .no-print, .toast { display: none !important; }
+  .panel { padding: 0 !important; max-width: none !important; }
+  .receipt { border: 1px solid #999 !important; border-radius: 0 !important; break-inside: avoid; }
+  .receipt-head { background: #fff !important; color: #111 !important; border-bottom: 2px solid #111 !important; }
+  .receipt-head .org, .receipt-ref { opacity: 1 !important; color: #555 !important; }
+  .receipt-stamp { border: 1.5pt solid #111 !important; color: #111 !important; }
+  .lines th { background: #f2f2f2 !important; color: #333 !important; }
+  .lines th, .lines td { border-color: #ccc !important; }
+  .meta dt, .field-label { color: #555 !important; }
+  .meta dd, .lines td { color: #111 !important; }
+  .print-only { display: block !important; }
+  .print-foot {
+    margin-top: 10mm; padding-top: 4mm; border-top: 1px solid #ccc;
+    font-size: 8.5pt; color: #555; text-align: center;
+  }
+  a { color: #111 !important; text-decoration: none !important; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% if payment.status == 'paid' %}
+  <div class="flash is-ok no-print" style="align-items:center">
+    <svg aria-hidden="true"><use href="#i-check-circle"/></svg>
+    <span style="flex:1">
+      <b>Payment confirmed.</b>
+      {{ payment.tokens_to_grant|intcomma }} tokens were added to your
+      {% if payment.plan.ai_model %}{{ payment.plan.ai_model.name }}{% endif %} balance.
+    </span>
+    <a href="{% url 'student:chat' %}" class="btn btn-primary btn-sm">Start chatting</a>
+  </div>
+{% endif %}
+
+<article class="receipt">
+  <div class="receipt-head">
+    <div>
+      <span class="mark">
+        <svg aria-hidden="true"><use href="#atlas-mark"/></svg>
+        {{ BRAND.name }}
+      </span>
+      <p class="org">{{ BRAND.org }} · Official payment receipt</p>
+    </div>
+    <div style="text-align:right">
+      <span class="receipt-stamp">{{ payment.get_status_display }}</span>
+      <p class="receipt-ref">{{ payment.reference }}</p>
+    </div>
+  </div>
+
+  <div class="receipt-body">
+    <dl class="meta">
+      <div>
+        <dt>Billed to</dt>
+        <dd>
+          {{ payment.user.display_name }}
+          <span class="sub">{{ payment.user.email|default:payment.user.username }}</span>
+        </dd>
+      </div>
+      <div style="text-align:right">
+        <dt>Date</dt>
+        <dd>
+          {{ payment.paid_at|default:payment.created_at|date:"d F Y" }}
+          <span class="sub">{{ payment.paid_at|default:payment.created_at|date:"H:i" }}</span>
+        </dd>
+      </div>
+    </dl>
+
+    <table class="lines">
+      <thead>
+        <tr><th>Description</th><th>Amount</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <b>{{ payment.plan.name }}</b>
+            <span class="sub" style="display:block;margin-top:3px;font-size:12px;color:var(--ink-3)">
+              {{ payment.tokens_to_grant|intcomma }} tokens{% if payment.plan.ai_model %} for {{ payment.plan.ai_model.name }}{% endif %}
+            </span>
+          </td>
+          <td style="font-variant-numeric:tabular-nums">
+            {% if payment.currency == 'USD' %}${% endif %}{{ payment.list_price }}
+          </td>
+        </tr>
+        {% if payment.was_discounted %}
+          <tr>
+            <td>
+              <span style="color:var(--ok);font-weight:600">Discount</span>
+              <span class="sub" style="display:block;margin-top:3px;font-size:12px;color:var(--ink-3)">{{ payment.discount_reason }}</span>
+            </td>
+            <td style="font-variant-numeric:tabular-nums;color:var(--ok)">−{% if payment.currency == 'USD' %}${% endif %}{{ payment.discount_amount }}</td>
+          </tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr class="total">
+          <td>Total paid</td>
+          <td>{% if payment.currency == 'USD' %}${% endif %}{{ payment.amount }} {{ payment.currency }}</td>
+        </tr>
+        {% if payment.charge_currency and payment.charge_currency != payment.currency %}
+          <tr>
+            <td style="font-size:12.5px;color:var(--ink-3)">Charged as{% if payment.exchange_rate %} · ៛{{ payment.exchange_rate|floatformat:"0"|intcomma }} per $1{% endif %}</td>
+            <td style="font-size:13px;font-variant-numeric:tabular-nums">{{ payment.pay_display }}</td>
+          </tr>
+        {% endif %}
+      </tfoot>
+    </table>
+
+    <dl class="meta" style="margin-top:24px">
+      <div>
+        <dt>Payment method</dt>
+        <dd>{{ payment.get_method_display }}</dd>
+      </div>
+      <div>
+        <dt>Transaction ID</dt>
+        <dd class="mono" style="font-size:12px;word-break:break-all">{{ payment.provider_txn_id|default:"—" }}</dd>
+      </div>
+      <div>
+        <dt>Tokens credited</dt>
+        <dd style="font-variant-numeric:tabular-nums">
+          {% if payment.tokens_credited %}{{ payment.tokens_to_grant|intcomma }}{% else %}Pending{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt>Model</dt>
+        <dd>{% if payment.plan.ai_model %}{{ payment.plan.ai_model.name }}{% else %}—{% endif %}</dd>
+      </div>
+    </dl>
+
+    {% if payment.status == 'refunded' %}
+      <p class="flash" style="margin-top:22px">
+        <svg aria-hidden="true"><use href="#i-info"/></svg>
+        <span>
+          This payment was refunded{% if payment.admin_note %} — {{ payment.admin_note }}{% endif %}.
+          The tokens from this purchase were removed from the balance.
+        </span>
+      </p>
+    {% endif %}
+
+    {% comment %}
+      Only needed on paper, where there is no site around the document to say
+      who issued it or what it is for.
+    {% endcomment %}
+    <div class="print-only" style="margin-top:24px;border-top:1px solid #ccc;padding-top:18px">
+      <div style="display:flex;justify-content:space-between;gap:24px">
+        <div>
+          <p class="field-label">Issued by</p>
+          <p style="margin-top:4px;font-weight:600">{{ BRAND.full_name }}</p>
+          <p style="font-size:9pt;color:#555">{{ BRAND.org }}</p>
+          <p style="font-size:9pt;color:#555">{{ BRAND.support_email }}</p>
+        </div>
+        <div style="text-align:right">
+          <p class="field-label">Invoice number</p>
+          <p style="margin-top:4px;font-family:monospace;font-size:9pt">{{ payment.reference }}</p>
+          <p class="field-label" style="margin-top:10px">Date of issue</p>
+          <p style="margin-top:2px;font-size:9pt">{{ payment.paid_at|default:payment.created_at|date:"d F Y" }}</p>
+        </div>
+      </div>
+      <p class="print-foot">
+        This is a computer-generated invoice and is valid without a signature.
+        Printed {% now "d F Y, H:i" %}.
+      </p>
+    </div>
+
+    <div class="receipt-foot no-print">
+      <p style="margin:0">Thank you for supporting {{ BRAND.full_name }}.</p>
+      <p style="margin:4px 0 0;font-size:11.5px;color:var(--ink-4)">
+        Questions about this receipt? Contact {{ BRAND.support_email }} quoting {{ payment.reference }}.
+      </p>
+    </div>
+  </div>
+</article>
+
+<div class="btn-row no-print" style="justify-content:center;margin-top:18px">
+  <button type="button" class="btn" onclick="window.print()">
+    <svg aria-hidden="true"><use href="#i-download"/></svg> Print or save as PDF
+  </button>
+  <a href="{% url 'student:billing' %}" class="btn">Back to billing</a>
+</div>
+{% endblock %}

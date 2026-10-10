@@ -1,0 +1,123 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Review before a bulk action: who is selected, and the details the action
+  needs. The selection travels as hidden ids, so "Back" loses nothing and the
+  final post names exactly the students shown here.
+{% endcomment %}
+
+{% block title %}{% if action == 'tokens' %}Give tokens{% elif action == 'message' %}Message students{% else %}Tag students{% endif %} · Console{% endblock %}
+{% block heading %}{% if action == 'tokens' %}Give tokens{% elif action == 'message' %}Message students{% else %}Tag students{% endif %}{% endblock %}
+{% block subheading %}
+  <p>{{ students|length }} student{{ students|length|pluralize }} selected. Nothing happens until you confirm below.</p>
+{% endblock %}
+
+{% block measure %}max-w-4xl{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <a href="{{ back }}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> Back to students
+  </a>
+
+  <form method="post" action="{% url 'console:users_bulk' %}" data-loading-form class="space-y-5">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="{{ action }}">
+    <input type="hidden" name="confirm" value="1">
+    <input type="hidden" name="next" value="{{ back }}">
+    {% for s in students %}<input type="hidden" name="ids" value="{{ s.pk }}">{% endfor %}
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      {% if action == 'tokens' %}
+        <h2 class="section-title">How many tokens</h2>
+        <p class="section-note mt-0.5">Drawn from the model's pool, like any distribution. Each student is notified.</p>
+        <div class="mt-5 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label class="label" for="bkModel">Model</label>
+            <select class="input" id="bkModel" name="model" required>
+              {% for m in models %}<option value="{{ m.pk }}" {% if form.model == m.pk|stringformat:'s' %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="bkAmount">Tokens each</label>
+            <input class="input tabular-nums" id="bkAmount" name="amount" type="number" min="1" step="1" required value="{{ form.amount|default:'' }}" placeholder="10000">
+          </div>
+          <div>
+            <label class="label" for="bkReason">Reason <span class="font-medium text-ink-400">(optional)</span></label>
+            <input class="input" id="bkReason" name="reason" maxlength="200" value="{{ form.reason|default:'' }}" placeholder="Exam week bonus">
+          </div>
+        </div>
+      {% elif action == 'message' %}
+        <h2 class="section-title">The message</h2>
+        <p class="section-note mt-0.5">Arrives in each student's notifications, and in Telegram if they linked it.</p>
+        <div class="mt-5 grid gap-4">
+          <div class="grid gap-4 sm:grid-cols-[1fr_200px]">
+            <div>
+              <label class="label" for="bkTitle">Title</label>
+              <input class="input" id="bkTitle" name="title" maxlength="140" required value="{{ form.title|default:'' }}" placeholder="Your exam-week tokens are in">
+            </div>
+            <div>
+              <label class="label" for="bkLevel">Tone</label>
+              <select class="input" id="bkLevel" name="level">
+                {% for value, label in levels %}<option value="{{ value }}" {% if form.level == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="label" for="bkBody">Message</label>
+            <textarea class="input" id="bkBody" name="body" rows="5" maxlength="2000" required placeholder="Write the message…">{{ form.body|default:'' }}</textarea>
+          </div>
+          <label class="flex items-start gap-2.5 text-sm text-ink-700 dark:text-ink-200">
+            <input type="checkbox" name="email" class="mt-0.5 h-4 w-4 rounded" {% if form.email %}checked{% endif %}>
+            <span>Also send it by e-mail <span class="block text-xs text-ink-500 dark:text-ink-400">Skipped for students who turned e-mail off. Every attempt is in the e-mail log.</span></span>
+          </label>
+        </div>
+      {% else %}
+        <h2 class="section-title">Tag</h2>
+        <p class="section-note mt-0.5">Tags are for administrators only — students never see them. Lower-case, up to 32 characters.</p>
+        <div class="mt-5 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="label" for="bkAdd">Add tag</label>
+            <input class="input" id="bkAdd" name="add_tag" maxlength="32" list="bkKnown" value="{{ form.add_tag|default:'' }}" placeholder="scholarship">
+          </div>
+          <div>
+            <label class="label" for="bkRemove">Remove tag <span class="font-medium text-ink-400">(optional)</span></label>
+            <input class="input" id="bkRemove" name="remove_tag" maxlength="32" list="bkKnown" value="{{ form.remove_tag|default:'' }}">
+          </div>
+          <datalist id="bkKnown">{% for tag in known_tags %}<option value="{{ tag }}">{% endfor %}</datalist>
+        </div>
+        {% if known_tags %}
+          <p class="mt-3 text-xs text-ink-500 dark:text-ink-400">In use: {% for tag in known_tags %}<span class="badge-neutral mr-1">{{ tag }}</span>{% endfor %}</p>
+        {% endif %}
+      {% endif %}
+    </section>
+
+    <section class="card overflow-hidden reveal">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">Selected students</h2>
+        <span class="badge-neutral">{{ students|length }}</span>
+      </div>
+      <ul class="max-h-[340px] divide-y divide-ink-100 overflow-y-auto scroll-slim dark:divide-white/5">
+        {% for s in students %}
+          <li class="flex items-center gap-3 px-5 py-2.5">
+            {% with av=s|avatar_tone %}<span class="student-mark" aria-hidden="true" style="background: linear-gradient(140deg, {{ av.from }}, {{ av.to }})">{{ s.initials }}</span>{% endwith %}
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-semibold text-ink-900 dark:text-white">{{ s.display_name }}</span>
+              <span class="block truncate text-[11.5px] text-ink-500 dark:text-ink-400">{{ s.email|default:s.username }}</span>
+            </span>
+            {% for tag in s.tags %}<span class="badge-neutral hidden sm:inline-flex">{{ tag }}</span>{% endfor %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <div class="flex flex-wrap items-center justify-end gap-2">
+      <a href="{{ back }}" class="btn-ghost btn-sm">Cancel</a>
+      <button type="submit" class="btn-primary">
+        {% if action == 'tokens' %}Give tokens to {{ students|length }}{% elif action == 'message' %}Send to {{ students|length }}{% else %}Update {{ students|length }}{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

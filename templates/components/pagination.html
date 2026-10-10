@@ -1,0 +1,39 @@
+{% load ai_extras %}
+{% if page.paginator.num_pages > 1 %}
+  <nav class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row" aria-label="Pagination">
+    <p class="text-xs text-ink-500 dark:text-ink-400">
+      Showing <span class="font-semibold text-ink-700 dark:text-ink-200">{{ page.start_index }}–{{ page.end_index }}</span>
+      of <span class="font-semibold text-ink-700 dark:text-ink-200">{{ page.paginator.count|intcomma }}</span>
+    </p>
+    <div class="flex items-center gap-1">
+      {% if page.has_previous %}
+        <a href="{% qs request page=page.previous_page_number %}" class="btn-icon" aria-label="Previous page">
+          <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg>
+        </a>
+      {% else %}
+        <span class="btn-icon opacity-35" aria-hidden="true"><svg class="h-4 w-4"><use href="#i-chevron-left"/></svg></span>
+      {% endif %}
+
+      {% for number in page_numbers %}
+        {% if number is None %}
+          <span class="px-2 text-sm text-ink-400">…</span>
+        {% elif number == page.number %}
+          <span class="inline-flex h-9 min-w-9 items-center justify-center rounded-xl bg-brand-600 px-2.5 text-sm font-semibold text-white"
+                aria-current="page">{{ number }}</span>
+        {% else %}
+          <a href="{% qs request page=number %}"
+             class="inline-flex h-9 min-w-9 items-center justify-center rounded-xl px-2.5 text-sm font-medium text-ink-600 transition
+                    hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-white/5 dark:hover:text-white">{{ number }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if page.has_next %}
+        <a href="{% qs request page=page.next_page_number %}" class="btn-icon" aria-label="Next page">
+          <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+        </a>
+      {% else %}
+        <span class="btn-icon opacity-35" aria-hidden="true"><svg class="h-4 w-4"><use href="#i-chevron-right"/></svg></span>
+      {% endif %}
+    </div>
+  </nav>
+{% endif %}

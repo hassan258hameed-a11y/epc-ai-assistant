@@ -1,0 +1,18 @@
+{% load ai_extras %}{% comment %}
+  One direct action from the "Can this student chat?" explainer.
+  `action` comes from console.model_access: grant (opens Manage tokens with the
+  model picked), toggle (flips access for one model) or link (a console page).
+{% endcomment %}
+{% if action.kind == 'grant' %}
+  <button type="button" class="btn-primary btn-sm" data-open-grant data-grant-model="{{ action.model_pk }}">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-coin"/></svg> {{ action.label }}
+  </button>
+{% elif action.kind == 'toggle' %}
+  <form method="post" action="{% url 'console:ai_toggle_access' student.pk action.model_pk %}" class="inline">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.path }}#models">
+    <button type="submit" class="{% if action.quiet %}btn-ghost{% else %}btn-primary{% endif %} btn-sm">{{ action.label }}</button>
+  </form>
+{% elif action.kind == 'link' and console_reach|get_item:action.url %}
+  <a href="{{ action.url }}" class="btn-outline btn-sm">{{ action.label }}</a>
+{% endif %}

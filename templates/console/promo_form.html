@@ -1,0 +1,120 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}{% if promo %}Edit {{ promo.code }}{% else %}New promo code{% endif %} · Console{% endblock %}
+{% block heading %}{% if promo %}Edit promo code{% else %}New promo code{% endif %}{% endblock %}
+{% block subheading %}
+  <p>{% if promo %}{{ promo.code }} · changes apply to the next checkout.{% else %}Students enter it at checkout; it is checked again when the order is placed.{% endif %}</p>
+{% endblock %}
+
+{% block measure %}max-w-3xl{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <a href="{% url 'console:promos' %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> All promo codes
+  </a>
+
+  <form method="post" data-loading-form>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="mb-5 rounded-xl border border-rose-500/25 bg-rose-500/8 p-3.5">
+        {% for error in form.non_field_errors %}<p class="text-sm font-medium text-rose-700 dark:text-rose-300">{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="section-title">The code</h2>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label" for="id_code">Code</label>
+          <input class="input font-mono uppercase tracking-wide {% if form.code.errors %}input-error{% endif %}" id="id_code" name="code"
+                 maxlength="32" required value="{{ form.code.value|default:'' }}" placeholder="WELCOME20">
+          {% for error in form.code.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="label" for="id_description">Description <span class="font-medium text-ink-400">(optional)</span></label>
+          <input class="input" id="id_description" name="description" maxlength="160" value="{{ form.description.value|default:'' }}" placeholder="Back-to-school offer">
+        </div>
+        <div>
+          <label class="label" for="id_kind">Discount type</label>
+          <select class="input" id="id_kind" name="kind">
+            {% for value, label in form.kind.field.choices %}
+              <option value="{{ value }}" {% if form.kind.value == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="id_value">Amount <span class="font-medium text-ink-400" data-value-unit>(% or $)</span></label>
+          <input class="input tabular-nums {% if form.value.errors %}input-error{% endif %}" id="id_value" name="value" type="number" min="0.01" step="0.01" required value="{{ form.value.value|default:'' }}">
+          {% for error in form.value.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Limits</h2>
+      <p class="section-note mt-0.5">A pending checkout holds its use for 24 hours; a cancelled or failed one gives it back.</p>
+      <div class="mt-5 grid gap-4 sm:grid-cols-3">
+        <div>
+          <label class="label" for="id_max_uses">Total uses</label>
+          <input class="input tabular-nums" id="id_max_uses" name="max_uses" type="number" min="0" step="1" value="{{ form.max_uses.value|default:0 }}">
+          <p class="help">0 = unlimited</p>
+        </div>
+        <div>
+          <label class="label" for="id_per_user_limit">Uses per student</label>
+          <input class="input tabular-nums" id="id_per_user_limit" name="per_user_limit" type="number" min="0" step="1" value="{{ form.per_user_limit.value|default:0 }}">
+          <p class="help">0 = unlimited</p>
+        </div>
+        <div>
+          <label class="label" for="id_min_purchase">Minimum price ($)</label>
+          <input class="input tabular-nums" id="id_min_purchase" name="min_purchase" type="number" min="0" step="0.01" value="{{ form.min_purchase.value|default:0 }}">
+        </div>
+        <div>
+          <label class="label" for="id_starts_at">Starts <span class="font-medium text-ink-400">(optional)</span></label>
+          <input class="input" id="id_starts_at" name="starts_at" type="datetime-local" value="{{ form.starts_at.value|default:'' }}">
+        </div>
+        <div>
+          <label class="label" for="id_expires_at">Expires <span class="font-medium text-ink-400">(optional)</span></label>
+          <input class="input {% if form.expires_at.errors %}input-error{% endif %}" id="id_expires_at" name="expires_at" type="datetime-local" value="{{ form.expires_at.value|default:'' }}">
+          {% for error in form.expires_at.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Where it applies</h2>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        {% include "console/_form_field.html" with field=form.ai_model %}
+        {% include "console/_form_field.html" with field=form.eligible_plans %}
+      </div>
+      <div class="mt-4">{% include "console/_form_field.html" with field=form.is_active %}</div>
+    </section>
+
+    <div class="mt-5 flex items-center justify-end gap-2">
+      <a href="{% url 'console:promos' %}" class="btn-ghost">Cancel</a>
+      <button type="submit" class="btn-primary">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-check"/></svg>
+        {% if promo %}Save changes{% else %}Create code{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var kind = document.getElementById('id_kind');
+    var unit = document.querySelector('[data-value-unit]');
+    var value = document.getElementById('id_value');
+    function sync() {
+      var percent = kind.value === 'percent';
+      unit.textContent = percent ? '(% off)' : '($ off)';
+      value.max = percent ? '100' : '';
+    }
+    kind.addEventListener('change', sync);
+    sync();
+  })();
+</script>
+{% endblock %}

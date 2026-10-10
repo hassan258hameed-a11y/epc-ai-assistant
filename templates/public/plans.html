@@ -1,0 +1,82 @@
+{% extends "base/public.html" %}
+{% load ai_extras %}
+
+{% block title %}Plans &amp; pricing · {{ BRAND.full_name }}{% endblock %}
+
+{% block content %}
+<section class="relative overflow-hidden mesh">
+  <div class="pointer-events-none absolute inset-0 grid-lines opacity-50 [mask-image:radial-gradient(55%_45%_at_50%_0%,#000,transparent)]"></div>
+  <div class="relative mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-20">
+    <span class="badge-brand">Plans</span>
+    <h1 class="mt-4 text-4xl font-extrabold tracking-tight text-ink-900 dark:text-white sm:text-5xl">
+      Simple, honest pricing
+    </h1>
+    <p class="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink-600 dark:text-ink-300">
+      Buy tokens once, use them across every subject. Nothing renews without you choosing to.
+    </p>
+    {% if free_trial_tokens %}
+      <p class="mt-5 inline-flex items-center gap-2 rounded-full border border-accent-500/25 bg-accent-500/8 px-4 py-2 text-sm font-medium text-accent-800 dark:text-accent-300">
+        <svg class="h-4 w-4" aria-hidden="true"><use href="#i-gift"/></svg>
+        Every new account starts with {{ free_trial_tokens|intcomma }} free {% if free_trial_model %}{{ free_trial_model }} {% endif %}tokens
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="border-t hairline bg-white py-16 dark:bg-[#0B0E14] sm:py-20">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    {% if plans %}
+      <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {% for plan in plans %}{% include "public/_plan_card.html" with plan=plan %}{% endfor %}
+      </div>
+
+      <div class="mt-14 overflow-hidden card">
+        <div class="border-b hairline px-6 py-4">
+          <h2 class="text-base font-semibold text-ink-900 dark:text-white">Compare plans</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="th">Plan</th><th class="th">Tokens</th><th class="th">Price</th>
+                <th class="th">Duration</th><th class="th">Cost per 1M tokens</th><th class="th"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for plan in plans %}
+                <tr class="row">
+                  <td class="td">
+                    <span class="font-semibold text-ink-900 dark:text-white">{{ plan.name }}</span>
+                    {% if plan.is_featured %}<span class="badge-brand ml-2">Popular</span>{% endif %}
+                  </td>
+                  <td class="td tabular-nums">{{ plan.tokens|intcomma }}</td>
+                  <td class="td tabular-nums font-semibold">{% if plan.currency == 'USD' %}${% endif %}{{ plan.price|floatformat:"-2" }}</td>
+                  <td class="td">{{ plan.duration_days }} days</td>
+                  <td class="td tabular-nums text-ink-600 dark:text-ink-400">${{ plan.price_per_million }}</td>
+                  <td class="td text-right">
+                    <a href="{% if user.is_authenticated and user.is_student %}{% url 'payments:checkout' plan.slug %}{% else %}{% url 'auth:signup' %}{% endif %}"
+                       class="btn-outline btn-sm">Choose</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-card" title="Plans are being prepared" body="Our team is setting up pricing. Please check back shortly or contact support." action_url="mailto:"|add:BRAND.support_email action_label="Contact support" %}
+    {% endif %}
+
+    <div class="mt-14 grid gap-5 sm:grid-cols-3">
+      {% include "public/_feature.html" with icon="i-shield" title="Secure payments" body="Every transaction is verified on our backend before tokens are credited — never from a browser redirect." %}
+      {% include "public/_feature.html" with icon="i-receipt" title="Receipts for everything" body="A clear receipt is generated for every payment and stays available in your account." %}
+      {% include "public/_feature.html" with icon="i-bell" title="Renewal reminders" body="We tell you before a plan expires or your balance runs low, on the website and via Telegram." %}
+    </div>
+
+    <p class="mt-10 text-center text-sm text-ink-600 dark:text-ink-400">
+      Questions about billing? Read the <a href="{% url 'public:refund_policy' %}" class="tap-inline font-semibold text-brand-600 hover:underline dark:text-brand-300">refund policy</a>
+      or e-mail <a href="mailto:{{ BRAND.support_email }}" class="tap-inline font-semibold text-brand-600 hover:underline dark:text-brand-300">{{ BRAND.support_email }}</a>.
+    </p>
+  </div>
+</section>
+{% endblock %}

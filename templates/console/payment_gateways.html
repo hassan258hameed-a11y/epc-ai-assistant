@@ -1,0 +1,216 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  One card per gateway: its mode, which environment variables are set (never
+  their values), the callback URLs to register with the provider, the last
+  week's orders, a live credentials test and the go-live checklist.
+{% endcomment %}
+
+{% block title %}Payment gateways · Console{% endblock %}
+{% block heading %}Payment gateways{% endblock %}
+{% block subheading %}
+  <p>Set-up status, callback URLs and a live credentials test for ABA PayWay, ACLEDA Bank (XPAY and KHQR) and Binance Pay.</p>
+{% endblock %}
+
+{% block head %}
+<style>
+  .gw-mode { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+  .gw-mode i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .gw-mode.live { background: rgba(16,185,129,.12); color: #047857; }
+  .gw-mode.sandbox, .gw-mode.emulator { background: rgba(59,130,246,.12); color: #1D4ED8; }
+  .gw-mode.qr_only { background: rgba(245,158,11,.14); color: #B45309; }
+  .gw-mode.manual { background: rgba(100,116,139,.14); color: #475569; }
+  .dark .gw-mode.live { color: #6EE7B7; } .dark .gw-mode.sandbox, .dark .gw-mode.emulator { color: #93C5FD; }
+  .dark .gw-mode.qr_only { color: #FCD34D; } .dark .gw-mode.manual { color: #CBD5E1; }
+  .gw-env { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .gw-env code { font-size: 11.5px; }
+  .gw-dot { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  .gw-dot.ok { background: rgba(16,185,129,.14); color: #059669; }
+  .gw-dot.no { background: rgba(244,63,94,.12); color: #E11D48; }
+  .gw-dot.opt { background: rgba(100,116,139,.12); color: #64748B; }
+  .gw-dot svg { width: 10px; height: 10px; }
+  .gw-url { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 8px 7px 11px; border-radius: .7rem; border: 1px solid rgba(148,163,184,.3); background: rgba(148,163,184,.06); }
+  .gw-url code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+  .gw-stat b { display: block; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .gw-stat span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #5B6884; }
+  .dark .gw-stat span { color: #9AA5BC; }
+  .gw-guide summary { cursor: pointer; list-style: none; }
+  .gw-guide summary::-webkit-details-marker { display: none; }
+  .gw-guide[open] .gw-caret { transform: rotate(180deg); }
+  .gw-guide ol { counter-reset: step; }
+  .gw-guide li { counter-increment: step; position: relative; padding-left: 28px; }
+  .gw-guide li::before { content: counter(step); position: absolute; left: 0; top: 1px; width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 700; background: rgba(37,99,235,.1); color: #2563EB; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <a href="{% url 'console:payments' %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> Payments
+  </a>
+
+  {% if emulator %}
+    <div class="card flex items-start gap-3 border-sky-300/60 p-4 text-sm dark:border-sky-400/30">
+      <svg class="mt-0.5 h-4 w-4 shrink-0 text-sky-600" aria-hidden="true"><use href="#i-info"/></svg>
+      <p class="text-ink-700 dark:text-ink-200"><b>Test mode.</b> PAYMENT_EMULATOR is on, so every gateway points at the local emulator with test keys. Turn it off (and DEBUG) before going live.</p>
+    </div>
+  {% elif not site_is_https or site_is_local %}
+    <div class="card flex items-start gap-3 border-amber-300/70 p-4 text-sm dark:border-amber-400/30">
+      <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true"><use href="#i-alert"/></svg>
+      <p class="text-ink-700 dark:text-ink-200">SITE_URL is <code>{{ site_url }}</code>. Gateways can only call back a <b>public HTTPS</b> address — set SITE_URL to your real domain before registering the URLs below.</p>
+    </div>
+  {% endif %}
+
+  {% if flagged %}
+    <section class="card overflow-hidden reveal">
+      <div class="flex items-center gap-2 border-b hairline px-5 py-3.5">
+        <svg class="h-4 w-4 text-rose-600" aria-hidden="true"><use href="#i-alert"/></svg>
+        <h2 class="section-title">Held for review</h2>
+        <span class="section-note">Gateway confirmations that did not match the order — nothing was credited.</span>
+      </div>
+      <ul class="divide-y divide-ink-100 dark:divide-white/5">
+        {% for event in flagged %}
+          <li class="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+            <span class="badge-danger">{% if event.event_type == 'amount_mismatch' %}Amount mismatch{% else %}Duplicate transaction{% endif %}</span>
+            <a class="font-mono text-xs font-semibold text-brand-600 hover:underline dark:text-brand-300" href="{% url 'console:payment_detail' event.payment.reference %}">{{ event.payment.reference }}</a>
+            <span class="min-w-0 flex-1 truncate text-xs text-ink-500">{{ event.payment.user.display_name }} · {{ event.message }}</span>
+            <time class="text-[11px] text-ink-400">{{ event.created_at|timeago }}</time>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section class="grid gap-4 sm:grid-cols-3" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-coin" label="Riel rate" value=khr_rate|floatformat:"0"|intcomma foot="KHR per US$1 — edit in Settings" url="/admin/settings/#payments" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-clock" label="Payment window" value=expiry_minutes foot="minutes before an unpaid order expires" url="/admin/settings/#payments" %}
+    {% if manual_review %}
+      {% include "console/_kpi.html" with variant="violet" icon="i-shield" label="Manual review" value="On" foot="unconfigured methods take receipts" url="/admin/settings/#payments" %}
+    {% else %}
+      {% include "console/_kpi.html" with variant="violet" icon="i-shield" label="Manual review" value="Off" foot="only automatic methods are offered" url="/admin/settings/#payments" %}
+    {% endif %}
+  </section>
+
+  {% for row in rows %}
+    <section class="card overflow-hidden reveal" id="gw-{{ row.key }}">
+      <div class="flex flex-wrap items-center gap-3 border-b hairline px-5 py-4">
+        <span class="chip-brand h-9 w-9 shrink-0 rounded-[.8rem]" aria-hidden="true">
+          <svg style="width:16px;height:16px"><use href="#{% if row.key == 'acleda_khqr' %}i-qr{% elif row.key == 'binance' %}i-coin{% elif row.key == 'acleda_xpay' %}i-shield{% else %}i-card{% endif %}"/></svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <h2 class="section-title">{{ row.provider.label }}</h2>
+          <p class="section-note">Charges in {{ row.currency }} · {% if row.polls %}confirmed by polling Bakong{% else %}confirmed by signed callback + status query{% endif %}</p>
+        </div>
+        <span class="gw-mode {{ row.mode }}"><i></i>
+          {% if row.mode == 'live' %}LIVE{% elif row.mode == 'sandbox' %}SANDBOX{% elif row.mode == 'emulator' %}EMULATOR{% elif row.mode == 'qr_only' %}QR ONLY · MANUAL CONFIRM{% else %}NOT SET UP · MANUAL{% endif %}
+        </span>
+        <form method="post" action="{% url 'console:gateway_test' row.key %}" data-loading-form>
+          {% csrf_token %}
+          <button type="submit" class="btn-outline btn-sm" data-submit data-loading-label="Testing…">
+            <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-activity"/></svg> Test connection
+          </button>
+        </form>
+      </div>
+
+      {% for notice in row.notices %}
+        <div class="flex items-start gap-2.5 border-b hairline bg-amber-500/[.08] px-5 py-3 text-sm">
+          <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true"><use href="#i-alert"/></svg>
+          <p class="min-w-0 flex-1 text-ink-700 dark:text-ink-200">{{ notice }}</p>
+        </div>
+      {% endfor %}
+
+      {% if row.health %}
+        <div class="flex items-start gap-2.5 border-b hairline px-5 py-3 text-sm {% if row.health.ok %}bg-emerald-500/[.06]{% else %}bg-rose-500/[.06]{% endif %}">
+          <svg class="mt-0.5 h-4 w-4 shrink-0 {% if row.health.ok %}text-emerald-600{% else %}text-rose-600{% endif %}" aria-hidden="true"><use href="#{% if row.health.ok %}i-check-circle{% else %}i-alert{% endif %}"/></svg>
+          <p class="min-w-0 flex-1 text-ink-700 dark:text-ink-200">{{ row.health.message }}</p>
+          <time class="shrink-0 text-[11px] text-ink-400">{{ row.health.at }}</time>
+        </div>
+      {% endif %}
+
+      <div class="grid gap-6 p-5 lg:grid-cols-[1fr_1.25fr]">
+        <div class="space-y-5">
+          <div>
+            <p class="kpi-label">Environment (.env)</p>
+            <ul class="mt-2.5 space-y-1.5">
+              {% for var in row.env %}
+                <li class="gw-env">
+                  <span class="gw-dot {% if var.set %}ok{% elif var.required %}no{% else %}opt{% endif %}">
+                    <svg aria-hidden="true"><use href="#{% if var.set %}i-check{% elif var.required %}i-x{% else %}i-chevron-right{% endif %}"/></svg>
+                  </span>
+                  <code class="text-ink-800 dark:text-ink-100">{{ var.name }}</code>
+                  <span class="text-[11px] text-ink-400">{% if var.set %}set{% elif var.required %}required{% else %}optional{% endif %}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 rounded-xl border hairline p-3">
+            <div class="gw-stat"><b class="text-emerald-600 dark:text-emerald-400">{{ row.week.paid }}</b><span>Paid</span></div>
+            <div class="gw-stat"><b class="text-amber-600 dark:text-amber-400">{{ row.week.pending }}</b><span>Pending</span></div>
+            <div class="gw-stat"><b class="text-ink-500 dark:text-ink-400">{{ row.week.expired }}</b><span>Expired</span></div>
+            <div class="gw-stat"><b class="text-rose-600 dark:text-rose-400">{{ row.week.failed }}</b><span>Failed</span></div>
+          </div>
+          <p class="-mt-3 text-[11px] text-ink-400">Orders in the last 7 days.
+            {% if row.last_paid %}Last paid {{ row.last_paid.paid_at|timeago }}.{% endif %}
+            {% if row.last_webhook %}Last callback {{ row.last_webhook.created_at|timeago }}.{% elif not row.polls %}No callback received yet.{% endif %}
+          </p>
+        </div>
+
+        <div class="space-y-5">
+          <div>
+            <p class="kpi-label">Callback URLs to register</p>
+            {% if row.callbacks %}
+              <div class="mt-2.5 space-y-2">
+                {% for cb in row.callbacks %}
+                  <div>
+                    <p class="mb-1 text-[11px] font-medium text-ink-500">{{ cb.label }}</p>
+                    <div class="gw-url">
+                      <code class="text-ink-800 dark:text-ink-100" data-copy-src>{{ cb.url }}</code>
+                      <button type="button" class="btn-icon h-7 w-7" data-copy title="Copy" aria-label="Copy {{ cb.label }}">
+                        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-copy"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="mt-2 text-xs leading-relaxed text-ink-500">None. Bakong sends no callbacks — the payment page asks <code>check_transaction_by_md5</code> every few seconds, and a background sweep catches students who close the page.</p>
+            {% endif %}
+          </div>
+
+          <details class="gw-guide rounded-xl border hairline">
+            <summary class="flex items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink-800 dark:text-ink-100">
+              Go-live checklist
+              <svg class="gw-caret h-4 w-4 text-ink-400 transition" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+            </summary>
+            <ol class="space-y-2.5 px-4 pb-4 text-xs leading-relaxed text-ink-600 dark:text-ink-300">
+              {% for step in row.guide %}<li>{{ step }}</li>{% endfor %}
+            </ol>
+          </details>
+        </div>
+      </div>
+    </section>
+  {% endfor %}
+
+  <p class="px-1 text-[11.5px] leading-relaxed text-ink-400">
+    Credentials are read from the server's environment and never stored in the database or shown here.
+    After changing <code>.env</code>, restart the application.
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var src = button.parentElement.querySelector('[data-copy-src]');
+      if (!src || !navigator.clipboard) return;
+      navigator.clipboard.writeText(src.textContent.trim()).then(function () {
+        button.classList.add('text-emerald-600');
+        setTimeout(function () { button.classList.remove('text-emerald-600'); }, 1400);
+      }).catch(function () {});
+    });
+  });
+</script>
+{% endblock %}

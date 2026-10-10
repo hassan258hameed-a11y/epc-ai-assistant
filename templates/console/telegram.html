@@ -1,0 +1,794 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Telegram — is it set up, is it working, what goes out automatically, who
+  is connected, and did the message arrive.
+
+  Status is read live from the Bot API (cached for a minute; Re-check asks
+  again). Secrets are only ever reported as set or missing. The delivery log
+  holds what happened to each message, never the message: some are codes.
+{% endcomment %}
+
+{% block title %}Telegram · Console{% endblock %}
+{% block heading %}Telegram{% endblock %}
+{% block subheading %}
+  <p>The bot students connect for alerts and sign-in codes, the {% if channel_title %}“{{ channel_title }}” {% endif %}channel and the community group announcements are posted to, and every message they sent.</p>
+{% endblock %}
+
+{% block head %}
+<style>
+  .tg-state { display: inline-flex; align-items: center; gap: 6px; }
+  .tg-dl { display: grid; grid-template-columns: minmax(96px, 150px) minmax(0, 1fr); gap: 8px 14px; font-size: 13px; }
+  .tg-dl dt { color: rgb(100 116 139); font-weight: 600; font-size: 12px; padding-top: 1px; }
+  .tg-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .dark .tg-dl dt { color: rgb(148 163 184); }
+  .tg-steps { counter-reset: tgstep; display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+  .tg-steps > li { counter-increment: tgstep; position: relative; padding-left: 40px; font-size: 13px; line-height: 1.65; }
+  .tg-steps > li::before { content: counter(tgstep); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #1D4ED8; background: rgba(37, 99, 235, .1); }
+  .dark .tg-steps > li::before { color: #93C5FD; background: rgba(96, 165, 250, .14); }
+  .tg-steps b { font-weight: 600; }
+  .tg-steps code, .tg-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 1px 5px; border-radius: 6px; background: rgba(100, 116, 139, .12); overflow-wrap: anywhere; }
+  .tg-pre { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; background: rgba(100, 116, 139, .1); }
+  .tg-check { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; align-items: start; padding: 10px 0; border-top: 1px solid rgba(100, 116, 139, .14); }
+  .tg-check:first-child { border-top: 0; padding-top: 0; }
+  .tg-check svg { width: 16px; height: 16px; margin-top: 2px; }
+  .tg-check-key { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+  .tg-check-val { font-size: 12px; overflow-wrap: anywhere; }
+  .tg-qr { width: 148px; flex: none; padding: 8px; border-radius: 14px; background: #fff; color: #0B1020; border: 1px solid rgba(100, 116, 139, .2); }
+  .tg-qr svg { display: block; width: 100%; height: auto; }
+  .tg-err { display: block; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tg-switch { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; }
+  .tg-switch input { margin-top: 3px; width: 16px; height: 16px; accent-color: #2563EB; flex: none; }
+  /* Automatic alerts: with the master off the categories stay editable, but
+     read as paused until it is back on — a grey track instead of blue, and a
+     quieter name. The text keeps its contrast; only the colour says "not now". */
+  .tg-cat-name, .tg-track { transition: color .2s ease, background-color .2s ease; }
+  .tg-cats.is-paused .tg-cat-name { color: rgb(100 116 139); }
+  .tg-cats.is-paused .tg-cat input:checked + .tg-track { background-color: rgb(148 163 184); }
+  .dark .tg-cats.is-paused .tg-cat-name { color: rgb(148 163 184); }
+  .dark .tg-cats.is-paused .tg-cat input:checked + .tg-track { background-color: rgba(255, 255, 255, .3); }
+  .tg-copied { color: #059669; }
+  .dark .tg-copied { color: #34D399; }
+  @media (prefers-reduced-motion: reduce) { .tg-cat-name, .tg-track { transition: none; } }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="?refresh=1" class="btn-ghost btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-refresh"/></svg> Re-check
+  </a>
+  {% if configured and console_can.content or configured and console_can.student_care %}
+    <a href="{% url 'console:telegram_send' %}" class="btn-ghost btn-sm">
+      <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-send"/></svg> Send a message
+    </a>
+  {% endif %}
+  {% if bot_username %}
+    <a href="https://t.me/{{ bot_username }}" target="_blank" rel="noopener" class="btn-primary btn-sm">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-telegram"/></svg> Open the bot
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-telegram" label="Connected students" value=counts.linked|intcomma foot="linked a private chat" %}
+    {% include "console/_kpi.html" with variant="violet" icon="i-alert" label="Blocked the bot" value=counts.blocked|intcomma foot="linked, but unreachable" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-lock" label="Sign-in codes on" value=counts.login_otp|intcomma foot="accounts asking for a code" %}
+    {% with failed=counts.week_failed|stringformat:"s" %}
+      {% include "console/_kpi.html" with variant="plain" icon="i-send" label="Sent · 7 days" value=counts.week_sent|intcomma foot=failed|add:" failed or blocked" url="?status=failed#deliveries" %}
+    {% endwith %}
+  </section>
+
+  <div class="grid gap-5 xl:grid-cols-2">
+
+    {# ---------- Bot ---------- #}
+    <section class="card p-5 sm:p-6 reveal">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="section-title">Bot</h2>
+          <p class="section-note mt-0.5">Delivers codes and alerts, and answers /start, /status, /help and /unlink.</p>
+        </div>
+        {% if not configured %}
+          <span class="badge-neutral">Not configured</span>
+        {% elif bot.error %}
+          <span class="badge-danger">Unreachable</span>
+        {% else %}
+          <span class="badge-success">Online</span>
+        {% endif %}
+      </div>
+
+      {% if not configured %}
+        <p class="mt-4 text-sm text-ink-600 dark:text-ink-300">No <span class="tg-code">TELEGRAM_BOT_TOKEN</span> in <span class="tg-code">.env</span>. Follow the setup guide below.</p>
+      {% else %}
+        <dl class="tg-dl mt-5">
+          <dt>Username</dt>
+          <dd>{% if me.username %}<a href="https://t.me/{{ me.username }}" target="_blank" rel="noopener" class="font-semibold text-brand-600 hover:underline dark:text-brand-300">@{{ me.username }}</a>{% if me.first_name %} <span class="text-ink-500 dark:text-ink-400">· {{ me.first_name }}</span>{% endif %}{% else %}<span class="text-ink-400">—</span>{% endif %}</dd>
+          {% if bot.error %}
+            <dt>Error</dt>
+            <dd class="text-rose-600 dark:text-rose-400">{{ bot.error }}</dd>
+          {% endif %}
+          <dt>Receiving</dt>
+          <dd>
+            {% if webhook.url %}
+              Webhook{% if webhook_matches %} <span class="badge-success">this site</span>{% else %} <span class="badge-warning">different URL</span>{% endif %}
+              <span class="block text-xs text-ink-500 dark:text-ink-400">{{ webhook.url }}</span>
+            {% elif bot.webhook %}
+              Long polling <span class="block text-xs text-ink-500 dark:text-ink-400">No webhook — run <span class="tg-code">python manage.py telegram_bot --poll</span> to receive updates.</span>
+            {% else %}<span class="text-ink-400">—</span>{% endif %}
+          </dd>
+          {% if webhook.url %}
+            <dt>Pending updates</dt>
+            <dd class="tabular-nums">{{ webhook.pending_update_count|default:0 }}</dd>
+          {% endif %}
+          {% if webhook.last_error_message %}
+            <dt>Last webhook error</dt>
+            <dd class="text-rose-600 dark:text-rose-400">{{ webhook.last_error_message }}{% if webhook.last_error_date %} <span class="text-xs text-ink-500 dark:text-ink-400">({{ webhook.last_error_date|stringformat:"s" }})</span>{% endif %}</dd>
+          {% endif %}
+          <dt>Webhook secret</dt>
+          <dd>{% if secret_set %}<span class="badge-success">Set</span>{% elif debug %}<span class="badge-warning">Missing</span> <span class="text-xs text-ink-500 dark:text-ink-400">allowed only while DEBUG is on</span>{% else %}<span class="badge-danger">Missing</span> <span class="text-xs text-ink-500 dark:text-ink-400">the webhook refuses every call</span>{% endif %}</dd>
+          {% if checked_at %}
+            <dt>Checked</dt>
+            <dd class="text-xs text-ink-500 dark:text-ink-400">{{ checked_at|timeago }}</dd>
+          {% endif %}
+        </dl>
+
+        {% comment %}
+          Setting up the bot is Operations' job; everyone else uses this page
+          for their own Telegram link and sign-in codes, further down.
+        {% endcomment %}
+        {% if console_can.operations %}
+        <div class="mt-5 flex flex-wrap gap-2">
+          <form method="post" action="{% url 'console:telegram_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="register_webhook">
+            <button type="submit" class="btn-primary btn-sm" {% if not site_is_https %}disabled title="SITE_URL must be https://"{% endif %}>
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-globe"/></svg> Register webhook
+            </button>
+          </form>
+          <form method="post" action="{% url 'console:telegram_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_commands">
+            <button type="submit" class="btn-ghost btn-sm">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-list"/></svg> Set command menu
+            </button>
+          </form>
+        </div>
+        {% endif %}
+        {% if not console_can.operations %}
+        {% elif not site_is_https %}
+          <p class="mt-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+            SITE_URL is not https://, so Telegram can't call this site. Locally, run
+            <span class="tg-code">python manage.py telegram_bot --poll</span> instead.
+          </p>
+        {% else %}
+          <p class="mt-3 text-xs text-ink-500 dark:text-ink-400">Registers <span class="tg-code">{{ webhook_expected }}</span>{% if secret_set %} with the secret{% endif %}.</p>
+        {% endif %}
+      {% endif %}
+    </section>
+
+    {# ---------- Channel ---------- #}
+    <section class="card p-5 sm:p-6 reveal">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="section-title">Channel</h2>
+          <p class="section-note mt-0.5">Where announcements are posted for everyone following along.</p>
+        </div>
+        {% if not channel.configured %}
+          <span class="badge-neutral">Not configured</span>
+        {% elif channel.error %}
+          <span class="badge-danger">Problem</span>
+        {% elif channel.can_post %}
+          <span class="badge-success">Can post</span>
+        {% else %}
+          <span class="badge-warning">Can't post</span>
+        {% endif %}
+      </div>
+
+      {% if not channel.configured %}
+        <p class="mt-4 text-sm text-ink-600 dark:text-ink-300">
+          {% if configured %}No <span class="tg-code">TELEGRAM_CHANNEL_ID</span> yet.{% else %}Configure the bot first.{% endif %}
+          Announcements still reach students in the app{% if configured %} and, if you choose, their bot chats{% endif %}.
+        </p>
+      {% else %}
+        <dl class="tg-dl mt-5">
+          <dt>Channel</dt>
+          <dd>
+            {% if channel.chat.title %}<b>{{ channel.chat.title }}</b>{% else %}<span class="tg-code">{{ channel_id }}</span>{% endif %}
+            {% if channel.chat.username %}<a href="https://t.me/{{ channel.chat.username }}" target="_blank" rel="noopener" class="ml-1 text-brand-600 hover:underline dark:text-brand-300">@{{ channel.chat.username }}</a>{% endif %}
+            {% if channel.chat.id %}<span class="block text-xs text-ink-500 dark:text-ink-400">id {{ channel.chat.id|stringformat:"s" }}</span>{% endif %}
+          </dd>
+          {% if channel.error %}
+            <dt>Error</dt>
+            <dd class="text-rose-600 dark:text-rose-400">{{ channel.error }}</dd>
+          {% endif %}
+          <dt>Bot's rights</dt>
+          <dd class="flex flex-wrap gap-1.5">
+            <span class="{% if channel.can_post %}badge-success{% else %}badge-danger{% endif %}">{% if channel.can_post %}Can post{% else %}Can't post{% endif %}</span>
+            <span class="{% if channel.can_delete %}badge-success{% else %}badge-neutral{% endif %}">{% if channel.can_delete %}Can delete{% else %}Deletes own posts only{% endif %}</span>
+          </dd>
+          <dt>Public link</dt>
+          <dd>{% if channel_url %}<a href="{{ channel_url }}" target="_blank" rel="noopener" class="text-brand-600 hover:underline dark:text-brand-300">{{ channel_url }}</a>{% else %}<span class="text-ink-400">Not set — students won't see a “Join our channel” link</span>{% endif %}</dd>
+        </dl>
+        {% if console_can.operations %}
+        <div class="mt-5 flex flex-wrap gap-2">
+          <form method="post" action="{% url 'console:telegram_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="test_channel">
+            <button type="submit" class="btn-primary btn-sm">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-send"/></svg> Send test to channel
+            </button>
+          </form>
+          <form method="post" action="{% url 'console:telegram_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="check">
+            <button type="submit" class="btn-ghost btn-sm">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-shield"/></svg> Check channel permissions
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      {% endif %}
+
+      {% if detected %}
+        <div class="mt-5 rounded-xl border border-sky-500/25 bg-sky-500/8 p-3 text-xs leading-relaxed text-ink-700 dark:text-ink-200">
+          <b>Detected:</b> the bot became <b>{{ detected.status }}</b> of
+          “{{ detected.title|default:"a channel" }}” — id <span class="tg-code">{{ detected.id }}</span>{% if detected.username %}, <span class="tg-code">@{{ detected.username }}</span>{% endif %}{% if detected.at %} · {{ detected.at|slice:":10" }}{% endif %}.
+          {% if detected.id != channel_id and detected.username != channel_id|cut:"@" %}Set <span class="tg-code">TELEGRAM_CHANNEL_ID={% if detected.username %}@{{ detected.username }}{% else %}{{ detected.id }}{% endif %}</span> to use it.{% endif %}
+        </div>
+      {% endif %}
+    </section>
+  </div>
+
+  {% comment %}
+    The group and the alert switches. Top-aligned rather than stretched: the
+    switches run longer than the group card, and an empty half-card reads as
+    something missing.
+  {% endcomment %}
+  <div class="grid gap-5 xl:grid-cols-2 xl:items-start">
+
+    {# ---------- Community group ---------- #}
+    <section class="card p-5 sm:p-6 reveal" id="group">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="section-title">Community group</h2>
+          <p class="section-note mt-0.5">Where students help each other — announcements can go here too.</p>
+        </div>
+        {% if not group.configured %}
+          <span class="badge-neutral">Not configured</span>
+        {% elif group.error %}
+          <span class="badge-danger">Problem</span>
+        {% elif group.can_post %}
+          <span class="badge-success">Can post</span>
+        {% else %}
+          <span class="badge-warning">Can't post</span>
+        {% endif %}
+      </div>
+
+      {% if not group.configured %}
+        <p class="mt-4 text-sm text-ink-600 dark:text-ink-300">
+          {% if configured %}No <span class="tg-code">TELEGRAM_GROUP_ID</span> yet.{% else %}Configure the bot first.{% endif %}
+          The group is optional — announcements still reach students in the app{% if configured %}, the channel and their bot chats{% endif %}.
+        </p>
+        {% if group_url %}
+          <dl class="tg-dl mt-4">
+            <dt>Invite link</dt>
+            <dd><a href="{{ group_url }}" target="_blank" rel="noopener" class="text-brand-600 hover:underline dark:text-brand-300">{{ group_url }}</a></dd>
+          </dl>
+        {% endif %}
+      {% else %}
+        <dl class="tg-dl mt-5">
+          <dt>Group</dt>
+          <dd>
+            {% if group.chat.title %}<b>{{ group.chat.title }}</b>{% else %}<span class="tg-code">{{ group_id }}</span>{% endif %}
+            {% if group.chat.username %}<a href="https://t.me/{{ group.chat.username }}" target="_blank" rel="noopener" class="ml-1 text-brand-600 hover:underline dark:text-brand-300">@{{ group.chat.username }}</a>{% endif %}
+            {% if group.chat.type %}
+              <span class="block text-xs text-ink-500 dark:text-ink-400">{% if group.chat.type == "supergroup" %}Supergroup{% else %}Basic group{% endif %}{% if group.chat.id %} · id {{ group.chat.id|stringformat:"s" }}{% endif %}</span>
+            {% endif %}
+          </dd>
+          {% if group.error %}
+            <dt>Error</dt>
+            <dd class="text-rose-600 dark:text-rose-400">{{ group.error }}</dd>
+          {% endif %}
+          <dt>Bot's rights</dt>
+          <dd class="flex flex-wrap gap-1.5">
+            <span class="{% if group.can_post %}badge-success{% else %}badge-danger{% endif %}">{% if group.can_post %}Can post{% else %}Can't post{% endif %}</span>
+            <span class="{% if group.can_delete %}badge-success{% else %}badge-neutral{% endif %}">{% if group.can_delete %}Can delete{% else %}Deletes own posts only{% endif %}</span>
+            {% if group.member.status %}<span class="badge-neutral">{{ group.member.status|capfirst }}</span>{% endif %}
+          </dd>
+          <dt>Group ID</dt>
+          <dd><span class="tg-code">{{ group_id }}</span> <span class="block text-xs text-ink-500 dark:text-ink-400">TELEGRAM_GROUP_ID in .env</span></dd>
+          <dt>Invite link</dt>
+          <dd>{% if group_url %}<a href="{{ group_url }}" target="_blank" rel="noopener" class="text-brand-600 hover:underline dark:text-brand-300">{{ group_url }}</a>{% else %}<span class="text-ink-400">Not set — students won't see a “Join our Telegram group” link</span>{% endif %}</dd>
+        </dl>
+        {% if console_can.operations %}
+        <div class="mt-5 flex flex-wrap gap-2">
+          <form method="post" action="{% url 'console:telegram_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="test_group">
+            <button type="submit" class="btn-primary btn-sm">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-send"/></svg> Send test to group
+            </button>
+          </form>
+          <form method="post" action="{% url 'console:telegram_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="check">
+            <button type="submit" class="btn-ghost btn-sm">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-shield"/></svg> Check group permissions
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      {% endif %}
+
+      {% if detected_group %}
+        <div class="mt-5 rounded-xl border border-sky-500/25 bg-sky-500/8 p-3 text-xs leading-relaxed text-ink-700 dark:text-ink-200">
+          <p>
+            <b>Detected group:</b>
+            {% if detected_group.migrated %}
+              the group was upgraded to a supergroup, which gave it a new id.
+            {% elif detected_group.removed %}
+              the bot was removed from “{{ detected_group.title|default:"a group" }}”.
+            {% else %}
+              the bot became <b>{{ detected_group.status }}</b> of “{{ detected_group.title|default:"a group" }}”{% if detected_group.type == "supergroup" %}, a supergroup{% endif %}.
+            {% endif %}
+            {% if detected_group.at %}<span class="text-ink-500 dark:text-ink-400">{{ detected_group.at|slice:":10" }}</span>{% endif %}
+          </p>
+          {% if not detected_group.removed %}
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <span class="tg-code text-ink-900 dark:text-white">{{ detected_group.id }}</span>
+              <button type="button" class="btn-icon h-7 w-7" data-tg-copy="{{ detected_group.id }}" title="Copy the id" aria-label="Copy the group id {{ detected_group.id }}">
+                <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-copy"/></svg>
+              </button>
+              <span class="min-w-0">Set <span class="tg-code">TELEGRAM_GROUP_ID</span> to it and restart the site.</span>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+
+    {# ---------- Automatic alerts ---------- #}
+    <section class="card p-5 sm:p-6 reveal" id="alerts">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="section-title">Automatic alerts</h2>
+          <p class="section-note mt-0.5">Which alerts reach students' own bot chats automatically.</p>
+        </div>
+        {% if not configured %}
+          <span class="badge-neutral">Waiting for the bot</span>
+        {% elif alert_master.on %}
+          <span class="badge-success">{{ alerts_on }} of {{ alert_categories|length }} on</span>
+        {% else %}
+          <span class="badge-neutral">Paused</span>
+        {% endif %}
+      </div>
+      {% if not configured %}
+        <p class="mt-3 text-xs leading-relaxed text-ink-600 dark:text-ink-300">Nothing goes to Telegram until the bot is configured. Choose now and these apply from the first message.</p>
+      {% endif %}
+
+      {% comment %}
+        Only Operations (and owners) may change these, so everyone else gets
+        the same switches read-only — and no form that would answer 403.
+      {% endcomment %}
+      {% if console_can.operations %}
+      <form method="post" action="{% url 'console:telegram_action' %}" class="mt-4" data-tg-alerts>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="alert_settings">
+      {% else %}
+      <div class="mt-4" data-tg-alerts>
+      {% endif %}
+        <label class="flex items-center justify-between gap-4 rounded-xl px-1 py-2.5 transition {% if console_can.operations %}cursor-pointer hover:bg-ink-50 dark:hover:bg-white/[.03]{% endif %}">
+          <span class="min-w-0">
+            <span class="block text-sm font-semibold text-ink-900 dark:text-white">{{ alert_master.label }}</span>
+            <span class="block text-xs leading-relaxed text-ink-500 dark:text-ink-400">{{ alert_master.help }}</span>
+          </span>
+          <span class="relative inline-flex shrink-0">
+            <input type="checkbox" name="{{ alert_master.key }}" class="peer sr-only" data-tg-master {% if alert_master.on %}checked{% endif %} {% if not console_can.operations %}disabled{% endif %}>
+            <span class="h-6 w-11 rounded-full bg-ink-300 transition peer-checked:bg-brand-600 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/50 peer-disabled:opacity-60 dark:bg-white/15"></span>
+            <span class="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"></span>
+          </span>
+        </label>
+
+        <div class="tg-cats mt-1 border-t hairline pt-1{% if not alert_master.on %} is-paused{% endif %}" data-tg-cats>
+          <p class="px-1 pt-2 text-[11.5px] leading-relaxed text-amber-700 dark:text-amber-300" data-tg-paused {% if alert_master.on %}hidden{% endif %}>
+            Paused while Telegram alerts are off. You can still choose which ones come back.
+          </p>
+          {% for row in alert_categories %}
+            <label class="tg-cat flex items-center justify-between gap-4 rounded-xl px-1 py-2.5 {% if console_can.operations %}cursor-pointer hover:bg-ink-50 dark:hover:bg-white/[.03]{% endif %}">
+              <span class="min-w-0">
+                <span class="tg-cat-name block text-sm font-medium text-ink-800 dark:text-ink-100">{{ row.label }}</span>
+                <span class="block text-xs leading-relaxed text-ink-500 dark:text-ink-400">{{ row.help }}</span>
+              </span>
+              <span class="relative inline-flex shrink-0">
+                <input type="checkbox" name="{{ row.key }}" class="peer sr-only" {% if row.on %}checked{% endif %} {% if not console_can.operations %}disabled{% endif %}>
+                <span class="tg-track h-6 w-11 rounded-full bg-ink-300 transition peer-checked:bg-brand-600 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/50 peer-disabled:opacity-60 dark:bg-white/15"></span>
+                <span class="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"></span>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+
+        <p class="mt-3 flex items-start gap-2 rounded-xl border hairline p-3 text-[11.5px] leading-relaxed text-ink-600 dark:text-ink-300">
+          <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-400" aria-hidden="true"><use href="#i-lock"/></svg>
+          <span><b class="font-semibold text-ink-800 dark:text-ink-100">Sign-in codes are not affected</b> — students who chose Telegram for them always get them there. Each student's own switches in Settings still apply, and announcements are chosen when you publish them.</span>
+        </p>
+
+        {% if console_can.operations %}
+          <button type="submit" class="btn-primary btn-sm mt-4">
+            <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-check"/></svg> Save alerts
+          </button>
+      </form>
+        {% else %}
+          <p class="mt-3 text-xs text-ink-500 dark:text-ink-400">Operations and owners can change these.</p>
+      </div>
+        {% endif %}
+    </section>
+  </div>
+
+  {# ---------- Your own chat ---------- #}
+  <section class="card p-5 sm:p-6 reveal">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h2 class="section-title">Your Telegram</h2>
+        <p class="section-note mt-0.5">Connect your own chat to test delivery, and to get your sign-in codes there if you turn them on.</p>
+      </div>
+      {% if me_linked %}{% if me_can_receive %}<span class="badge-success">Connected</span>{% else %}<span class="badge-warning">Blocked the bot</span>{% endif %}{% endif %}
+    </div>
+
+    <div class="mt-5 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div>
+        {% if not configured %}
+          <p class="text-sm text-ink-600 dark:text-ink-300">Available once the bot is configured.</p>
+        {% elif me_linked %}
+          <p class="text-sm text-ink-700 dark:text-ink-200">
+            {% if me_account.username %}@{{ me_account.username }}{% else %}{{ me_account.first_name|default:"Your chat" }}{% endif %}
+            <span class="text-ink-500 dark:text-ink-400">· since {{ me_account.linked_at|date:"j M Y" }}</span>
+          </p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <form method="post" action="{% url 'console:telegram_action' %}">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="test_me">
+              <button type="submit" class="btn-primary btn-sm">
+                <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-send"/></svg> Send test to my chat
+              </button>
+            </form>
+            <form method="post" action="{% url 'console:telegram_action' %}" onsubmit="return confirm('Disconnect your Telegram?');">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="unlink_me">
+              <button type="submit" class="btn-ghost btn-sm">Disconnect</button>
+            </form>
+          </div>
+        {% elif my_link %}
+          <div class="flex flex-wrap items-start gap-4">
+            <div class="tg-qr" role="img" aria-label="QR code that opens the bot">{{ my_qr }}</div>
+            <div class="min-w-0 flex-1 text-sm text-ink-700 dark:text-ink-200">
+              <p>Open the link (or scan it) and press <b>Start</b>. It works once, for {{ ttl }} minutes.</p>
+              <a href="{{ my_link }}" target="_blank" rel="noopener" class="btn-primary btn-sm mt-3">
+                <svg class="h-4 w-4" aria-hidden="true"><use href="#i-telegram"/></svg> Open in Telegram
+              </a>
+              <p class="mt-3"><a href="{% url 'console:telegram' %}" class="text-xs font-semibold text-brand-600 hover:underline dark:text-brand-300">I've pressed Start — refresh</a></p>
+            </div>
+          </div>
+        {% else %}
+          <form method="post" action="{% url 'console:telegram_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="connect_me">
+            <button type="submit" class="btn-primary btn-sm">
+              <svg class="h-4 w-4" aria-hidden="true"><use href="#i-telegram"/></svg> Connect my Telegram
+            </button>
+          </form>
+        {% endif %}
+      </div>
+
+      <form method="post" action="{% url 'console:telegram_action' %}" class="rounded-xl border border-ink-200/70 p-4 dark:border-white/10">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="login_otp">
+        <label class="tg-switch">
+          <input type="checkbox" name="enabled" {% if user.login_otp_enabled %}checked{% endif %}>
+          <span><b class="text-ink-900 dark:text-white">Ask for a code when I sign in</b>
+            <span class="mt-0.5 block text-xs text-ink-500 dark:text-ink-400">Applies to your console sign-in only. {% if codes_everywhere %}Codes go to your Telegram and your e-mail together.{% else %}Codes go to your Telegram when connected, otherwise to your e-mail.{% endif %}</span></span>
+        </label>
+        <button type="submit" class="btn-ghost btn-sm mt-3">Save</button>
+      </form>
+    </div>
+  </section>
+
+  {# ---------- Students on Telegram (roles that read student profiles) ---------- #}
+  {% if linked_page is not None %}
+  <section class="card overflow-hidden reveal" id="linked">
+    <div class="flex flex-wrap items-start justify-between gap-3 border-b hairline px-5 py-4">
+      <div class="min-w-0">
+        <h2 class="section-title">Students on Telegram</h2>
+        <p class="section-note mt-0.5">Newest connections first. A student who blocked the bot gets nothing until they press Start again.</p>
+      </div>
+      <span class="badge-neutral">{{ linked_page.paginator.count|intcomma }} connected</span>
+    </div>
+    {% if linked_page.object_list %}
+      <div class="table-wrap">
+        <table class="table min-w-[640px]">
+          <thead>
+            <tr>
+              <th class="th">Student</th>
+              <th class="th">Telegram</th>
+              <th class="th">Linked</th>
+              <th class="th">Last delivery</th>
+              <th class="th">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for account in linked_page.object_list %}
+              <tr class="row">
+                <td class="td text-sm">
+                  {% if console_can.students and not account.user.is_admin_user or console_is_owner %}
+                    <a href="{% url 'console:user_detail' account.user_id %}" class="font-medium hover:text-brand-600 dark:hover:text-brand-300">{{ account.user.display_name|truncatechars:28 }}</a>
+                  {% else %}
+                    <span class="font-medium">{{ account.user.display_name|truncatechars:28 }}</span>
+                  {% endif %}
+                  {% if account.user.is_admin_user %}<span class="badge-neutral ml-1.5">Staff</span>{% endif %}
+                </td>
+                <td class="td text-sm">
+                  {% if account.username %}<span class="text-ink-700 dark:text-ink-200">@{{ account.username }}</span>{% elif account.first_name %}{{ account.first_name }}{% else %}<span class="text-ink-400">—</span>{% endif %}
+                </td>
+                <td class="td whitespace-nowrap text-xs text-ink-500 dark:text-ink-400"{% if account.linked_at %} title="{{ account.linked_at|date:'d M Y, H:i' }}"{% endif %}>{% if account.linked_at %}{{ account.linked_at|date:"d M Y" }}{% else %}—{% endif %}</td>
+                <td class="td whitespace-nowrap text-xs text-ink-500 dark:text-ink-400"{% if account.last_delivery_at %} title="{{ account.last_delivery_at|date:'d M Y, H:i' }}"{% endif %}>{% if account.last_delivery_at %}{{ account.last_delivery_at|timeago }}{% else %}Nothing yet{% endif %}</td>
+                <td class="td">
+                  {% if account.blocked_at %}
+                    <span class="badge-warning" title="Since {{ account.blocked_at|date:'d M Y' }}">Blocked the bot</span>
+                  {% else %}
+                    <span class="badge-success">Reachable</span>
+                    {% if console_can.student_care and not account.user.is_admin_user %}
+                      <a href="{% url 'console:telegram_send' %}?to=student&amp;student={{ account.user_id }}"
+                         class="ml-2 text-xs font-semibold text-brand-600 hover:underline dark:text-brand-300">Message</a>
+                    {% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if linked_page.paginator.num_pages > 1 %}
+        <nav class="flex flex-col items-center justify-between gap-3 border-t hairline px-5 py-3 sm:flex-row" aria-label="Connected students, by page">
+          <p class="text-xs text-ink-500 dark:text-ink-400">
+            Showing <span class="font-semibold text-ink-700 dark:text-ink-200">{{ linked_page.start_index }}–{{ linked_page.end_index }}</span>
+            of <span class="font-semibold text-ink-700 dark:text-ink-200">{{ linked_page.paginator.count|intcomma }}</span>
+          </p>
+          <div class="flex items-center gap-1">
+            {% if linked_page.has_previous %}
+              <a href="{% qs request linked=linked_page.previous_page_number %}#linked" class="btn-icon" aria-label="Newer connections">
+                <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg>
+              </a>
+            {% else %}
+              <span class="btn-icon opacity-35" aria-hidden="true"><svg class="h-4 w-4"><use href="#i-chevron-left"/></svg></span>
+            {% endif %}
+            <span class="px-2 text-xs font-medium tabular-nums text-ink-600 dark:text-ink-300">Page {{ linked_page.number }} of {{ linked_page.paginator.num_pages }}</span>
+            {% if linked_page.has_next %}
+              <a href="{% qs request linked=linked_page.next_page_number %}#linked" class="btn-icon" aria-label="Older connections">
+                <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              </a>
+            {% else %}
+              <span class="btn-icon opacity-35" aria-hidden="true"><svg class="h-4 w-4"><use href="#i-chevron-right"/></svg></span>
+            {% endif %}
+          </div>
+        </nav>
+      {% endif %}
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-telegram" title="Nobody has connected yet" body="Students connect under Settings → Telegram. They are listed here, newest first, with the last time a message reached them." %}
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ---------- Setup guide (the people who set the bot up) ---------- #}
+  {% if console_can.operations %}
+  <div class="grid gap-5 xl:grid-cols-[1.6fr_1fr]" id="setup">
+    <section class="card p-5 sm:p-6 reveal">
+      <h2 class="section-title">Setup guide</h2>
+      <p class="section-note mt-0.5">Once, in this order. Takes about ten minutes.</p>
+      <ol class="tg-steps mt-5">
+        <li>
+          <b>Create the bot.</b> In Telegram, open <a href="https://t.me/BotFather" target="_blank" rel="noopener" class="text-brand-600 hover:underline dark:text-brand-300">@BotFather</a>, send <code>/newbot</code>, give it a name (e.g. “EPC AI Assistant”) and a username ending in <code>bot</code>. BotFather replies with the <b>token</b> — treat it like a password.
+        </li>
+        <li>
+          <b>Menu and privacy.</b> Press <b>Set command menu</b> above (or send BotFather <code>/setcommands</code> with the list on the right). Leave <code>/setprivacy</code> <b>enabled</b> — the bot only needs commands, never group chatter, and privacy mode doesn't stop it posting to the community group.
+        </li>
+        <li>
+          <b>Create the channel.</b> New Channel, then give it the name students will see. <b>Public</b> gives it a <code>@username</code> and a t.me link; <b>private</b> gives it a numeric id starting <code>-100</code>.
+        </li>
+        <li>
+          <b>Make the bot an administrator.</b> Channel → Administrators → Add admin → your bot, with <b>Post messages</b> on. That also lets it delete its own posts when you retract an announcement — Telegram allows that for 48 hours; <b>Delete messages</b> is optional. Once the bot is added, this page shows the channel's id under “Detected”.
+        </li>
+        <li>
+          <b>Create the community group</b> (optional). New Group → e.g. “AI Assistant Community”, and add your bot as a member. It needs to be allowed to <b>send messages</b>: members can by default; if you limited them, make the bot an administrator instead. Once the bot is in, the <b>Community group</b> card above shows the group's id under “Detected group”, with a copy button.
+          Upgrading a group to a supergroup (Telegram does it when you add a public link or turn on some settings) <b>changes its id</b>; the card then shows the new one — put it in <code>TELEGRAM_GROUP_ID</code>.
+        </li>
+        <li>
+          <b>Fill in <code>.env</code></b> and restart the site:
+          <pre class="tg-pre">TELEGRAM_BOT_TOKEN=123456789:AA…
+TELEGRAM_BOT_USERNAME=YourBotName
+TELEGRAM_WEBHOOK_SECRET=&lt;random, see below&gt;
+TELEGRAM_CHANNEL_ID=@your_channel      # or -100…
+TELEGRAM_CHANNEL_URL=https://t.me/your_channel
+TELEGRAM_GROUP_ID=-100…                # from “Detected group”
+TELEGRAM_GROUP_URL=https://t.me/+invite_link
+SITE_URL=https://your-domain.example</pre>
+          Make the secret with <code>python -c "import secrets; print(secrets.token_urlsafe(32))"</code> (letters, digits, <code>_</code> and <code>-</code> only).
+          The group lines are optional; <code>TELEGRAM_GROUP_URL</code> is the invite link students see as “Join our Telegram group”.
+        </li>
+        <li>
+          <b>Start receiving updates.</b> In production press <b>Register webhook</b> (needs https). On a laptop run <code>python manage.py telegram_bot --poll</code> and leave it running — polling only works while no webhook is registered (<code>--delete-webhook</code> removes one).
+        </li>
+        <li>
+          <b>Check.</b> Re-check this page: Bot online, Channel and Community group “Can post”. Connect your own Telegram, send yourself a test, then send a test to the channel and to the group. Finally, choose which <b>Automatic alerts</b> go to Telegram.
+        </li>
+      </ol>
+    </section>
+
+    <div class="space-y-5">
+      <section class="card p-5 sm:p-6 reveal">
+        <h2 class="section-title">Configuration</h2>
+        <p class="section-note mt-0.5">Read from <span class="tg-code">.env</span>. Secrets show as set or missing only.</p>
+        <div class="mt-4">
+          {% for item in checklist %}
+            <div class="tg-check">
+              {% if item.ok %}
+                <svg class="text-emerald-600 dark:text-emerald-400" aria-hidden="true"><use href="#i-check-circle"/></svg>
+              {% elif item.optional %}
+                <svg class="text-ink-400" aria-hidden="true"><use href="#i-info"/></svg>
+              {% else %}
+                <svg class="text-amber-600 dark:text-amber-400" aria-hidden="true"><use href="#i-alert"/></svg>
+              {% endif %}
+              <div class="min-w-0">
+                <div class="tg-check-key text-ink-900 dark:text-white">{{ item.key }}</div>
+                <div class="tg-check-val text-ink-600 dark:text-ink-300">{{ item.value }}</div>
+                <div class="text-[11px] leading-relaxed text-ink-500 dark:text-ink-400">{{ item.note }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card p-5 sm:p-6 reveal">
+        <h2 class="section-title">Command list</h2>
+        <p class="section-note mt-0.5">For BotFather's <span class="tg-code">/setcommands</span>.</p>
+        <pre class="tg-pre">{% for name, description in commands %}{{ name }} - {{ description }}
+{% endfor %}</pre>
+      </section>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---------- Delivery log ---------- #}
+  <section class="card overflow-hidden reveal" id="deliveries">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <div class="min-w-0">
+        <h2 class="section-title">Recent deliveries</h2>
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          <a href="{% qs request status='' page='' %}#deliveries" class="chip{% if not status_filter %} chip-active{% endif %}">All</a>
+          {% for value, label in statuses %}
+            <a href="{% qs request status=value page='' %}#deliveries" class="chip{% if status_filter == value %} chip-active{% endif %}">{{ label }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      <form method="get" class="flex items-center gap-2">
+        {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+        <label for="tgKind" class="sr-only">Kind</label>
+        <select name="kind" id="tgKind" class="input py-2 text-sm">
+          <option value="">Any kind</option>
+          {% for value, label in kinds %}
+            <option value="{{ value }}" {% if value == kind_filter %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-ghost btn-sm">Filter</button>
+      </form>
+    </div>
+    {% if page.object_list %}
+      <div class="table-wrap">
+        <table class="table min-w-[760px]">
+          <thead>
+            <tr>
+              <th class="th">When</th>
+              <th class="th">To</th>
+              <th class="th">Kind</th>
+              <th class="th">Status</th>
+              <th class="th">Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in page.object_list %}
+              <tr class="row">
+                <td class="td whitespace-nowrap text-xs text-ink-500 dark:text-ink-400" title="{{ row.created_at|date:'d M Y, H:i:s' }}">{{ row.created_at|date:"d M, H:i" }}</td>
+                <td class="td text-sm">
+                  {% if row.target == "channel" %}
+                    <span class="badge-info">Channel</span>
+                  {% elif row.target == "group" %}
+                    <span class="badge-brand">Group</span>
+                  {% elif row.user and console_can.students and not row.user.is_admin_user or row.user and console_is_owner %}
+                    <a href="{% url 'console:user_detail' row.user_id %}" class="font-medium hover:text-brand-600 dark:hover:text-brand-300">{{ row.user.display_name|truncatechars:26 }}</a>
+                  {% elif row.user %}
+                    <span class="font-medium">{{ row.user.display_name|truncatechars:26 }}</span>
+                  {% else %}
+                    <span class="text-ink-500 dark:text-ink-400">Chat {{ row.chat_id }}</span>
+                  {% endif %}
+                </td>
+                <td class="td text-xs">{{ row.kind }}</td>
+                <td class="td">
+                  <span class="{% if row.status == 'sent' %}badge-success{% elif row.status == 'blocked' %}badge-warning{% elif row.status == 'failed' %}badge-danger{% else %}badge-neutral{% endif %}">{{ row.get_status_display }}</span>
+                </td>
+                <td class="td text-xs">
+                  {% if row.error %}
+                    <span class="tg-err tap-expand text-rose-700 dark:text-rose-300" tabindex="0" title="{{ row.error }}">{{ row.error }}</span>
+                  {% elif row.telegram_message_id %}
+                    <span class="text-ink-500 dark:text-ink-400">message #{{ row.telegram_message_id }}</span>
+                  {% else %}<span class="text-ink-400">—</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-send" title="Nothing sent yet" body="Every message the bot sends — to a student, the channel or the group — is listed here, without its text." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  /* Automatic alerts: with the master off the categories read as paused,
+     but stay editable, so the ones that come back can be chosen first. */
+  var alerts = document.querySelector('[data-tg-alerts]');
+  if (alerts) {
+    var master = alerts.querySelector('[data-tg-master]');
+    var cats = alerts.querySelector('[data-tg-cats]');
+    var note = alerts.querySelector('[data-tg-paused]');
+    if (master && cats) {
+      master.addEventListener('change', function () {
+        cats.classList.toggle('is-paused', !master.checked);
+        if (note) note.hidden = master.checked;
+      });
+    }
+  }
+
+  /* Copy the detected group's id. The clipboard API needs a secure page;
+     anywhere else a hidden field and the older copy command stand in. */
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise(function (resolve, reject) {
+      var field = document.createElement('textarea');
+      field.value = text;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+      document.body.removeChild(field);
+      if (ok) resolve(); else reject(new Error('copy failed'));
+    });
+  }
+  document.querySelectorAll('[data-tg-copy]').forEach(function (button) {
+    var use = button.querySelector('use');
+    button.addEventListener('click', function () {
+      copyText(button.getAttribute('data-tg-copy')).then(function () {
+        button.classList.add('tg-copied');
+        button.setAttribute('title', 'Copied');
+        if (use) use.setAttribute('href', '#i-check');
+        setTimeout(function () {
+          button.classList.remove('tg-copied');
+          button.setAttribute('title', 'Copy the id');
+          if (use) use.setAttribute('href', '#i-copy');
+        }, 1600);
+      }).catch(function () {});
+    });
+  });
+})();
+</script>
+{% endblock %}

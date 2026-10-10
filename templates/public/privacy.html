@@ -1,0 +1,100 @@
+{% extends "public/_legal_base.html" %}
+
+{% block title %}Privacy policy · {{ BRAND.full_name }}{% endblock %}
+{% block doc_kicker %}Privacy{% endblock %}
+{% block doc_title %}Privacy policy{% endblock %}
+
+{% block doc_body %}
+<section>
+  <h2>What we collect</h2>
+  <ul>
+    <li><strong>Account details</strong> — your name, username, e-mail address and, if you provide one, a phone number.</li>
+    <li><strong>Conversations</strong> — the messages and images you send to the assistant, and the replies you receive.</li>
+    <li><strong>Usage records</strong> — how many tokens each request consumed, which model answered, and when.</li>
+    <li><strong>Payment records</strong> — the plan, amount, method and reference. We never see or store your card number.</li>
+    <li><strong>Technical data</strong> — IP address and browser type, used for security, rate limiting and audit logs.</li>
+    <li><strong>Telegram link</strong> — your Telegram chat id, only if you choose to connect it.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>How we use it</h2>
+  <ul>
+    <li>To provide the assistant and keep your conversation history available to you.</li>
+    <li>To count tokens accurately and show you what you have spent.</li>
+    <li>To verify your identity, protect accounts and detect abuse.</li>
+    <li>To process payments and issue receipts.</li>
+    <li>To send the alerts you have enabled — low balance, expiry reminders and payment confirmations.</li>
+  </ul>
+  <p>We do not sell your personal data, and we do not use your conversations for advertising.</p>
+</section>
+
+<section>
+  <h2>Who can see your conversations</h2>
+  <p>
+    Your conversations are private to your account. Other students cannot access them. Our administrators can see
+    account-level information — your balance, payments and usage totals — because they need it to support you and to
+    keep the platform running. Administrative actions are recorded in an audit log.
+  </p>
+  <p>
+    To generate an answer, your message is sent to our AI provider, which processes it to produce the reply. We do not
+    send them your name, e-mail address or payment details.
+  </p>
+</section>
+
+<section>
+  <h2>Images you upload</h2>
+  <p>
+    Uploaded images are validated, re-encoded to strip embedded metadata such as location tags, and stored under a
+    random filename. They are attached to the conversation you sent them in and are deleted when you delete that
+    conversation.
+  </p>
+</section>
+
+<section>
+  <h2>How long we keep it</h2>
+  <ul>
+    <li>Conversations remain until you delete them or close your account.</li>
+    <li>Token and payment records are kept for accounting purposes, as required by law.</li>
+    <li>Verification codes are short-lived and stored only as a one-way hash.</li>
+    <li>Rate-limit records are cleared automatically once their window has passed.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>How we protect it</h2>
+  <ul>
+    <li>Passwords are stored as salted hashes and are never recoverable, not even by us.</li>
+    <li>Verification codes are hashed, expire quickly and can only be used once.</li>
+    <li>Only one active session is allowed per account, so a forgotten sign-in elsewhere is closed automatically.</li>
+    <li>API keys and payment credentials are held in the server environment, never in the database or the code.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Your choices</h2>
+  <ul>
+    <li>Update or correct your details at any time from your profile page.</li>
+    <li>Delete any conversation, which removes its messages and images.</li>
+    <li>Turn individual notification types on or off in your profile.</li>
+    <li>Disconnect Telegram whenever you like.</li>
+    <li>Ask us for a copy of your data, or ask us to delete your account, by e-mailing support.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Cookies</h2>
+  <p>
+    We use cookies that are strictly necessary: one to keep you signed in and one to protect forms against
+    cross-site request forgery. Your theme preference is stored in your browser and never sent to us. We do not use
+    advertising or third-party tracking cookies.
+  </p>
+</section>
+
+<section>
+  <h2>Contact</h2>
+  <p>
+    For any privacy question or request, write to <a href="mailto:{{ BRAND.support_email }}">{{ BRAND.support_email }}</a>.
+  </p>
+</section>
+{% endblock %}

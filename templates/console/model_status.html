@@ -1,0 +1,515 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Model status — for running the service during an incident.
+
+  Top to bottom: the site-wide pause (a banner while it is on), the four
+  headline counts, the pause switch itself, one card per model (declared
+  status + note + the student preview on the left, measured health on the
+  right), and the daily digest. Measurement only ever suggests; every change
+  here is made by a person and lands in the audit log.
+{% endcomment %}
+
+{% block title %}Model status · Console{% endblock %}
+{% block heading %}Model status{% endblock %}
+{% block subheading %}
+  <p>Tell students when a model is slow or paused, and see how each one is really doing right now.</p>
+{% endblock %}
+{% block header_actions %}
+  <a href="{% url 'console:health' %}" class="btn-outline btn-sm">
+    <svg aria-hidden="true"><use href="#i-activity"/></svg> Provider health
+  </a>
+{% endblock %}
+
+{% block head %}
+<style>
+  /* ---- declared status: a segmented control built from radios ---------- */
+  .ms-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: .9rem;
+            border: 1px solid rgba(228,233,243,.9); background: rgba(241,244,251,.7); }
+  .dark .ms-seg { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.04); }
+  .ms-seg-opt { position: relative; display: block; min-width: 0; cursor: pointer; }
+  .ms-seg-face { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 6px 10px;
+                 border-radius: .65rem; font-size: 12.5px; font-weight: 600; line-height: 1.2; text-align: center; color: #5B6884;
+                 transition: background-color .2s ease, color .2s ease, box-shadow .2s ease; }
+  .dark .ms-seg-face { color: #9AA5BC; }
+  .ms-seg-opt:hover .ms-seg-face { color: #0E1526; }
+  .dark .ms-seg-opt:hover .ms-seg-face { color: #fff; }
+  .ms-seg-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: currentColor; opacity: .45; }
+  .ms-seg-opt input:checked + .ms-seg-face { background: #fff; color: #0E1526; box-shadow: 0 1px 2px rgba(14,21,38,.08), 0 4px 12px -6px rgba(14,21,38,.25); }
+  .dark .ms-seg-opt input:checked + .ms-seg-face { background: rgba(255,255,255,.12); color: #fff; box-shadow: none; }
+  .ms-seg-opt input:checked + .ms-seg-face .ms-seg-dot { opacity: 1; }
+  .ms-seg-opt.tone-ok input:checked + .ms-seg-face .ms-seg-dot { background: #10B981; }
+  .ms-seg-opt.tone-warn input:checked + .ms-seg-face { color: #92400E; box-shadow: inset 0 0 0 1px rgba(245,158,11,.45); background: #FFFBEB; }
+  .ms-seg-opt.tone-warn input:checked + .ms-seg-face .ms-seg-dot { background: #F59E0B; }
+  .ms-seg-opt.tone-stop input:checked + .ms-seg-face { color: #9F1239; box-shadow: inset 0 0 0 1px rgba(225,29,72,.4); background: #FFF1F2; }
+  .ms-seg-opt.tone-stop input:checked + .ms-seg-face .ms-seg-dot { background: #E11D48; }
+  .dark .ms-seg-opt.tone-warn input:checked + .ms-seg-face { color: #FCD34D; background: rgba(245,158,11,.14); box-shadow: inset 0 0 0 1px rgba(245,158,11,.35); }
+  .dark .ms-seg-opt.tone-stop input:checked + .ms-seg-face { color: #FDA4AF; background: rgba(225,29,72,.16); box-shadow: inset 0 0 0 1px rgba(251,113,133,.35); }
+  .ms-seg-opt input:focus-visible + .ms-seg-face { outline: 2px solid #2563EB; outline-offset: 1px; }
+  @media (max-width: 519px) { .ms-seg { grid-template-columns: 1fr; } .ms-seg-face { justify-content: flex-start; } }
+
+  /* ---- what a student sees ------------------------------------------ */
+  .ms-notice { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border-radius: .9rem; border: 1px solid; font-size: 13px; line-height: 1.5; }
+  .ms-notice > svg { width: 17px; height: 17px; flex: none; margin-top: 1px; }
+  .ms-notice-title { font-weight: 700; }
+  .ms-notice-text { overflow-wrap: anywhere; }
+  .ms-notice.is-degraded { border-color: rgba(245,158,11,.4); background: #FFFBEB; color: #78350F; }
+  .ms-notice.is-degraded > svg { color: #D97706; }
+  .ms-notice.is-paused { border-color: rgba(225,29,72,.3); background: #FFF1F2; color: #881337; }
+  .ms-notice.is-paused > svg { color: #E11D48; }
+  .ms-notice.is-maintenance { border-color: rgba(37,99,235,.28); background: #EFF6FF; color: #1E3A8A; }
+  .ms-notice.is-maintenance > svg { color: #2563EB; }
+  .ms-notice.is-none { border-style: dashed; border-color: rgba(154,165,188,.55); background: transparent; color: #5B6884; }
+  .ms-notice.is-none > svg { color: #10B981; }
+  .dark .ms-notice.is-degraded { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.3); color: #FDE68A; }
+  .dark .ms-notice.is-degraded > svg { color: #FBBF24; }
+  .dark .ms-notice.is-paused { background: rgba(225,29,72,.12); border-color: rgba(251,113,133,.3); color: #FECDD3; }
+  .dark .ms-notice.is-paused > svg { color: #FB7185; }
+  .dark .ms-notice.is-maintenance { background: rgba(37,99,235,.14); border-color: rgba(96,165,250,.3); color: #DBEAFE; }
+  .dark .ms-notice.is-maintenance > svg { color: #60A5FA; }
+  .dark .ms-notice.is-none { color: #9AA5BC; border-color: rgba(255,255,255,.14); }
+
+  /* ---- measured health ---------------------------------------------- */
+  .ms-table { width: 100%; min-width: 18rem; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .ms-table th, .ms-table td { padding: 8px 8px; text-align: right; white-space: nowrap; }
+  @media (max-width: 479px) {
+    .ms-table { font-size: 12px; }
+    .ms-table th, .ms-table td { padding: 8px 4px; }
+    .ms-rate { padding: 2px 5px; }
+  }
+  .ms-table thead th { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #5B6884; border-bottom: 1px solid rgba(228,233,243,.9); }
+  .ms-table tbody th { text-align: left; font-weight: 700; color: #364054; }
+  .ms-table tbody td { color: #364054; }
+  .ms-table tbody tr + tr > * { border-top: 1px solid rgba(228,233,243,.7); }
+  .ms-table th:first-child { text-align: left; padding-left: 0; }
+  .ms-table th:last-child, .ms-table td:last-child { padding-right: 0; }
+  .dark .ms-table thead th { color: #9AA5BC; border-color: rgba(255,255,255,.08); }
+  .dark .ms-table tbody th, .dark .ms-table tbody td { color: #D3DAE8; }
+  .dark .ms-table tbody tr + tr > * { border-color: rgba(255,255,255,.06); }
+  .ms-rate { display: inline-block; padding: 2px 7px; border-radius: 999px; font-weight: 700; }
+  .ms-rate.is-warn { background: rgba(245,158,11,.14); color: #92400E; }
+  .ms-rate.is-bad { background: rgba(225,29,72,.12); color: #BE123C; }
+  .dark .ms-rate.is-warn { color: #FCD34D; }
+  .dark .ms-rate.is-bad { color: #FDA4AF; }
+  .ms-error { display: flex; gap: 9px; align-items: flex-start; padding: 10px 12px; border-radius: .8rem; background: rgba(225,29,72,.06); border: 1px solid rgba(225,29,72,.16); }
+  .dark .ms-error { background: rgba(225,29,72,.08); border-color: rgba(251,113,133,.18); }
+  .ms-error p { overflow-wrap: anywhere; }
+
+  /* ---- state pill, hints, inactive models --------------------------- */
+  .ms-state { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+  .ms-state i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .ms-state.is-on { background: rgba(16,185,129,.12); color: #047857; }
+  .ms-state.is-off { background: rgba(225,29,72,.12); color: #BE123C; }
+  .dark .ms-state.is-on { color: #6EE7B7; } .dark .ms-state.is-off { color: #FDA4AF; }
+  .ms-hint { display: flex; align-items: flex-start; gap: 10px; padding: 11px 20px; font-size: 13px; line-height: 1.5; }
+  .ms-hint.is-warn { background: rgba(245,158,11,.1); color: #78350F; }
+  .ms-hint.is-good { background: rgba(16,185,129,.08); color: #065F46; }
+  .dark .ms-hint.is-warn { color: #FDE68A; } .dark .ms-hint.is-good { color: #A7F3D0; }
+  .ms-hint > svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+  .ms-card.is-inactive .ms-dim { opacity: .58; filter: grayscale(.6); transition: opacity .2s ease, filter .2s ease; }
+  .ms-card.is-inactive:hover .ms-dim, .ms-card.is-inactive:focus-within .ms-dim { opacity: 1; filter: none; }
+  .ms-confirm { border-radius: .9rem; border: 1px solid rgba(225,29,72,.3); background: rgba(225,29,72,.06); padding: 12px 14px; }
+  .dark .ms-confirm { background: rgba(225,29,72,.1); border-color: rgba(251,113,133,.3); }
+  .ms-note { resize: vertical; min-height: 3.2rem; }
+  .ms-banner .btn-primary, .ms-banner form { flex: none; }
+
+  /* ---- touch: every control at least 40px tall ---------------------- */
+  @media (pointer: coarse) {
+    .ms-page .btn-sm, .ms-page .btn-outline, .page-head-actions .btn-sm { min-height: 42px; }
+    .ms-seg-face { min-height: 44px; }
+    .ms-page a.ms-link { display: inline-flex; align-items: center; min-height: 40px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ms-page space-y-5">
+
+  {% if chat_paused %}
+    <div class="alarm-banner ms-banner" role="status" id="pauseBanner">
+      <span class="alarm-mark" aria-hidden="true"><svg><use href="#i-lock"/></svg></span>
+      <div class="min-w-0 flex-1 basis-60">
+        <p class="text-[15px] font-bold text-ink-900 dark:text-white">All chat is paused</p>
+        <p class="mt-0.5 text-[13px] leading-relaxed text-ink-600 dark:text-ink-300">
+          Students can't send new messages to any model{% if chat_paused_at %} — since {{ chat_paused_at|timeago }}{% if chat_paused_by %} ({{ chat_paused_by.display_name }}){% endif %}{% endif %}.
+          They see: “{{ maintenance.text }}”
+        </p>
+      </div>
+      <form method="post" action="{% url 'console:model_status_pause' %}" data-busy-form>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="resume">
+        <button type="submit" class="btn-primary btn-sm" data-busy-label="Resuming…">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-refresh"/></svg> Resume chat
+        </button>
+      </form>
+    </div>
+  {% endif %}
+
+  <section class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4" data-stagger="70">
+    {% with ok=counts.operational|stringformat:"s" total=counts.active|stringformat:"s" %}
+      {% include "console/_kpi.html" with variant="brand" icon="i-check-circle" label="Working" value=ok|add:" of "|add:total foot="active models, no notice" %}
+    {% endwith %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-clock" label="Slow" value=counts.degraded foot="students see a warning" %}
+    {% include "console/_kpi.html" with variant="violet" icon="i-lock" label="Paused" value=counts.paused foot="take no new messages" %}
+    {% with rate=hour.rate|stringformat:"s" %}
+      {% include "console/_kpi.html" with variant="plain" icon="i-activity" label="Requests · 1 h" value=hour.requests|intcomma foot=rate|add:"% failed" %}
+    {% endwith %}
+  </section>
+
+  {# ===================== Pause all chat ===================== #}
+  <section class="card overflow-hidden reveal" id="chat-pause">
+    <div class="flex flex-wrap items-start gap-3 border-b hairline px-5 py-4 sm:items-center">
+      <span class="chip-brand h-9 w-9 shrink-0 rounded-[.8rem]" aria-hidden="true">
+        <svg style="width:16px;height:16px"><use href="#i-lock"/></svg>
+      </span>
+      <div class="min-w-0 flex-1 basis-56">
+        <h2 class="section-title">Pause all chat</h2>
+        <p class="section-note">For maintenance or a wider outage: stops new messages to every model at once. Students can still read, search and export their chats. Administrators are not affected.</p>
+      </div>
+      <span class="ms-state {% if chat_paused %}is-off{% else %}is-on{% endif %}"><i></i>{% if chat_paused %}Chat paused{% else %}Chat is running{% endif %}</span>
+    </div>
+
+    <div class="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <form method="post" action="{% url 'console:model_status_pause' %}" class="space-y-3" id="pauseForm" data-busy-form>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{% if chat_paused %}note{% else %}pause{% endif %}">
+        <div>
+          <label class="label" for="chatNote">Message for students <span class="font-normal text-ink-400">(optional)</span></label>
+          <textarea id="chatNote" name="note" rows="2" maxlength="{{ note_max }}" class="input ms-note"
+                    placeholder="{{ maintenance_default }}" data-count-src="chatNoteCount">{{ chat_note }}</textarea>
+          <p class="help flex flex-wrap justify-between gap-x-3"><span>e.g. “Back by 9:00 pm — we're upgrading.” Blank uses the standard wording.</span><span id="chatNoteCount" class="tabular-nums">{{ chat_note|length }}/{{ note_max }}</span></p>
+        </div>
+
+        {% if chat_paused %}
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="submit" class="btn-outline btn-sm" data-busy-label="Saving…">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-check"/></svg> Save message
+            </button>
+          </div>
+        {% else %}
+          <div data-pause-step>
+            <button type="button" class="btn-danger btn-sm" data-pause-open aria-controls="pauseConfirm" aria-expanded="false">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-lock"/></svg> Pause all chat…
+            </button>
+          </div>
+          <div class="ms-confirm" id="pauseConfirm" role="group" aria-labelledby="pauseConfirmTitle" hidden>
+            <p id="pauseConfirmTitle" class="text-[13.5px] font-bold text-ink-900 dark:text-white">Pause chat for every student?</p>
+            <p class="mt-1 text-[12.5px] leading-relaxed text-ink-600 dark:text-ink-300">Nobody can send a message to any model until you press Resume. They'll see the notice on the right.</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" class="btn-outline btn-sm" data-pause-cancel>Cancel</button>
+              <button type="submit" name="confirm" value="yes" class="btn-danger btn-sm" data-busy-label="Pausing…">
+                <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-lock"/></svg> Yes, pause all chat
+              </button>
+            </div>
+          </div>
+        {% endif %}
+      </form>
+
+      <div>
+        <p class="kpi-label">{% if chat_paused %}Every student sees now{% else %}Students will see, once paused{% endif %}</p>
+        <div class="ms-notice is-maintenance mt-2" id="chatPreview">
+          <svg aria-hidden="true"><use href="#i-settings"/></svg>
+          <div class="min-w-0">
+            <p class="ms-notice-title">{{ maintenance.title }}</p>
+            <p class="ms-notice-text" data-default="{{ maintenance_default }}">{{ maintenance.text }}</p>
+          </div>
+        </div>
+        <p class="help">Shown above the message box on every model, with sending switched off.</p>
+      </div>
+    </div>
+  </section>
+
+  {# ===================== One card per model ===================== #}
+  <div class="flex flex-wrap items-end justify-between gap-2 px-1 pt-1">
+    <div>
+      <h2 class="section-title">Models</h2>
+      <p class="section-note">Active models first. Measured health is read from the request log — it suggests, it never changes a status by itself.</p>
+    </div>
+    {% if counts.unhealthy %}<span class="badge-warning">{{ counts.unhealthy }} look{{ counts.unhealthy|pluralize:"s," }} unhealthy</span>{% endif %}
+  </div>
+
+  {% for row in rows %}
+    {% with m=row.model %}
+    <section class="card ms-card overflow-hidden reveal {% if not m.is_active %}is-inactive{% endif %}" id="model-{{ m.pk }}">
+      <header class="ms-dim flex flex-wrap items-start gap-3 border-b hairline px-5 py-4">
+        <span class="model-tile" aria-hidden="true" style="--from: {{ row.tone.from }}; --to: {{ row.tone.to }}">
+          <svg><use href="#{{ row.tone.icon }}"/></svg>
+        </span>
+        <div class="min-w-0 flex-1 basis-48">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="model-provider" style="color: {{ row.tone.ink }}">{{ m.provider_name }}</span>
+            <span class="badge-{{ row.badge }}">{{ m.get_service_status_display }}</span>
+            {% if not m.is_active %}<span class="badge-neutral">Hidden from students</span>{% endif %}
+          </div>
+          <h3 class="mt-1 truncate text-[17px] font-extrabold tracking-[-.02em] text-ink-900 dark:text-white">{{ m.name }}</h3>
+          <p class="mt-0.5 text-[12px] leading-relaxed text-ink-500 dark:text-ink-400">
+            <code class="text-[11px]">{{ m.key }}</code>{% if m.best_for %} · Best for {{ m.best_for }}{% endif %}
+          </p>
+        </div>
+        <p class="w-full text-[11.5px] text-ink-500 dark:text-ink-400 sm:w-auto sm:text-right">
+          {% if m.status_changed_at %}Status set {{ m.status_changed_at|timeago }}<br class="hidden sm:inline"><span class="sm:hidden"> · </span>{{ m.status_changed_at|date:"j M, H:i" }}{% else %}Status never changed{% endif %}
+        </p>
+      </header>
+
+      {% if row.unhealthy %}
+        <div class="ms-hint is-warn" role="note">
+          <svg aria-hidden="true"><use href="#i-alert"/></svg>
+          <p><b>Looks unhealthy — consider marking it “Slow or unreliable”.</b>
+            {{ row.unhealthy.failures }} of {{ row.unhealthy.requests }} requests failed in the last {{ row.unhealthy.phrase }} ({{ row.unhealthy.error_rate }}%). Nothing has been changed.</p>
+        </div>
+      {% elif row.recovered %}
+        <div class="ms-hint is-good" role="note">
+          <svg aria-hidden="true"><use href="#i-check-circle"/></svg>
+          <p><b>Looks healthy again.</b> The last 15 minutes had {{ row.windows.0.requests }} requests with {{ row.windows.0.error_rate }}% errors — consider marking it “Working normally”.</p>
+        </div>
+      {% endif %}
+
+      <div class="ms-dim grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+        <form method="post" action="{% url 'console:model_status_set' m.pk %}" class="space-y-4" data-status-form data-busy-form
+              data-name="{{ m.name }}"
+              data-degraded-title="{{ row.draft.degraded.title }}" data-degraded-text="{{ row.draft.degraded.text }}"
+              data-paused-title="{{ row.draft.paused.title }}" data-paused-text="{{ row.draft.paused.text }}">
+          {% csrf_token %}
+          <fieldset>
+            <legend class="kpi-label">Declared status</legend>
+            <div class="ms-seg mt-2">
+              {% for choice in status_choices %}
+                <label class="ms-seg-opt tone-{{ choice.tone }}">
+                  <input type="radio" name="status" value="{{ choice.value }}" class="sr-only"
+                         {% if m.service_status == choice.value %}checked{% endif %}>
+                  <span class="ms-seg-face"><i class="ms-seg-dot" aria-hidden="true"></i>{{ choice.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </fieldset>
+
+          <div data-note-wrap {% if m.service_status == 'operational' %}hidden{% endif %}>
+            <label class="label" for="note-{{ m.pk }}">Note for students <span class="font-normal text-ink-400">(optional)</span></label>
+            <textarea id="note-{{ m.pk }}" name="note" rows="2" maxlength="{{ note_max }}" class="input ms-note"
+                      placeholder="{% if m.is_paused %}{{ row.draft.paused.text }}{% else %}{{ row.draft.degraded.text }}{% endif %}"
+                      data-count-src="count-{{ m.pk }}">{{ m.status_note }}</textarea>
+            <p class="help flex flex-wrap justify-between gap-x-3"><span>Blank uses the standard wording shown.</span><span id="count-{{ m.pk }}" class="tabular-nums">{{ m.status_note|length }}/{{ note_max }}</span></p>
+          </div>
+
+          <div>
+            <p class="kpi-label">Students will see</p>
+            {% with n=row.notice %}
+              <div class="ms-notice mt-2 {% if n %}is-{{ n.level }}{% else %}is-none{% endif %}" data-preview>
+                <svg aria-hidden="true"><use href="#{% if not n %}i-check-circle{% elif n.level == 'paused' %}i-lock{% else %}i-clock{% endif %}"/></svg>
+                <div class="min-w-0">
+                  <p class="ms-notice-title" data-preview-title>{% if n %}{{ n.title }}{% else %}No notice{% endif %}</p>
+                  <p class="ms-notice-text" data-preview-text>{% if n %}{{ n.text }}{% else %}{{ m.name }} works as normal — nothing is shown.{% endif %}</p>
+                </div>
+              </div>
+            {% endwith %}
+            <p class="help" data-preview-effect {% if not m.is_paused and not m.is_degraded %}hidden{% endif %}>{% if m.is_paused %}Sending to {{ m.name }} is switched off; other models still work.{% elif m.is_degraded %}Students can still send messages to {{ m.name }}.{% endif %}</p>
+            {% if chat_paused %}<p class="help">All chat is paused right now, so every student sees the maintenance notice instead.</p>{% endif %}
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <button type="submit" class="btn-primary btn-sm" data-busy-label="Saving…">
+              <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-check"/></svg> Save status
+            </button>
+            <span class="text-[11.5px] font-semibold text-amber-700 dark:text-amber-300" data-dirty hidden>Not saved yet</span>
+          </div>
+        </form>
+
+        <div class="min-w-0 space-y-3">
+          <p class="kpi-label">Measured from the request log</p>
+          <div class="table-wrap">
+            <table class="ms-table">
+              <thead>
+                <tr>
+                  <th scope="col">Last</th>
+                  <th scope="col"><span class="hidden sm:inline">Requests</span><span class="sm:hidden" title="Requests">Req.</span></th>
+                  <th scope="col">Failed</th>
+                  <th scope="col"><span class="hidden sm:inline">Error rate</span><span class="sm:hidden" title="Error rate">Errors</span></th>
+                  <th scope="col" title="Median latency">p50</th>
+                  <th scope="col" title="95th-percentile latency">p95</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for w in row.windows %}
+                  <tr>
+                    <th scope="row">{{ w.label }}</th>
+                    <td>{{ w.requests|intcomma }}</td>
+                    <td>{{ w.failures|intcomma }}</td>
+                    <td>{% if w.requests %}<span class="ms-rate {% if w.bad %}is-bad{% elif w.failures %}is-warn{% endif %}">{{ w.error_rate }}%</span>{% else %}—{% endif %}</td>
+                    <td>{{ w.p50 }}</td>
+                    <td>{{ w.p95 }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if row.last_error %}
+            <div class="ms-error">
+              <svg class="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden="true"><use href="#i-alert"/></svg>
+              <div class="min-w-0">
+                <p class="text-[11px] font-bold uppercase tracking-[.08em] text-rose-700 dark:text-rose-300">
+                  Last error · {{ row.last_error.last_error_at|timeago }}{% if row.last_error.last_error_code %} · <code class="normal-case tracking-normal">{{ row.last_error.last_error_code }}</code>{% endif %}
+                </p>
+                <p class="mt-1 text-[12.5px] leading-relaxed text-ink-700 dark:text-ink-200">{{ row.last_error.last_error|default:"No message was recorded." }}</p>
+              </div>
+            </div>
+          {% else %}
+            <p class="flex items-center gap-2 text-[12.5px] text-ink-500 dark:text-ink-400">
+              <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true"><use href="#i-check-circle"/></svg>
+              No failed requests in the last 24 hours.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+    {% endwith %}
+  {% empty %}
+    <div class="card p-8 text-center text-sm text-ink-500">No AI models are set up yet.</div>
+  {% endfor %}
+
+  {# ===================== Daily digest ===================== #}
+  <section class="card overflow-hidden reveal" id="digest">
+    <div class="flex flex-wrap items-start gap-3 border-b hairline px-5 py-4 sm:items-center">
+      <span class="chip-violet h-9 w-9 shrink-0 rounded-[.8rem]" aria-hidden="true">
+        <svg style="width:16px;height:16px"><use href="#i-mail"/></svg>
+      </span>
+      <div class="min-w-0 flex-1 basis-56">
+        <h2 class="section-title">Daily admin digest</h2>
+        <p class="section-note">Each morning after {{ digest.hour }}:00 (Phnom Penh), every administrator gets the last 24 hours: sign-ups, payments and revenue, token use and errors by model, open tickets, paused or slow models and token-pool runway.</p>
+      </div>
+      <span class="ms-state {% if digest.enabled %}is-on{% else %}is-off{% endif %}"><i></i>{% if digest.enabled %}On{% else %}Off{% endif %}</span>
+      <form method="post" action="{% url 'console:model_status_digest' %}" data-busy-form>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{% if digest.enabled %}disable{% else %}enable{% endif %}">
+        <button type="submit" class="btn-outline btn-sm" data-busy-label="Saving…">{% if digest.enabled %}Turn off{% else %}Turn on{% endif %}</button>
+      </form>
+    </div>
+    <div class="grid gap-5 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <dl class="grid gap-3 text-[13px] sm:grid-cols-3">
+        <div>
+          <dt class="kpi-label">Your Telegram</dt>
+          <dd class="mt-1 text-ink-800 dark:text-ink-100">
+            {% if digest.telegram_linked %}<span class="badge-success">Linked</span>
+            {% elif not digest.telegram_ready %}<span class="badge-neutral">Bot not set up</span>
+            {% else %}<span class="badge-warning">Not linked</span> <a href="{% url 'console:telegram' %}" class="ms-link text-[12px] font-semibold text-brand-600 hover:underline dark:text-brand-300">Link it</a>{% endif %}
+          </dd>
+        </div>
+        <div class="min-w-0">
+          <dt class="kpi-label">Your e-mail</dt>
+          <dd class="mt-1 truncate text-ink-800 dark:text-ink-100">{{ digest.email|default:"No address on your account" }}</dd>
+        </div>
+        <div>
+          <dt class="kpi-label">Last digest to you</dt>
+          <dd class="mt-1 text-ink-800 dark:text-ink-100">{% if digest.last_sent %}{{ digest.last_sent|timeago }}{% else %}Not sent yet{% endif %}</dd>
+        </div>
+      </dl>
+      <form method="post" action="{% url 'console:model_status_digest' %}" data-busy-form>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="test">
+        <button type="submit" class="btn-outline btn-sm w-full sm:w-auto" data-busy-label="Sending…">
+          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-send"/></svg> Send a test digest to me
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <p class="px-1 text-[11.5px] leading-relaxed text-ink-500 dark:text-ink-400">
+    Every change on this page is recorded in the {% if console_can.staff %}<a class="font-semibold text-brand-600 hover:underline dark:text-brand-300" href="{% url 'console:audit_logs' %}">audit log</a>{% else %}audit log{% endif %}.
+    Vendor credentials and provider-wide error rates are on <a class="font-semibold text-brand-600 hover:underline dark:text-brand-300" href="{% url 'console:health' %}">System health</a>.
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var ICONS = { degraded: '#i-clock', paused: '#i-lock', maintenance: '#i-settings', none: '#i-check-circle' };
+
+  function counter(field) {
+    var out = document.getElementById(field.getAttribute('data-count-src'));
+    if (!out) return;
+    var max = field.getAttribute('maxlength') || 200;
+    var paint = function () { out.textContent = field.value.length + '/' + max; };
+    field.addEventListener('input', paint);
+    paint();
+  }
+  document.querySelectorAll('[data-count-src]').forEach(counter);
+
+  /* One model: status + note drive the preview, the placeholder and the dirty flag. */
+  document.querySelectorAll('form[data-status-form]').forEach(function (form) {
+    var noteWrap = form.querySelector('[data-note-wrap]');
+    var note = form.querySelector('textarea[name="note"]');
+    var preview = form.querySelector('[data-preview]');
+    var title = form.querySelector('[data-preview-title]');
+    var text = form.querySelector('[data-preview-text]');
+    var effect = form.querySelector('[data-preview-effect]');
+    var dirty = form.querySelector('[data-dirty]');
+    var name = form.dataset.name;
+    var initial = { status: (form.querySelector('input[name="status"]:checked') || {}).value, note: note.value.trim() };
+
+    function status() { var c = form.querySelector('input[name="status"]:checked'); return c ? c.value : 'operational'; }
+
+    function paint() {
+      var s = status();
+      var ok = s === 'operational';
+      noteWrap.hidden = ok;
+      if (!ok) note.placeholder = form.dataset[s + 'Text'];
+      preview.className = preview.className.replace(/\bis-\w+/g, '').trim() + ' is-' + (ok ? 'none' : s);
+      preview.querySelector('use').setAttribute('href', ICONS[ok ? 'none' : s]);
+      if (ok) {
+        title.textContent = 'No notice';
+        text.textContent = name + ' works as normal — nothing is shown.';
+        effect.hidden = true;
+      } else {
+        effect.hidden = false;
+        title.textContent = form.dataset[s + 'Title'];
+        text.textContent = note.value.replace(/\s+/g, ' ').trim() || form.dataset[s + 'Text'];
+        effect.textContent = s === 'paused'
+          ? 'Sending to ' + name + ' is switched off; other models still work.'
+          : 'Students can still send messages to ' + name + '.';
+      }
+      var changed = s !== initial.status || (!ok && note.value.trim() !== initial.note);
+      dirty.hidden = !changed;
+    }
+    form.addEventListener('change', paint);
+    note.addEventListener('input', paint);
+  });
+
+  /* Pause all chat: a second, explicit step before anything is sent. */
+  var pauseForm = document.getElementById('pauseForm');
+  var confirmBox = document.getElementById('pauseConfirm');
+  var chatNote = document.getElementById('chatNote');
+  var chatText = document.querySelector('#chatPreview .ms-notice-text');
+  if (chatNote && chatText) {
+    chatNote.addEventListener('input', function () {
+      chatText.textContent = chatNote.value.replace(/\s+/g, ' ').trim() || chatText.getAttribute('data-default');
+    });
+  }
+  if (pauseForm && confirmBox) {
+    var step = pauseForm.querySelector('[data-pause-step]');
+    var opener = pauseForm.querySelector('[data-pause-open]');
+    opener.addEventListener('click', function () {
+      confirmBox.hidden = false; step.hidden = true; opener.setAttribute('aria-expanded', 'true');
+      var yes = confirmBox.querySelector('button[type="submit"]');
+      if (yes) yes.focus();
+    });
+    pauseForm.querySelector('[data-pause-cancel]').addEventListener('click', function () {
+      confirmBox.hidden = true; step.hidden = false; opener.setAttribute('aria-expanded', 'false'); opener.focus();
+    });
+  }
+
+  /* No double submits: the pressed button says what it is doing. */
+  document.querySelectorAll('form[data-busy-form]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      var button = event.submitter || form.querySelector('button[type="submit"]');
+      if (!button) return;
+      // Disable after the browser has read the submitter's name/value.
+      setTimeout(function () {
+        button.disabled = true;
+        if (button.dataset.busyLabel) button.lastChild.textContent = ' ' + button.dataset.busyLabel;
+      }, 0);
+    });
+  });
+})();
+</script>
+{% endblock %}

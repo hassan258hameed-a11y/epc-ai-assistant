@@ -1,0 +1,130 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}{% if plan %}Edit {{ plan.name }}{% else %}New plan{% endif %} · Console{% endblock %}
+{% block heading %}{% if plan %}Edit plan{% else %}New plan{% endif %}{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    {% if plan %}{{ plan.name }}{% else %}Define what students get and what it costs.{% endif %}
+  </p>
+{% endblock %}
+
+{% block measure %}max-w-3xl{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <a href="{% url 'console:plans' %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> All plans
+  </a>
+
+  <form method="post" data-loading-form>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="mb-5 rounded-xl border border-rose-500/25 bg-rose-500/8 p-3.5">
+        {% for error in form.non_field_errors %}<p class="text-sm font-medium text-rose-700 dark:text-rose-300">{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <section class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="section-title">Basics</h2>
+      <div class="mt-5 space-y-4">
+        {% include "console/_form_field.html" with field=form.name %}
+        {% include "console/_form_field.html" with field=form.description %}
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Pricing</h2>
+      <p class="section-note mt-0.5">
+        Tokens are credited in full the moment payment is confirmed.
+      </p>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        {% include "console/_form_field.html" with field=form.ai_model %}
+        {% include "console/_form_field.html" with field=form.tokens %}
+        {% include "console/_form_field.html" with field=form.price %}
+        {% include "console/_form_field.html" with field=form.currency %}
+        {% include "console/_form_field.html" with field=form.duration_days %}
+      </div>
+
+      <div id="pricePreview" class="mt-4 hidden rounded-xl border border-brand-500/25 bg-brand-500/8 p-3.5">
+        <p class="text-xs text-ink-600 dark:text-ink-300">
+          That works out at <span id="perMillion" class="font-bold text-ink-900 dark:text-white"></span> per million tokens.
+        </p>
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Usage limits</h2>
+      <p class="section-note mt-0.5">
+        How fast this package may be spent. Each is a number of tokens, not a
+        percentage. Leave one at <span class="font-mono">0</span> for no ceiling of that kind.
+        A package already sold keeps the limits it was sold with, so changes here
+        only affect future purchases.
+      </p>
+      <div class="mt-5 grid gap-4 sm:grid-cols-3">
+        {% include "console/_form_field.html" with field=form.daily_limit %}
+        {% include "console/_form_field.html" with field=form.weekly_limit %}
+        {% include "console/_form_field.html" with field=form.monthly_limit %}
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Other models included</h2>
+      <p class="section-note mt-1">
+        A plan is sold for one model — the one chosen above, whose price and revenue it carries.
+        Add amounts here to make it a bundle that also credits other models. Tokens are a separate
+        currency per model, so each is credited to its own wallet rather than pooled.
+        Leave every field at 0 for a single-model plan.
+      </p>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        {% for field in form.bundle_fields %}
+          {% include "console/_form_field.html" with field=field %}
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="card spotlight mt-5 p-5 sm:p-6 reveal">
+      <h2 class="section-title">Presentation</h2>
+      <div class="mt-5 space-y-4">
+        {% include "console/_form_field.html" with field=form.features %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% include "console/_form_field.html" with field=form.display_order %}
+        </div>
+        <div class="space-y-1 border-t hairline pt-4">
+          {% include "console/_form_field.html" with field=form.is_active %}
+          {% include "console/_form_field.html" with field=form.is_featured %}
+        </div>
+      </div>
+    </section>
+
+    <div class="mt-5 flex flex-wrap justify-end gap-2">
+      <a href="{% url 'console:plans' %}" class="btn-ghost">Cancel</a>
+      <button type="submit" class="btn-primary" data-submit data-loading-label="Saving…">
+        {% if plan %}Save changes{% else %}Create plan{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var tokens = document.getElementById('id_tokens');
+    var price = document.getElementById('id_price');
+    var preview = document.getElementById('pricePreview');
+    if (!tokens || !price) return;
+
+    function update() {
+      var t = Number(tokens.value || 0), p = Number(price.value || 0);
+      if (t <= 0 || p <= 0) { preview.classList.add('hidden'); return; }
+      document.getElementById('perMillion').textContent = '$' + (p / t * 1000000).toFixed(2);
+      preview.classList.remove('hidden');
+    }
+    tokens.addEventListener('input', update);
+    price.addEventListener('input', update);
+    update();
+  })();
+</script>
+{% endblock %}

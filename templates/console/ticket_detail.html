@@ -1,0 +1,303 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}{{ ticket.reference }} · Support tickets · {{ BRAND.full_name }}{% endblock %}
+{% block heading %}{{ ticket.subject }}{% endblock %}
+{% block subheading %}
+  <p class="truncate font-mono text-xs text-ink-500 dark:text-ink-400">{{ ticket.reference }}</p>
+{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'console:tickets' %}" class="btn-outline btn-sm">
+    <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-left"/></svg> Queue
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto grid max-w-[80rem] gap-5 lg:grid-cols-3">
+
+  {# ================= Thread ================= #}
+  <div class="space-y-5 lg:col-span-2">
+
+    <div class="card spotlight p-5 reveal">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="{{ ticket.status_tone|tone_classes }}">{{ ticket.get_status_display }}</span>
+        <span class="{{ ticket.priority_tone|tone_classes }}">{{ ticket.get_priority_display }}</span>
+        <span class="badge-neutral">{{ ticket.get_category_display }}</span>
+        {% if not ticket.first_response_at and ticket.is_open %}
+          <span class="badge-danger">Unanswered for {{ ticket.waiting_hours }}h</span>
+        {% endif %}
+        <span class="ml-auto text-xs text-ink-500 dark:text-ink-400">{{ ticket.created_at|date:"d M Y, H:i" }}</span>
+      </div>
+    </div>
+
+    <div class="card spotlight p-5 sm:p-6 reveal">
+      <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Conversation</h2>
+
+      <div class="mt-5 space-y-5">
+        <div class="flex gap-3">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 shadow-pill text-[10px] font-bold text-white">
+            {{ ticket.user.initials }}
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs text-ink-500 dark:text-ink-400">
+              <b class="font-semibold text-ink-700 dark:text-ink-200">{{ ticket.full_name }}</b>
+              · {{ ticket.created_at|date:"d M, H:i" }}
+            </p>
+            <div class="mt-1.5 whitespace-pre-wrap break-words rounded-xl2 rounded-tl-md border hairline bg-ink-50 p-3.5
+                        text-sm leading-relaxed text-ink-700 dark:bg-white/[.03] dark:text-ink-200">{{ ticket.description }}</div>
+
+            {% if ticket.attachment %}
+              <a href="{{ ticket.attachment.url }}" target="_blank" rel="noopener"
+                 class="mt-2 inline-flex items-center gap-2.5 rounded-xl border hairline bg-white p-2.5 pr-3.5 transition
+                        hover:border-brand-300 dark:bg-ink-900/50">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500/12 text-brand-600 dark:text-brand-300">
+                  <svg style="width:16px;height:16px" aria-hidden="true"><use href="#i-doc"/></svg>
+                </span>
+                <span class="min-w-0">
+                  <span class="block max-w-[16rem] truncate text-xs font-medium text-ink-800 dark:text-ink-100">{{ ticket.attachment_name }}</span>
+                  <span class="block text-[11px] text-ink-500">{{ ticket.attachment_size|filesizeformat }} · opens in a new tab</span>
+                </span>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% for reply in replies %}
+          <div class="flex gap-3 {% if reply.is_internal %}rounded-xl border border-amber-500/25 bg-amber-500/6 p-3{% endif %}">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white
+                         {% if reply.is_from_staff %}bg-gradient-to-br from-ink-600 to-ink-800{% else %}bg-gradient-to-br from-brand-500 to-accent-500{% endif %}">
+              {% if reply.is_from_staff %}
+                <svg style="width:14px;height:14px" aria-hidden="true"><use href="#i-shield"/></svg>
+              {% else %}{{ ticket.user.initials }}{% endif %}
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="flex flex-wrap items-center gap-2 text-xs text-ink-500 dark:text-ink-400">
+                <b class="font-semibold text-ink-700 dark:text-ink-200">
+                  {% if reply.author %}{{ reply.author.display_name }}{% else %}Removed user{% endif %}
+                </b>
+                <span>· {{ reply.created_at|date:"d M, H:i" }}</span>
+                {% if reply.is_internal %}<span class="badge-warning">Internal note</span>{% endif %}
+              </p>
+              <div class="mt-1.5 whitespace-pre-wrap break-words rounded-xl2 rounded-tl-md p-3.5 text-sm leading-relaxed
+                          {% if reply.is_internal %}text-ink-700 dark:text-ink-200
+                          {% elif reply.is_from_staff %}border border-brand-500/20 bg-brand-500/6 text-ink-700 dark:text-ink-200
+                          {% else %}border hairline bg-ink-50 text-ink-700 dark:bg-white/[.03] dark:text-ink-200{% endif %}">{{ reply.body|default:"(a file)" }}</div>
+              {% if reply.attachment %}
+                <a href="{{ reply.attachment.url }}" target="_blank" rel="noopener"
+                   class="mt-2 inline-flex items-center gap-2 rounded-xl border hairline px-3 py-2 text-xs font-medium text-ink-700 hover:border-brand-400 dark:text-ink-200">
+                  <svg style="width:14px;height:14px" aria-hidden="true"><use href="#i-doc"/></svg>
+                  {{ reply.attachment_name }} <span class="text-ink-400">{{ reply.attachment_size|filesizeformat }}</span>
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {# ---------- Reply ---------- #}
+      <form method="post" action="{% url 'console:ticket_reply' ticket.reference %}" class="mt-6 border-t hairline pt-5"
+            enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="canned_id" id="cannedId" value="">
+        <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
+          <label class="label mb-0" for="replyBody">Reply to {{ ticket.full_name }}</label>
+          {% if canned %}
+            <select class="select w-auto min-w-[13rem] py-1.5 text-xs" id="cannedPick" aria-label="Insert a saved reply">
+              <option value="">Insert a saved reply…</option>
+              {% for reply in canned %}<option value="{{ reply.id }}">{{ reply.title }}</option>{% endfor %}
+            </select>
+          {% else %}
+            <a href="{% url 'console:canned_replies' %}" class="text-xs font-semibold text-brand-600 hover:underline dark:text-brand-300">Set up saved replies</a>
+          {% endif %}
+        </div>
+        <textarea name="body" id="replyBody" rows="5" class="input resize-y"
+                  placeholder="Write your reply…"></textarea>
+
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-4">
+            <label class="flex cursor-pointer items-center gap-2.5 text-sm text-ink-600 dark:text-ink-300">
+              <input type="checkbox" name="is_internal" value="on" class="checkbox">
+              <span>Internal note — the student never sees this</span>
+            </label>
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
+              <svg style="width:15px;height:15px" aria-hidden="true"><use href="#i-upload"/></svg>
+              <span id="replyFileName">Attach a file</span>
+              <input type="file" name="attachment" class="sr-only" id="replyFile"
+                     accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,.csv,.xlsx">
+            </label>
+          </div>
+          <button type="submit" class="btn-primary">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#i-send"/></svg> Send
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# ================= Side panel ================= #}
+  <div class="space-y-5">
+
+    {# ---------- Actions ---------- #}
+    <div class="card spotlight p-5 reveal">
+      <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Manage</h2>
+      <form method="post" action="{% url 'console:ticket_update' ticket.reference %}" class="mt-4 space-y-3">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="ticketStatus">Status</label>
+          <select name="status" id="ticketStatus" class="select">
+            {% for value, label in statuses %}
+              <option value="{{ value }}" {% if ticket.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="ticketPriority">Priority</label>
+          <select name="priority" id="ticketPriority" class="select">
+            {% for value, label in priorities %}
+              <option value="{{ value }}" {% if ticket.priority == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="ticketAssign">Assignment</label>
+          <select name="assign" id="ticketAssign" class="select">
+            <option value="">
+              {% if ticket.assigned_to %}Assigned to {{ ticket.assigned_to.display_name }}{% else %}Unassigned{% endif %}
+            </option>
+            {% if ticket.assigned_to_id != request.user.pk %}<option value="me">Assign to me</option>{% endif %}
+            {% if admins|length > 1 %}
+              <optgroup label="Assign to">
+                {% for admin in admins %}
+                  {% if admin.pk != request.user.pk and admin.pk != ticket.assigned_to_id %}
+                    <option value="{{ admin.pk }}">{{ admin.display_name }}</option>
+                  {% endif %}
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            {% if ticket.assigned_to %}<option value="none">Unassign</option>{% endif %}
+          </select>
+        </div>
+        <button type="submit" class="btn-primary w-full">Save changes</button>
+      </form>
+    </div>
+
+    {# ---------- Who is asking ---------- #}
+    <div class="card spotlight p-5 reveal">
+      <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Student</h2>
+      {% if console_can.students and not ticket.user.is_admin_user or console_is_owner %}
+      <a href="{% url 'console:user_detail' ticket.user_id %}" class="mt-3 flex items-center gap-3 rounded-xl p-2 transition hover:bg-ink-100 dark:hover:bg-white/5">
+      {% else %}
+      <div class="mt-3 flex items-center gap-3 rounded-xl p-2">
+      {% endif %}
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 shadow-pill text-xs font-bold text-white">
+          {{ ticket.user.initials }}
+        </span>
+        <span class="min-w-0">
+          <span class="block truncate text-sm font-semibold text-ink-900 dark:text-white">{{ ticket.user.display_name }}</span>
+          <span class="block truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">{{ ticket.user.email|default:ticket.user.username }}</span>
+        </span>
+      {% if console_can.students and not ticket.user.is_admin_user or console_is_owner %}</a>{% else %}</div>{% endif %}
+
+      <dl class="mt-3 space-y-2 text-xs">
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500 dark:text-ink-400">Contact given</dt>
+          <dd class="truncate font-medium text-ink-700 dark:text-ink-200">{{ ticket.email }}</dd>
+        </div>
+        {% if ticket.phone %}
+          <div class="flex justify-between gap-3">
+            <dt class="text-ink-500 dark:text-ink-400">Phone</dt>
+            <dd class="font-medium text-ink-700 dark:text-ink-200">{{ ticket.phone }}</dd>
+          </div>
+        {% endif %}
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500 dark:text-ink-400">Token balance</dt>
+          <dd class="font-semibold tabular-nums {% if account.balance <= 0 %}text-rose-600{% else %}text-ink-700 dark:text-ink-200{% endif %}">
+            {{ account.balance|intcomma }}
+          </dd>
+        </div>
+        <div class="flex justify-between gap-3">
+          <dt class="text-ink-500 dark:text-ink-400">Joined</dt>
+          <dd class="font-medium text-ink-700 dark:text-ink-200">{{ ticket.user.date_joined|date:"d M Y" }}</dd>
+        </div>
+      </dl>
+
+      {% if console_can.support or console_can.tokens %}
+      <div class="mt-4 flex flex-wrap gap-2 border-t hairline pt-3">
+        {% if console_can.support %}<a href="{% url 'console:conversations' %}?student={{ ticket.user_id }}" class="btn-outline btn-sm">Chats</a>{% endif %}
+        {% if console_can.tokens %}<a href="{% url 'console:ai_distribute' %}?student={{ ticket.user_id }}" class="btn-outline btn-sm">Tokens</a>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    {# ---------- Recent payments ---------- #}
+    {% if recent_payments %}
+      <div class="card spotlight p-5 reveal">
+        <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Recent payments</h2>
+        <div class="mt-3 divide-y divide-ink-200/70 dark:divide-white/8">
+          {% for payment in recent_payments %}
+            {% if console_can.finance %}<a href="{% url 'console:payment_detail' payment.reference %}" class="flex items-center gap-3 py-2.5">{% else %}<div class="flex items-center gap-3 py-2.5">{% endif %}
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-xs font-medium text-ink-800 dark:text-ink-100">{{ payment.plan.name }}</span>
+                <span class="block truncate font-mono text-[10px] text-ink-400">{{ payment.reference }}</span>
+              </span>
+              <span class="shrink-0 text-right">
+                <span class="block text-xs font-semibold tabular-nums text-ink-700 dark:text-ink-200">
+                  {{ payment.currency }} {{ payment.amount|floatformat:2 }}
+                </span>
+                <span class="block text-[10px] {% if payment.status == 'paid' %}text-emerald-600{% else %}text-ink-400{% endif %}">
+                  {{ payment.get_status_display }}
+                </span>
+              </span>
+            {% if console_can.finance %}</a>{% else %}</div>{% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {# ---------- Their other tickets ---------- #}
+    {% if other_tickets %}
+      <div class="card spotlight p-5 reveal">
+        <h2 class="text-sm font-semibold text-ink-900 dark:text-white">Other tickets</h2>
+        <div class="mt-3 space-y-2">
+          {% for other in other_tickets %}
+            <a href="{% url 'console:ticket_detail' other.reference %}"
+               class="flex items-center gap-2.5 rounded-lg px-2 py-2 transition hover:bg-ink-100 dark:hover:bg-white/5">
+              <span class="{{ other.status_tone|tone_classes }} shrink-0">{{ other.get_status_display }}</span>
+              <span class="min-w-0 flex-1 truncate text-xs text-ink-700 dark:text-ink-200">{{ other.subject }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ canned|json_script:"cannedData" }}
+{{ first_name|json_script:"cannedName" }}
+<script>
+  (function () {
+    var file = document.getElementById('replyFile');
+    if (file) file.addEventListener('change', function () {
+      document.getElementById('replyFileName').textContent = file.files[0] ? file.files[0].name : 'Attach a file';
+    });
+    var pick = document.getElementById('cannedPick'), box = document.getElementById('replyBody');
+    if (!pick) return;
+    var replies = JSON.parse(document.getElementById('cannedData').textContent);
+    var name = JSON.parse(document.getElementById('cannedName').textContent) || 'there';
+    /* Drops the reply in with {name} filled; an empty box is replaced, a
+       started one is appended to, so nothing typed is lost. */
+    pick.addEventListener('change', function () {
+      var chosen = replies.filter(function (r) { return String(r.id) === pick.value; })[0];
+      if (!chosen) return;
+      var text = chosen.body.replace(/\{name\}/g, name);
+      box.value = box.value.trim() ? box.value.replace(/\s+$/, '') + '\n\n' + text : text;
+      document.getElementById('cannedId').value = chosen.id;
+      pick.value = '';
+      box.focus();
+    });
+  })();
+</script>
+{% endblock %}

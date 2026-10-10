@@ -1,0 +1,84 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Token ledger · Console{% endblock %}
+{% block heading %}Token ledger{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">Every token movement, newest first.</p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <a href="{% url 'console:tokens' %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> Back to token management
+  </a>
+
+  <form method="get" class="card spotlight p-4 animate-fade-up sm:p-5">
+    {% include "console/_scope_field.html" %}
+    <div class="grid gap-3 sm:grid-cols-3">
+      <div class="sm:col-span-2">
+        <label for="id_q" class="label">Search student</label>
+        <div class="search-shell">
+          <svg aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="search" name="q" id="id_q" value="{{ search }}" placeholder="Name or username"
+                 class="input py-2 pl-9 text-sm">
+        </div>
+      </div>
+      <div>
+        <label for="id_type" class="label">Transaction type</label>
+        <select name="type" id="id_type" class="input py-2 text-sm">
+          <option value="">All types</option>
+          {% for value, label in types %}
+            <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="mt-4 flex flex-wrap items-center gap-2">
+      <button type="submit" class="btn-primary btn-sm">
+        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-filter"/></svg> Apply
+      </button>
+      <a href="{% url 'console:token_history' %}" class="btn-ghost btn-sm">Clear</a>
+      <span class="ml-auto text-xs text-ink-500 dark:text-ink-400">{{ page.paginator.count|intcomma }} entries</span>
+    </div>
+  </form>
+
+  <section class="card overflow-hidden reveal">
+    {% if page.object_list %}
+      <div class="table-wrap">
+        <table class="table min-w-[900px]">
+          <thead>
+            <tr>
+              <th class="th">Date</th><th class="th">Student</th><th class="th">Type</th>
+              <th class="th">Description</th><th class="th">By</th>
+              <th class="th text-right">Amount</th><th class="th text-right">Balance after</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in page.object_list %}
+              <tr class="row group/row">
+                <td class="td text-xs text-ink-500 dark:text-ink-400">{{ entry.created_at|date:"d M Y, H:i" }}</td>
+                <td class="td">
+                  <a href="{% url 'console:user_detail' entry.user_id %}" class="text-sm font-medium hover:text-brand-600 dark:hover:text-brand-300">
+                    {{ entry.user.display_name|truncatechars:24 }}
+                  </a>
+                </td>
+                <td class="td"><span class="{{ entry.tone|tone_classes }}">{{ entry.get_transaction_type_display }}</span></td>
+                <td class="td max-w-sm truncate text-sm" title="{{ entry.description }}">{{ entry.description|default:"—" }}</td>
+                <td class="td text-xs">{{ entry.created_by.display_name|default:"System" }}</td>
+                <td class="td text-right text-sm font-bold tabular-nums {% if entry.is_credit %}text-emerald-600 dark:text-emerald-400{% else %}text-ink-700 dark:text-ink-200{% endif %}">
+                  {% if entry.is_credit %}+{% else %}−{% endif %}{{ entry.abs_amount|intcomma }}
+                </td>
+                <td class="td text-right text-sm tabular-nums text-ink-500">{{ entry.balance_after|intcomma }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-history" title="No transactions match" body="Try clearing the filters." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

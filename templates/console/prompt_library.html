@@ -1,0 +1,125 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% comment %}
+  Prompt library — the featured prompts every student sees in the composer's
+  prompt menu and at the top of their library. Hiding one keeps it (and its
+  use count) for later; deleting removes it. Students' own prompts are theirs
+  and are only counted here, never listed.
+{% endcomment %}
+
+{% block title %}Prompt library · Console{% endblock %}
+{% block heading %}Prompt library{% endblock %}
+{% block subheading %}
+  <p>Publish ready-made prompts to every student. They appear in the chat's prompt menu and at the top of each student's library.</p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-sparkles" label="Featured prompts" value=stats.featured|intcomma foot="visible to every student" %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-send" label="Times used" value=stats.uses|intcomma foot="featured and personal" %}
+    {% include "console/_kpi.html" with variant="violet" icon="i-star" label="Personal prompts" value=stats.student_prompts|intcomma foot="saved by students" %}
+    {% include "console/_kpi.html" with variant="plain" icon="i-users" label="Students with prompts" value=stats.students_with_prompts|intcomma foot="built their own library" %}
+  </section>
+
+  <div class="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
+    <section class="card overflow-hidden reveal">
+      <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+        <h2 class="section-title">Featured prompts</h2>
+        <span class="text-[11px] text-ink-500 dark:text-ink-400">{{ prompts|length }} in total</span>
+      </div>
+      {% if prompts %}
+        <div class="table-wrap">
+          <table class="table min-w-[600px]">
+            <thead>
+              <tr>
+                <th class="th">Prompt</th>
+                <th class="th">Category</th>
+                <th class="th text-right">Used</th>
+                <th class="th">Status</th>
+                <th class="th"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for prompt in prompts %}
+                <tr class="row{% if editing and editing.pk == prompt.pk %} bg-brand-500/5{% endif %}">
+                  <td class="td max-w-[240px]">
+                    <span class="block truncate text-sm font-semibold text-ink-900 dark:text-white">{{ prompt.title }}</span>
+                    <span class="block truncate text-[11px] text-ink-500 dark:text-ink-400">{{ prompt.preview }}</span>
+                  </td>
+                  <td class="td text-xs">{{ prompt.category|default:"—" }}</td>
+                  <td class="td text-right tabular-nums">{{ prompt.use_count|intcomma }}</td>
+                  <td class="td text-xs">
+                    {% if prompt.is_active %}<span class="badge-success">Visible</span>{% else %}<span class="badge-neutral">Hidden</span>{% endif %}
+                  </td>
+                  <td class="td w-px whitespace-nowrap text-right">
+                    <div class="flex items-center justify-end gap-1">
+                      <a href="?edit={{ prompt.pk }}#promptForm" class="btn-icon h-7 w-7" title="Edit" aria-label="Edit {{ prompt.title }}">
+                        <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-edit"/></svg>
+                      </a>
+                      <form method="post" action="{% url 'console:prompt_toggle' prompt.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-icon h-7 w-7" title="{% if prompt.is_active %}Hide{% else %}Show{% endif %}"
+                                aria-label="{% if prompt.is_active %}Hide{% else %}Show{% endif %} {{ prompt.title }}">
+                          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#{% if prompt.is_active %}i-eye-off{% else %}i-eye{% endif %}"/></svg>
+                        </button>
+                      </form>
+                      <form method="post" action="{% url 'console:prompt_delete' prompt.pk %}"
+                            onsubmit="return confirm('Delete this prompt for every student?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-icon h-7 w-7" title="Delete" aria-label="Delete {{ prompt.title }}">
+                          <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-trash"/></svg>
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "components/empty_state.html" with icon="i-sparkles" title="No featured prompts" body="Publish the first one with the form." %}
+      {% endif %}
+    </section>
+
+    <section class="card spotlight p-5 sm:p-6 reveal" id="promptForm">
+      <h2 class="section-title">{% if editing %}Edit prompt{% else %}New featured prompt{% endif %}</h2>
+      <p class="section-note mt-0.5">
+        {% if editing %}Changes apply to every student straight away.{% else %}Write it the way a student would type it; they can edit it before sending.{% endif %}
+      </p>
+      <form method="post" class="mt-5 space-y-4" data-loading-form
+            action="{% if editing %}{% url 'console:prompt_save' editing.pk %}{% else %}{% url 'console:prompt_create' %}{% endif %}">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="pTitle">Title</label>
+          <input class="input" id="pTitle" name="title" maxlength="80" required value="{{ editing.title|default:'' }}">
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="label" for="pCategory">Category</label>
+            <input class="input" id="pCategory" name="category" maxlength="40" value="{{ editing.category|default:'' }}" placeholder="e.g. Study">
+          </div>
+          <div>
+            <label class="label" for="pOrder">Order</label>
+            <input class="input" id="pOrder" name="sort_order" type="number" min="0" value="{{ editing.sort_order|default:100 }}">
+          </div>
+        </div>
+        <div>
+          <label class="label" for="pBody">Prompt</label>
+          <textarea class="input resize-y leading-relaxed" id="pBody" name="body" rows="7" maxlength="4000" required>{{ editing.body|default:'' }}</textarea>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          {% if editing %}<a href="{% url 'console:prompt_library' %}" class="btn-ghost">Cancel</a>{% endif %}
+          <button type="submit" class="btn-primary">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="#{% if editing %}i-check{% else %}i-plus{% endif %}"/></svg>
+            {% if editing %}Save changes{% else %}Publish prompt{% endif %}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,312 @@
+{% load ai_extras humanize %}
+{% comment %}
+  The auth card: one surface, both forms.
+
+  Each panel is a real <form> with its own action, CSRF token and field
+  names, so whichever one is submitted is validated by the same view that
+  validated it before. The slide is presentation.
+
+  Only the panel for the current page is bound to a Django form; the other
+  renders empty and posts to its own URL. Errors therefore always come back
+  on the page that produced them.
+
+  Expects: mode ("in" | "up"), and whichever of login_form / signup_form
+  belongs to this page.
+{% endcomment %}
+
+<div class="card-shell">
+<div class="card" id="authCard" data-initial-mode="{{ mode }}">
+
+  <div class="card-badge">
+    <span class="mark" aria-hidden="true">
+      <svg width="21" height="21" viewBox="0 0 16 16" fill="none">
+        <rect x="4.5" y="7" width="7" height="6" rx="1.6" fill="#fff"/>
+        <path d="M5.8 7V5.4a2.2 2.2 0 0 1 4.4 0V7" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </span>
+  </div>
+
+  {% comment %}
+    These views report a failed sign-in, a rate limit and a disabled account
+    through Django's messages, not through form errors — so they are rendered
+    here, above the panels, where they apply to whichever one is showing.
+  {% endcomment %}
+  {% if messages %}
+    <div style="display:grid;gap:8px;margin-bottom:14px">
+      {% for message in messages %}
+        <div class="banner {% if 'error' in message.tags %}banner-bad{% elif 'success' in message.tags %}banner-ok{% else %}banner-info{% endif %}" role="status">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            {% if 'success' in message.tags %}
+              <circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M5.4 8.2l1.8 1.8 3.4-3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            {% else %}
+              <circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            {% endif %}
+          </svg>
+          <span>{{ message }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="seg" role="tablist" aria-label="Sign in or sign up">
+    <span class="seg-pill" aria-hidden="true"></span>
+    <button type="button" class="seg-btn" data-mode="in" role="tab">Sign in</button>
+    <button type="button" class="seg-btn" data-mode="up" role="tab">Sign up</button>
+  </div>
+
+  <div class="heads">
+    <div class="head" data-head="in">
+      <p class="eyebrow">
+        <span class="dot" style="background:#2BA36B"></span>
+        <span class="txt">GOOD TO SEE YOU AGAIN</span>
+        <span class="line"></span>
+      </p>
+      <h1 class="hl">
+        <span>Welcome</span>
+        <span class="keyed"><span class="swipe"></span><span class="word">back</span></span><span class="accent">.</span>
+      </h1>
+      <p class="head-sub">Sign in to pick up where you left off.</p>
+    </div>
+
+    <div class="head" data-head="up">
+      <p class="eyebrow">
+        <span class="dot" style="background:var(--ac)"></span>
+        <span class="txt">READY IN 60 SECONDS</span>
+        <span class="line"></span>
+      </p>
+      <h1 class="hl">
+        <span>Create your</span>
+        <span class="keyed"><span class="swipe"></span><span class="word">account</span></span><span class="accent">.</span>
+      </h1>
+      <p class="head-sub">
+        {% if free_trial_tokens %}{{ free_trial_tokens|intcomma }} free {% if free_trial_model %}{{ free_trial_model }} {% endif %}tokens land in your balance. No card required.
+        {% else %}Takes a minute. No card required.{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="rail">
+    <div class="track">
+
+      {# ============================ SIGN IN ============================ #}
+      <form class="panel panel-in" data-panel="in" method="post"
+            action="{% url 'auth:login' %}" data-auth-form novalidate
+            data-mono="VERIFYING CREDENTIALS" data-title="One moment…"
+            data-sub="Checking your details securely."
+            data-ok-greeting="Welcome back">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next|default:'' }}">
+
+        {% if login_form.non_field_errors %}
+          <div class="banner banner-bad">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span>{% for error in login_form.non_field_errors %}{{ error }}{% endfor %}</span>
+          </div>
+        {% endif %}
+
+        <div>
+          <label class="lbl" for="id_login_identifier">Username or e-mail</label>
+          <div class="wrap">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="5.2" r="2.7" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M2.8 13.6a5.4 5.4 0 0 1 10.4 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <input class="inp has-icon {% if login_form.identifier.errors %}is-bad{% endif %}"
+                   type="text" name="identifier" id="id_login_identifier"
+                   value="{{ login_form.identifier.value|default:'' }}"
+                   autocomplete="username" placeholder="you@example.com"
+                   {% if mode == 'in' %}autofocus{% endif %} required>
+          </div>
+          {% for error in login_form.identifier.errors %}
+            <p class="err"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+          {% endfor %}
+        </div>
+
+        <div>
+          <span class="lbl lbl-row">
+            Password
+            <a href="{% url 'auth:forgot_password' %}">Forgot password?</a>
+          </span>
+          <div class="wrap">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="3.5" y="7" width="9" height="6.5" rx="1.8" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <input class="inp has-icon has-eye {% if login_form.password.errors %}is-bad{% endif %}"
+                   type="password" name="password" id="id_login_password"
+                   autocomplete="current-password" placeholder="••••••••" required>
+            <button type="button" class="eye" data-eye="id_login_password" aria-label="Show password">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M1.8 8S4 3.8 8 3.8 14.2 8 14.2 8 12 12.2 8 12.2 1.8 8 1.8 8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
+              </svg>
+            </button>
+          </div>
+          {% for error in login_form.password.errors %}
+            <p class="err"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+          {% endfor %}
+        </div>
+
+        <label class="check">
+          <input type="checkbox" name="remember" checked>
+          <span class="box" aria-hidden="true">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8.5l3.2 3L13 4.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span>Keep me signed in on this device</span>
+        </label>
+
+        <button type="submit" class="btn">
+          Sign in
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2.8 8h9.6M9 3.8 13.2 8 9 12.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <div class="rule"><span>New here?</span></div>
+
+        <a class="btn-ghost" href="{% url 'auth:signup' %}" data-goto="up">Create a free account</a>
+
+        <div class="aside">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 1.8 13.4 4v4.1c0 3.3-2.3 5.4-5.4 6.1-3.1-.7-5.4-2.8-5.4-6.1V4L8 1.8Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            <path d="M5.7 8l1.6 1.6 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Only one device can be signed in at a time. Signing in here will sign you out elsewhere.</span>
+        </div>
+      </form>
+
+      {# ============================ SIGN UP ============================ #}
+      <form class="panel panel-up" data-panel="up" method="post"
+            action="{% url 'auth:signup' %}" data-auth-form novalidate
+            data-mono="CREATING YOUR ACCOUNT" data-title="One moment…"
+            data-sub="Setting up your workspace."
+            data-ok-greeting="You&#39;re in" data-ok-name-from="id_signup_full_name">
+        {% csrf_token %}
+
+        {% if signup_form.non_field_errors %}
+          <div class="banner banner-bad">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span>{% for error in signup_form.non_field_errors %}{{ error }}{% endfor %}</span>
+          </div>
+        {% endif %}
+
+        <div style="display:flex;gap:10px">
+          <div style="flex:1;min-width:0">
+            <label class="lbl" for="id_signup_full_name">Full name</label>
+            <input class="inp {% if signup_form.full_name.errors %}is-bad{% endif %}"
+                   type="text" name="full_name" id="id_signup_full_name"
+                   value="{{ signup_form.full_name.value|default:'' }}"
+                   autocomplete="name" placeholder="Sokha Ny" required>
+          </div>
+          <div style="flex:1;min-width:0">
+            <label class="lbl" for="id_signup_username">Username</label>
+            <input class="inp {% if signup_form.username.errors %}is-bad{% endif %}"
+                   type="text" name="username" id="id_signup_username"
+                   value="{{ signup_form.username.value|default:'' }}"
+                   autocomplete="username" placeholder="sokha.ny" required>
+          </div>
+        </div>
+        {% for error in signup_form.full_name.errors %}
+          <p class="err" style="margin-top:-6px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+        {% endfor %}
+        {% for error in signup_form.username.errors %}
+          <p class="err" style="margin-top:-6px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+        {% endfor %}
+
+        <div>
+          <label class="lbl" for="id_signup_email">E-mail address</label>
+          <input class="inp {% if signup_form.email.errors %}is-bad{% endif %}"
+                 type="email" name="email" id="id_signup_email"
+                 value="{{ signup_form.email.value|default:'' }}"
+                 autocomplete="email" placeholder="you@example.com" required>
+          {% if signup_form.email.errors %}
+            {% for error in signup_form.email.errors %}
+              <p class="err"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+            {% endfor %}
+          {% else %}
+            <p class="hint">We send your verification code here.</p>
+          {% endif %}
+        </div>
+
+        <div>
+          <span class="lbl lbl-row">
+            <span>Password</span>
+            <span class="strength" id="pwWord"></span>
+          </span>
+          <div class="wrap">
+            <input class="inp has-eye {% if signup_form.password.errors %}is-bad{% endif %}"
+                   type="password" name="password" id="id_signup_password"
+                   autocomplete="new-password" placeholder="At least 8 characters"
+                   minlength="8" required>
+            <button type="button" class="eye" data-eye="id_signup_password" aria-label="Show password">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M1.8 8S4 3.8 8 3.8 14.2 8 14.2 8 12 12.2 8 12.2 1.8 8 1.8 8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
+              </svg>
+            </button>
+          </div>
+          <div class="segs" id="pwSegs" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          {% for error in signup_form.password.errors %}
+            <p class="err"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+          {% endfor %}
+        </div>
+
+        <div>
+          <label class="lbl" for="id_signup_referral">
+            Referral code <span style="font-weight:400;color:var(--tx3)">(optional)</span>
+          </label>
+          <input class="inp mono {% if signup_form.referral_code.errors %}is-bad{% endif %}"
+                 type="text" name="referral_code" id="id_signup_referral"
+                 {% comment %}
+                   `firstof` rather than a chained `default:` — a filter
+                   argument must resolve, and referral_prefill is only in the
+                   context on the sign-up page.
+                 {% endcomment %}
+                 value="{% firstof signup_form.referral_code.value referral_prefill '' %}"
+                 placeholder="ABCD1234" maxlength="16" autocomplete="off">
+          {% for error in signup_form.referral_code.errors %}
+            <p class="err"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+          {% endfor %}
+        </div>
+
+        <label class="check tight">
+          <input type="checkbox" name="accept_terms" required
+                 {% if signup_form.accept_terms.value %}checked{% endif %}>
+          <span class="box" aria-hidden="true">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8.5l3.2 3L13 4.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span>I agree to the <a href="{% url 'public:terms' %}" target="_blank" rel="noopener">Terms of Service</a>
+            and <a href="{% url 'public:privacy' %}" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
+        {% for error in signup_form.accept_terms.errors %}
+          <p class="err" style="margin-top:-6px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.6M8 10.8v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ error }}</p>
+        {% endfor %}
+
+        <button type="submit" class="btn">
+          Create account
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2.8 8h9.6M9 3.8 13.2 8 9 12.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+  <p class="tail">
+    Administrator? <a href="{% url 'auth:admin_login' %}">Use the console sign-in</a>
+  </p>
+</div>
+</div>

@@ -1,0 +1,168 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}Usage limits · Console{% endblock %}
+{% block heading %}Usage limits{% endblock %}
+{% block subheading %}
+  <p class="truncate text-[11.5px] font-medium text-ink-500 dark:text-ink-400">
+    Every package a student holds, and how much of its daily, weekly and monthly allowance is gone.
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <section class="grid gap-3 sm:grid-cols-3">
+    <div class="card p-4">
+      <p class="stat-label">Packages</p>
+      <p class="mt-1 text-2xl font-extrabold tabular-nums tracking-[-.03em] text-ink-900 dark:text-white">
+        {{ totals.packages|intcomma }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="stat-label">Active</p>
+      <p class="mt-1 text-2xl font-extrabold tabular-nums tracking-[-.03em] text-brand-600 dark:text-brand-300">
+        {{ totals.active|intcomma }}
+      </p>
+    </div>
+    <div class="card p-4">
+      <p class="stat-label">Metered from</p>
+      <p class="mt-1 text-2xl font-extrabold tabular-nums tracking-[-.03em] text-ink-900 dark:text-white">
+        {{ totals.minimum|intcomma }}
+      </p>
+      <p class="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">
+        Smaller grants carry no ceilings.
+        {% if console_can.settings %}<a href="{% url 'console:settings' %}#limits" class="font-semibold text-brand-600 hover:underline dark:text-brand-300">Change</a>{% endif %}
+      </p>
+    </div>
+  </section>
+
+  {# Filters. A GET form, so a filtered view is a URL somebody can send. #}
+  <form method="get" class="card flex flex-wrap items-end gap-3 p-4">
+    <div class="min-w-[200px] flex-1">
+      <label for="q" class="label">Search</label>
+      <input type="search" name="q" id="q" value="{{ query }}" class="input"
+             placeholder="Name, email or package">
+    </div>
+    {% comment %}
+      The model dropdown that stood here is now the console-wide selector above
+      the page. It filters on the same `?model=` key, so this form must carry
+      the current choice through a search or a status change - otherwise
+      submitting the form would silently widen the page back to all models.
+    {% endcomment %}
+    {% if model_scope and not model_scope.is_all %}
+      <input type="hidden" name="model" value="{{ model_scope.key }}">
+    {% endif %}
+    <div class="min-w-[150px]">
+      <label for="status" class="label">Status</label>
+      <select name="status" id="status" class="input">
+        <option value="">Any status</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Filter</button>
+      <a href="{% url 'console:usage_limits' %}" class="btn-ghost">Clear</a>
+    </div>
+  </form>
+
+  <section class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[1080px] text-left text-xs">
+        <thead class="border-b hairline text-[10.5px] uppercase tracking-[.08em] text-ink-500 dark:text-ink-400">
+          <tr>
+            <th class="px-4 py-3 font-semibold">Student</th>
+            <th class="px-4 py-3 font-semibold">Model</th>
+            <th class="px-4 py-3 font-semibold">Package</th>
+            <th class="px-4 py-3 text-right font-semibold">Purchased</th>
+            <th class="px-4 py-3 text-right font-semibold">Used</th>
+            <th class="px-4 py-3 text-right font-semibold">Remaining</th>
+            <th class="px-4 py-3 font-semibold">Daily</th>
+            <th class="px-4 py-3 font-semibold">Weekly</th>
+            <th class="px-4 py-3 font-semibold">Monthly</th>
+            <th class="px-4 py-3 font-semibold">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y hairline">
+          {% for item in rows %}
+            <tr class="align-top transition-colors hover:bg-ink-50 dark:hover:bg-white/[.03]">
+              <td class="px-4 py-3">
+                <a href="{% url 'console:user_detail' item.row.user_id %}"
+                   class="font-semibold text-ink-900 hover:text-brand-600 dark:text-white dark:hover:text-brand-300">
+                  {{ item.row.user.display_name }}
+                </a>
+                <span class="block text-[11px] text-ink-500 dark:text-ink-400">{{ item.row.user.email }}</span>
+              </td>
+              <td class="px-4 py-3">{{ item.row.ai_model.name }}</td>
+              <td class="px-4 py-3">
+                {{ item.row.label|default:"—" }}
+                <span class="block text-[11px] text-ink-500 dark:text-ink-400">
+                  {{ item.row.get_source_display }} · {{ item.row.activated_at|date:"j M Y, H:i" }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums">{{ item.row.tokens_allocated|intcomma }}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{{ item.row.tokens_used|intcomma }}</td>
+              <td class="px-4 py-3 text-right font-semibold tabular-nums text-ink-900 dark:text-white">
+                {{ item.row.tokens_remaining|intcomma }}
+              </td>
+
+              {% comment %}
+                One cell per window: how much of it is gone, and when it comes
+                back. A window with no ceiling says so rather than showing a
+                zero, which would read as "nothing allowed".
+              {% endcomment %}
+              {% for name, info in item.windows.items %}
+                <td class="px-4 py-3">
+                  {% if info.enforced %}
+                    <span class="font-semibold tabular-nums {% if info.at_limit %}text-rose-600 dark:text-rose-400{% else %}text-ink-900 dark:text-white{% endif %}">
+                      {{ info.used|intcomma }}<span class="text-ink-400"> / {{ info.limit|intcomma }}</span>
+                    </span>
+                    <span class="mt-1 block h-1 w-20 overflow-hidden rounded-full bg-ink-200 dark:bg-white/10">
+                      <span class="block h-full rounded-full {% if info.at_limit %}bg-rose-500{% else %}bg-brand-500{% endif %}"
+                            style="width:{{ info.percent }}%"></span>
+                    </span>
+                    <span class="mt-1 block text-[10.5px] text-ink-500 dark:text-ink-400">
+                      resets {{ info.reset_at|date:"j M, H:i" }}
+                    </span>
+                  {% else %}
+                    <span class="text-ink-400">No limit</span>
+                  {% endif %}
+                </td>
+              {% endfor %}
+
+              <td class="px-4 py-3">
+                {% if item.blocked %}
+                  <span class="badge-danger">Limit reached</span>
+                {% elif item.row.status == 'active' %}
+                  <span class="badge-success">Active</span>
+                {% elif item.row.status == 'exhausted' %}
+                  <span class="badge-neutral">Spent</span>
+                {% else %}
+                  <span class="badge-neutral">{{ item.row.get_status_display }}</span>
+                {% endif %}
+                <span class="mt-1 block text-[10.5px] text-ink-500 dark:text-ink-400 tabular-nums">
+                  {{ item.spendable|intcomma }} spendable now
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="10" class="px-4 py-10 text-center text-ink-500 dark:text-ink-400">
+                No packages match that filter.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page.paginator.num_pages > 1 %}
+      <div class="border-t hairline p-3">
+        {% include "components/pagination.html" with page=page page_numbers=page_numbers %}
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

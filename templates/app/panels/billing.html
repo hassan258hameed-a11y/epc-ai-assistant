@@ -1,0 +1,107 @@
+{% load ai_extras %}
+<div class="panel" data-panel-name="billing">
+  <header class="panel-head">
+    <p class="panel-eyebrow">Account</p>
+    <h2 class="panel-title">Billing</h2>
+    <p class="panel-sub">Everything you have bought, and what it left you with.</p>
+  </header>
+
+  {% include "app/panels/_messages.html" %}
+
+  <section class="panel-section">
+    <div class="grid grid-3">
+      <div class="stat">
+        <span class="stat-label">Total spent</span>
+        <span class="stat-value">${{ totals.spent|floatformat:"-2" }}</span>
+        <span class="stat-note">{{ totals.invoices }} paid order{{ totals.invoices|pluralize }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Tokens bought</span>
+        <span class="stat-value">{{ totals.tokens_bought|compact_number }}</span>
+        <span class="stat-note">across all models</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Awaiting payment</span>
+        <span class="stat-value">{{ totals.pending }}</span>
+        <span class="stat-note">order{{ totals.pending|pluralize }} pending</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel-section">
+    <h3 class="section-title">Balances by model</h3>
+    {% include "app/panels/_wallets.html" %}
+  </section>
+
+  {% if subscription %}
+    <section class="panel-section">
+      <div class="card">
+        <div class="card-head">
+          <h3>Current plan</h3>
+        </div>
+        <div class="rows">
+          <div class="row">
+            <span class="row-main">
+              <span class="row-title">{{ subscription.plan.name }}</span>
+              <span class="row-sub">Started {{ subscription.starts_at|date:"j M Y" }}</span>
+            </span>
+            <span class="badge {% if subscription.is_live %}is-ok{% else %}is-warn{% endif %}">
+              {{ subscription.get_status_display }}
+            </span>
+            <span class="row-value">{{ subscription.tokens_granted|intcomma }} tokens</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel-section">
+    <h3 class="section-title">
+      Invoices
+      <span class="count">{{ page.paginator.count }}</span>
+    </h3>
+    <div class="card">
+      <div class="rows">
+        {% for payment in page %}
+          <div class="row">
+            <span class="row-main">
+              <span class="row-title">{{ payment.plan.name }}</span>
+              <span class="row-sub">{{ payment.reference }} · {{ payment.created_at|date:"j M Y" }}</span>
+            </span>
+            <span class="badge {% if payment.status == 'paid' %}is-ok{% elif payment.status == 'pending' %}is-warn{% elif payment.status == 'failed' or payment.status == 'cancelled' %}is-danger{% endif %}">
+              {{ payment.get_status_display }}
+            </span>
+            <span class="row-value">${{ payment.amount|floatformat:"-2" }}</span>
+            {% if payment.status == 'paid' %}
+              <a class="btn btn-sm" href="{% url 'payments:receipt' payment.reference %}">Receipt</a>
+            {% else %}
+              <a class="btn btn-sm" href="{% url 'payments:detail' payment.reference %}">Open</a>
+            {% endif %}
+          </div>
+        {% empty %}
+          <p class="empty">
+            <svg aria-hidden="true"><use href="#i-receipt"/></svg>
+            No orders yet.
+          </p>
+        {% endfor %}
+      </div>
+      <div class="card-foot">
+        <a href="{% url 'student:pricing' %}" class="btn btn-sm btn-primary" data-panel-link="pricing">
+          <svg aria-hidden="true"><use href="#i-coin"/></svg> Buy tokens
+        </a>
+      </div>
+    </div>
+
+    {% if page.paginator.num_pages > 1 %}
+      <nav class="pager" aria-label="Invoice pages">
+        {% for number in page_numbers %}
+          {% if number == page.number %}
+            <span class="is-on" aria-current="page">{{ number }}</span>
+          {% else %}
+            <a href="{% url 'student:billing' %}?page={{ number }}" data-panel-link="billing">{{ number }}</a>
+          {% endif %}
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </section>
+</div>

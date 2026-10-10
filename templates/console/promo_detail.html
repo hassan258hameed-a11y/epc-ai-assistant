@@ -1,0 +1,81 @@
+{% extends "base/console.html" %}
+{% load ai_extras %}
+
+{% block title %}{{ promo.code }} · Promo codes · Console{% endblock %}
+{% block heading %}<span class="font-mono tracking-wide">{{ promo.code }}</span>{% endblock %}
+{% block subheading %}
+  <p>{{ promo.value_label }}{% if promo.description %} · {{ promo.description }}{% endif %}</p>
+{% endblock %}
+
+{% block header_actions %}
+  <div class="flex items-center gap-2">
+    <form method="post" action="{% url 'console:promo_toggle' promo.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="detail">
+      <button type="submit" class="btn-outline btn-sm">{% if promo.is_active %}Pause{% else %}Resume{% endif %}</button>
+    </form>
+    <a href="{% url 'console:promo_edit' promo.pk %}" class="btn-primary btn-sm">
+      <svg class="h-4 w-4" aria-hidden="true"><use href="#i-edit"/></svg> Edit
+    </a>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <a href="{% url 'console:promos' %}" class="back-link">
+    <svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-left"/></svg> All promo codes
+  </a>
+
+  <section class="kpi-caps grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger="70">
+    {% include "console/_kpi.html" with variant="brand" icon="i-tag" label="Status" value=status foot=promo.value_label %}
+    {% include "console/_kpi.html" with variant="ink" icon="i-users" label="Uses held" value=uses foot=uses_foot %}
+    {% include "console/_kpi.html" with variant="violet" icon="i-gift" label="Discount given" value=discount|money foot="on paid orders" %}
+    {% include "console/_kpi.html" with variant="plain" icon="i-trend-up" label="Revenue" value=revenue|money foot="collected with this code" %}
+  </section>
+
+  <section class="card overflow-hidden reveal">
+    <div class="flex items-center justify-between gap-3 border-b hairline px-5 py-4">
+      <h2 class="section-title">Redemptions</h2>
+      <span class="text-[11px] text-ink-500 dark:text-ink-400">{{ paid_uses }} paid</span>
+    </div>
+    {% if redemptions %}
+      <div class="table-wrap">
+        <table class="table min-w-[760px]">
+          <thead>
+            <tr>
+              <th class="th">Student</th>
+              <th class="th">Package</th>
+              <th class="th text-right">Discount</th>
+              <th class="th text-right">Paid</th>
+              <th class="th">Status</th>
+              <th class="th">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in redemptions %}
+              <tr class="row">
+                <td class="td">
+                  <a href="{% url 'console:user_detail' item.user.pk %}" class="text-sm font-semibold text-ink-900 dark:text-white">{{ item.user.display_name|truncatechars:26 }}</a>
+                </td>
+                <td class="td text-xs">
+                  <a href="{% url 'console:payment_detail' item.payment.reference %}" class="hover:underline">{{ item.payment.plan.name }}</a>
+                  <span class="block font-mono text-[10.5px] text-ink-400">{{ item.payment.reference }}</span>
+                </td>
+                <td class="td text-right tabular-nums text-emerald-600 dark:text-emerald-400">{{ item.amount|money }}</td>
+                <td class="td text-right tabular-nums">{{ item.payment.amount|money }}</td>
+                <td class="td text-xs">
+                  <span class="{% if item.status == 'used' %}badge-success{% elif item.status == 'reserved' %}badge-warning{% else %}badge-neutral{% endif %}">{{ item.get_status_display }}</span>
+                </td>
+                <td class="td text-xs text-ink-500 dark:text-ink-400">{{ item.created_at|timeago }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 pb-5">{% include "components/pagination.html" %}</div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="i-tag" title="Not used yet" body="Orders placed with this code will appear here." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

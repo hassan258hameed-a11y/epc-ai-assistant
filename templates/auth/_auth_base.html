@@ -1,0 +1,156 @@
+{% load static ai_extras %}<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <title>{% block title %}Sign in · {{ BRAND.full_name }}{% endblock %}</title>
+  <meta name="robots" content="noindex">
+  {% include "base/design.html" %}
+  {% comment %}
+    The split sign-in pages (forgot / reset password, the code screen, the
+    console sign-in) share the student sign-in card's ground: cool paper in
+    the light theme, the landing page's near-black in the dark one. The
+    story panel on the left is the landing page's closing band — navy, with
+    a blue and a rose glow — so it reads the same in either theme.
+  {% endcomment %}
+  <style>
+    body.auth-split { background: #F6F7F9; }
+    html.dark body.auth-split { background: #0B0E14; }
+    .auth-story { background: linear-gradient(150deg, #0B1222 0%, #111B34 46%, #2A1020 100%); }
+    html.dark .auth-story { box-shadow: inset -1px 0 0 rgba(255,255,255,.06); }
+    .auth-story-glow { position: absolute; border-radius: 50%; pointer-events: none; }
+    .auth-story-glow.a { left: -120px; top: 12%; width: 420px; height: 420px; filter: blur(100px); opacity: .55; background: radial-gradient(circle, rgba(59,130,246,.55), transparent 70%); }
+    .auth-story-glow.b { right: -140px; bottom: 6%; width: 400px; height: 400px; filter: blur(104px); opacity: .42; background: radial-gradient(circle, rgba(225,29,72,.45), transparent 70%); }
+    .auth-story-grid {
+      background-image:
+        linear-gradient(to right, rgba(255,255,255,.035) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 44px 44px;
+      -webkit-mask-image: radial-gradient(ellipse 80% 70% at 30% 40%, #000 30%, transparent 80%);
+              mask-image: radial-gradient(ellipse 80% 70% at 30% 40%, #000 30%, transparent 80%);
+    }
+    /* The form side in the dark theme: the landing page's surfaces. */
+    html.dark .auth-split .input { background-color: #0E1117; border-color: #262B34; }
+    html.dark .auth-split .input:hover { border-color: #323845; }
+    html.dark .auth-split .input:focus { border-color: rgba(116,140,247,.7); }
+    html.dark .auth-split .btn-outline { background-color: #14171E; border-color: #262B34; }
+    html.dark .auth-split .otp-box { background-color: #0E1117; border-color: #262B34; }
+    html.dark .auth-split .otp-box:focus { border-color: rgba(116,140,247,.7); }
+    .auth-split .input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #fff inset; -webkit-text-fill-color: #1D1A17; }
+    html.dark .auth-split .input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #0E1117 inset; -webkit-text-fill-color: #fff; }
+    @media (pointer: coarse) {
+      .auth-split .input { min-height: 48px; }
+    }
+  </style>
+</head>
+<body class="auth-split min-h-full">
+{% include "components/icons.html" %}
+{% include "components/messages.html" %}
+
+<div class="flex min-h-screen">
+
+  {# ---------- Brand panel (desktop) ---------- #}
+  <div class="auth-story relative hidden w-1/2 overflow-hidden lg:flex xl:w-[55%]">
+    <div class="absolute inset-0 auth-story-grid" aria-hidden="true"></div>
+    <span class="auth-story-glow a" aria-hidden="true"></span>
+    <span class="auth-story-glow b" aria-hidden="true"></span>
+
+    <div class="relative flex w-full flex-col justify-between p-10 xl:p-14">
+      <a href="{% url 'public:home' %}" class="w-fit rounded-xl">{% include "components/logo.html" with tone="light" %}</a>
+
+      <div class="max-w-md animate-fade-up">
+        <h2 class="text-4xl font-extrabold leading-[1.1] tracking-tight text-white xl:text-[2.75rem]">
+          {% block panel_title %}Study help that actually explains.{% endblock %}
+        </h2>
+        <p class="mt-5 text-base leading-relaxed text-slate-300">
+          {% block panel_body %}
+            Ask anything, attach a photo of the question, and get a worked answer you can learn from — not just a result to copy.
+          {% endblock %}
+        </p>
+
+        <ul class="mt-9 space-y-3.5">
+          {% block panel_points %}
+            <li class="flex items-start gap-3 text-sm text-slate-200">
+              <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/20 text-blue-300">
+                <svg class="h-3 w-3" aria-hidden="true"><use href="#i-check"/></svg>
+              </span>
+              Every subject, from calculus to essay structure
+            </li>
+            <li class="flex items-start gap-3 text-sm text-slate-200">
+              <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/20 text-blue-300">
+                <svg class="h-3 w-3" aria-hidden="true"><use href="#i-check"/></svg>
+              </span>
+              Snap a photo of a problem and ask about it
+            </li>
+            <li class="flex items-start gap-3 text-sm text-slate-200">
+              <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-500/20 text-blue-300">
+                <svg class="h-3 w-3" aria-hidden="true"><use href="#i-check"/></svg>
+              </span>
+              Transparent token usage — see exactly what you spend
+            </li>
+          {% endblock %}
+        </ul>
+      </div>
+
+      <p class="text-xs text-slate-400">
+        © {% now "Y" %} {{ BRAND.full_name }} ·
+        <a href="{% url 'public:privacy' %}" class="tap-inline rounded transition hover:text-white">Privacy</a> ·
+        <a href="{% url 'public:terms' %}" class="tap-inline rounded transition hover:text-white">Terms</a>
+      </p>
+    </div>
+  </div>
+
+  {# ---------- Form panel ---------- #}
+  <div class="flex w-full min-w-0 flex-col lg:w-1/2 xl:w-[45%]">
+    <div class="flex items-center justify-between px-5 py-5 sm:px-8">
+      <a href="{% url 'public:home' %}" class="tap-link rounded-xl lg:invisible">{% include "components/logo.html" with size=30 %}</a>
+      <button type="button" data-theme-toggle class="btn-icon" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg style="width:18px;height:18px" class="dark:hidden" aria-hidden="true"><use href="#i-moon"/></svg>
+        <svg style="width:18px;height:18px" class="hidden dark:block" aria-hidden="true"><use href="#i-sun"/></svg>
+      </button>
+    </div>
+
+    <div class="flex flex-1 items-center justify-center px-5 pb-10 sm:px-8">
+      <div class="w-full max-w-[26rem] animate-fade-up">
+        {% block form_content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Theme toggle — one choice for the whole product (see public/_theme_boot.html).
+  document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+    button.addEventListener('click', function () { window.epcTheme.toggle(); });
+  });
+
+  // Password visibility toggles.
+  document.querySelectorAll('[data-toggle-password]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var input = document.getElementById(button.dataset.togglePassword);
+      if (!input) return;
+      var reveal = input.type === 'password';
+      input.type = reveal ? 'text' : 'password';
+      button.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+      button.querySelector('[data-eye]').classList.toggle('hidden', reveal);
+      button.querySelector('[data-eye-off]').classList.toggle('hidden', !reveal);
+    });
+  });
+
+  // Disable submit buttons during the request so nothing is sent twice.
+  document.querySelectorAll('form[data-loading-form]').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      var button = form.querySelector('[data-submit]');
+      if (!button || button.dataset.busy) return;
+      button.dataset.busy = '1';
+      button.disabled = true;
+      button.innerHTML =
+        '<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/>' +
+        '<path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>' +
+        '<span>' + (button.dataset.loadingLabel || 'Please wait…') + '</span>';
+    });
+  });
+</script>
+{% block scripts %}{% endblock %}
+{% include "components/settle_motion.html" %}
+</body>
+</html>

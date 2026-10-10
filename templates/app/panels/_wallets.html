@@ -1,0 +1,51 @@
+{% load ai_extras %}
+{% comment %}
+  Per-model balances, as the Student App design draws them.
+
+  Shown as separate cards rather than one total on purpose: tokens are a
+  separate currency for each model, so a combined figure can read as healthy
+  while the model someone is actually using has nothing left. Each card wears
+  its model's own colour — the same palette the console uses — and carries its
+  own way out: the Upgrade link goes to that model's packages, not to a
+  generic pricing page.
+{% endcomment %}
+<div class="sa-bals">
+  {% for wallet in wallets %}
+    <div class="sa-bal{% if wallet.is_empty %} is-empty{% endif %}"
+         style="--m-from:{{ wallet.tone.from }};--m-to:{{ wallet.tone.to }};animation-delay:{{ wallet.delay }}">
+      <span class="edge" aria-hidden="true"></span>
+      <div class="sa-bal-top">
+        <span class="sa-bal-name">{{ wallet.name }}</span>
+        <span class="sa-bal-vendor">{{ wallet.provider }}</span>
+      </div>
+      <div class="sa-bal-fig">
+        <b>{{ wallet.balance|intcomma }}</b>
+        <span>of {{ wallet.allocated|compact_number|lower }}</span>
+      </div>
+      <div class="sa-bal-track"><i data-width="{{ wallet.percent_left }}" style="transition-delay:{{ wallet.delay }}"></i></div>
+
+      {% if wallet.is_empty %}
+        <div class="sa-bal-warn">
+          <span class="dot" aria-hidden="true"><b></b><em></em></span>
+          <span>Spent. Top up to keep using this model.</span>
+        </div>
+        <a href="{% url 'student:pricing' %}?model={{ wallet.key }}" class="sa-bal-cta"
+           data-panel-link="pricing">Upgrade plan</a>
+      {% elif wallet.is_low %}
+        <div class="sa-bal-warn">
+          <span class="dot" aria-hidden="true"><b></b><em></em></span>
+          <span>Running low &mdash; {{ wallet.balance|intcomma }} left.</span>
+        </div>
+        <a href="{% url 'student:pricing' %}?model={{ wallet.key }}" class="sa-bal-cta"
+           data-panel-link="pricing">Upgrade plan</a>
+      {% else %}
+        <div class="sa-bal-foot">
+          <span>{{ wallet.used|intcomma }} used so far</span>
+          <span class="sa-left-pill">{{ wallet.percent_left }}% left</span>
+        </div>
+      {% endif %}
+    </div>
+  {% empty %}
+    <p class="empty">No models are available on your account yet.</p>
+  {% endfor %}
+</div>

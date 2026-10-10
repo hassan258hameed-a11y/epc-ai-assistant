@@ -1,0 +1,20 @@
+{% extends "base/public.html" %}
+{% block title %}Page not found · {{ BRAND.full_name }}{% endblock %}
+{% block content %}
+<section class="relative flex min-h-[70vh] items-center overflow-hidden mesh">
+  <div class="pointer-events-none absolute inset-0 grid-lines opacity-40"></div>
+  <div class="relative mx-auto max-w-lg px-4 py-20 text-center">
+    <p class="text-[6rem] font-extrabold leading-none gradient-text sm:text-[8rem]">404</p>
+    <h1 class="mt-2 text-2xl font-bold tracking-tight text-ink-900 dark:text-white sm:text-3xl">We can't find that page</h1>
+    <p class="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-ink-600 dark:text-ink-400">
+      The link may be out of date, or the page may have moved. Let's get you back on track.
+    </p>
+    <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+      <a href="{% url 'public:home' %}" class="btn-primary">Back to home</a>
+      {% if user.is_authenticated and user.is_student %}
+        <a href="{% url 'student:chat' %}" class="btn-outline">Open the assistant</a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}
